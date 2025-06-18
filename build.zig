@@ -22,7 +22,7 @@ pub fn build(b: *std.Build) void {
     options.addOption(bool, "debug_mode", debug_mode);
 
     // libxev依赖
-    const libxev = b.dependency("libxev", .{
+    const libxev = b.lazyDependency("libxev", .{
         .target = target,
         .optimize = optimize,
     });
@@ -36,7 +36,9 @@ pub fn build(b: *std.Build) void {
     });
 
     lib.root_module.addOptions("config", options);
-    lib.root_module.addImport("libxev", libxev.module("libxev"));
+    if (libxev) |dep| {
+        lib.root_module.addImport("libxev", dep.module("xev"));
+    }
 
     // 安装库
     b.installArtifact(lib);
@@ -48,7 +50,9 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     unit_tests.root_module.addOptions("config", options);
-    unit_tests.root_module.addImport("libxev", libxev.module("libxev"));
+    if (libxev) |dep| {
+        unit_tests.root_module.addImport("libxev", dep.module("xev"));
+    }
 
     const run_unit_tests = b.addRunArtifact(unit_tests);
     const test_step = b.step("test", "运行单元测试");
@@ -61,7 +65,9 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     integration_tests.root_module.addOptions("config", options);
-    integration_tests.root_module.addImport("libxev", libxev.module("libxev"));
+    if (libxev) |dep| {
+        integration_tests.root_module.addImport("libxev", dep.module("xev"));
+    }
     integration_tests.root_module.addImport("zokio", lib.root_module);
 
     const run_integration_tests = b.addRunArtifact(integration_tests);
@@ -76,7 +82,9 @@ pub fn build(b: *std.Build) void {
         .optimize = .ReleaseFast,
     });
     benchmarks.root_module.addOptions("config", options);
-    benchmarks.root_module.addImport("libxev", libxev.module("libxev"));
+    if (libxev) |dep| {
+        benchmarks.root_module.addImport("libxev", dep.module("xev"));
+    }
     benchmarks.root_module.addImport("zokio", lib.root_module);
 
     const run_benchmarks = b.addRunArtifact(benchmarks);
@@ -99,7 +107,9 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         });
         example.root_module.addOptions("config", options);
-        example.root_module.addImport("libxev", libxev.module("libxev"));
+        if (libxev) |dep| {
+            example.root_module.addImport("libxev", dep.module("xev"));
+        }
         example.root_module.addImport("zokio", lib.root_module);
 
         const install_example = b.addInstallArtifact(example, .{});
@@ -110,11 +120,13 @@ pub fn build(b: *std.Build) void {
     // 文档生成
     const docs = b.addTest(.{
         .root_source_file = b.path("src/lib.zig"),
-        .target = b.host,
+        .target = b.resolveTargetQuery(.{}),
         .optimize = .Debug,
     });
     docs.root_module.addOptions("config", options);
-    docs.root_module.addImport("libxev", libxev.module("libxev"));
+    if (libxev) |dep| {
+        docs.root_module.addImport("libxev", dep.module("xev"));
+    }
 
     const docs_step = b.step("docs", "生成API文档");
     const docs_install = b.addInstallDirectory(.{
