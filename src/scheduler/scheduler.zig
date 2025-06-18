@@ -107,20 +107,20 @@ pub fn WorkStealingQueue(comptime T: type, comptime capacity: u32) type {
         const AtomicIndex = if (capacity <= 256) utils.Atomic.Value(u8) else utils.Atomic.Value(u16);
 
         // 缓存行对齐的队列结构
-        buffer: [CAPACITY]utils.Atomic.Value(?*T) align(platform.PlatformCapabilities.cache_line_size),
+        buffer: [CAPACITY]utils.Atomic.Value(?T) align(platform.PlatformCapabilities.cache_line_size),
         head: AtomicIndex align(platform.PlatformCapabilities.cache_line_size),
         tail: AtomicIndex align(platform.PlatformCapabilities.cache_line_size),
 
         pub fn init() Self {
             return Self{
-                .buffer = [_]utils.Atomic.Value(?*T){utils.Atomic.Value(?*T).init(null)} ** CAPACITY,
+                .buffer = [_]utils.Atomic.Value(?T){utils.Atomic.Value(?T).init(null)} ** CAPACITY,
                 .head = AtomicIndex.init(0),
                 .tail = AtomicIndex.init(0),
             };
         }
 
         /// 推入任务到队列尾部（只能被拥有者调用）
-        pub fn push(self: *Self, item: *T) bool {
+        pub fn push(self: *Self, item: T) bool {
             const tail = self.tail.load(.monotonic);
             const head = self.head.load(.acquire);
 
@@ -130,7 +130,7 @@ pub fn WorkStealingQueue(comptime T: type, comptime capacity: u32) type {
             }
 
             const index = tail & MASK;
-            self.buffer[index].store(item, .relaxed);
+            self.buffer[index].store(item, .unordered);
 
             // 内存屏障确保写入可见性
             self.tail.store(tail +% 1, .release);
@@ -138,7 +138,7 @@ pub fn WorkStealingQueue(comptime T: type, comptime capacity: u32) type {
         }
 
         /// 从队列尾部弹出任务（只能被拥有者调用）
-        pub fn pop(self: *Self) ?*T {
+        pub fn pop(self: *Self) ?T {
             const tail = self.tail.load(.monotonic);
             const head = self.head.load(.monotonic);
 
@@ -150,10 +150,10 @@ pub fn WorkStealingQueue(comptime T: type, comptime capacity: u32) type {
             self.tail.store(new_tail, .monotonic);
 
             const index = new_tail & MASK;
-            const item = self.buffer[index].load(.relaxed);
+            const item = self.buffer[index].load(.unordered);
 
             // 检查是否有并发窃取
-            if (self.head.compareAndSwap(head, head +% 1, .acq_rel, .monotonic) != null) {
+            if (self.head.cmpxchgWeak(head, head +% 1, .acq_rel, .monotonic) != null) {
                 // 有并发窃取，恢复tail
                 self.tail.store(tail, .monotonic);
                 return null;
@@ -163,7 +163,7 @@ pub fn WorkStealingQueue(comptime T: type, comptime capacity: u32) type {
         }
 
         /// 从队列头部窃取任务（可以被其他线程调用）
-        pub fn steal(self: *Self) ?*T {
+        pub fn steal(self: *Self) ?T {
             var head = self.head.load(.acquire);
 
             while (true) {
@@ -174,10 +174,10 @@ pub fn WorkStealingQueue(comptime T: type, comptime capacity: u32) type {
                 }
 
                 const index = head & MASK;
-                const item = self.buffer[index].load(.relaxed);
+                const item = self.buffer[index].load(.unordered);
 
                 // 尝试原子更新head
-                switch (self.head.compareAndSwap(head, head +% 1, .acq_rel, .acquire)) {
+                switch (self.head.cmpxchgWeak(head, head +% 1, .acq_rel, .acquire)) {
                     null => return item,
                     else => |actual| head = actual,
                 }
@@ -185,7 +185,7 @@ pub fn WorkStealingQueue(comptime T: type, comptime capacity: u32) type {
         }
 
         /// 批量窃取任务
-        pub fn stealBatch(self: *Self, buffer: []*T, max_count: u32) u32 {
+        pub fn stealBatch(self: *Self, buffer: []T, max_count: u32) u32 {
             var stolen: u32 = 0;
             const count = @min(max_count, buffer.len);
 

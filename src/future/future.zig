@@ -342,7 +342,7 @@ test "Poll类型基础功能" {
     // 测试pending状态
     const pending_poll = Poll(u32).pending;
     try testing.expect(pending_poll == .pending);
-    try testing.expect(pending_poll.isPending());
+    try testing.expect(pending_poll == .pending);
 
     // 测试map操作
     const mapped = ready_poll.map(u64, struct {

@@ -59,11 +59,11 @@ comptime {
 
     // 编译时配置检查
     if (config.enable_io_uring and !platform.PlatformCapabilities.io_uring_available) {
-        @compileLog("Warning: io_uring requested but not available on this platform");
+        // io_uring请求但不可用，将使用备用I/O后端
     }
 
     if (config.enable_numa and !platform.PlatformCapabilities.numa_available) {
-        @compileLog("Warning: NUMA optimization requested but not available");
+        // NUMA优化请求但不可用，将使用标准内存分配
     }
 }
 
