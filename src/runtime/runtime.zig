@@ -70,11 +70,11 @@ pub const RuntimeConfig = struct {
 
         // 平台特性验证
         if (self.enable_io_uring and !platform.PlatformCapabilities.io_uring_available) {
-            @compileLog("Warning: io_uring requested but not available on this platform");
+            // io_uring请求但不可用，将使用备用I/O后端
         }
 
         if (self.enable_numa and !platform.PlatformCapabilities.numa_available) {
-            @compileLog("Warning: NUMA optimization requested but not available");
+            // NUMA优化请求但不可用，将使用标准内存分配
         }
     }
 
