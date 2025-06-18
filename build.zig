@@ -98,11 +98,7 @@ pub fn build(b: *std.Build) void {
         "http_server",
         "file_processor",
         "async_await_demo",
-        "enhanced_async_demo",
-        "simple_enhanced_demo",
-        "nested_await_demo",
-        "simple_nested_await_demo",
-        "pure_async_await_demo",
+        "async_block_demo",
     };
 
     for (examples) |example_name| {

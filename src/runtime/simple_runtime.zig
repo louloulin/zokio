@@ -4,13 +4,12 @@
 
 const std = @import("std");
 const future = @import("../future/future.zig");
-const async_enhanced = @import("../future/async_enhanced.zig");
-const spawn_api = @import("../future/spawn.zig");
+const async_block_api = @import("../future/async_block.zig");
 
 pub const Context = future.Context;
 pub const Poll = future.Poll;
 pub const Waker = future.Waker;
-pub const JoinHandle = spawn_api.JoinHandle;
+// JoinHandle 暂时移除，简化实现
 
 /// 简化的运行时配置
 pub const SimpleConfig = struct {
@@ -100,34 +99,28 @@ pub const SimpleRuntime = struct {
         }
     }
 
-    /// 生成异步任务
-    pub fn spawn(self: *Self, future_arg: anytype) !JoinHandle(@TypeOf(future_arg).Output) {
+    /// 生成异步任务（简化版本，直接执行）
+    pub fn spawn(self: *Self, future_arg: anytype) !@TypeOf(future_arg).Output {
         if (!self.running) {
             return error.RuntimeNotStarted;
         }
 
-        const task_id = future.TaskId.generate();
         _ = self.task_counter.fetchAdd(1, .monotonic);
 
-        // 在实际实现中，这里会将任务添加到调度队列
-        // 现在返回模拟的句柄，忽略future_arg参数
-
-        return JoinHandle(@TypeOf(future_arg).Output).init(task_id);
+        // 简化实现：直接执行Future
+        return self.blockOn(future_arg);
     }
 
-    /// 生成阻塞任务
-    pub fn spawnBlocking(self: *Self, func: anytype) !JoinHandle(@TypeOf(@call(.auto, func, .{}))) {
+    /// 生成阻塞任务（简化版本，直接执行）
+    pub fn spawnBlocking(self: *Self, func: anytype) !@TypeOf(@call(.auto, func, .{})) {
         if (!self.running) {
             return error.RuntimeNotStarted;
         }
 
-        const task_id = future.TaskId.generate();
         _ = self.task_counter.fetchAdd(1, .monotonic);
 
-        // 在实际实现中，这里会在线程池中执行阻塞任务
-        // 现在返回模拟的句柄，忽略func参数
-
-        return JoinHandle(@TypeOf(@call(.auto, func, .{}))).init(task_id);
+        // 简化实现：直接执行函数
+        return @call(.auto, func, .{});
     }
 
     /// 获取运行时统计信息
@@ -188,7 +181,7 @@ pub fn shutdownGlobalRuntime() void {
 }
 
 /// 便捷的全局spawn函数
-pub fn spawn(future_arg: anytype) !JoinHandle(@TypeOf(future_arg).Output) {
+pub fn spawn(future_arg: anytype) !@TypeOf(future_arg).Output {
     const runtime = try getGlobalRuntime();
     return runtime.spawn(future_arg);
 }
@@ -200,7 +193,7 @@ pub fn blockOn(future_arg: anytype) !@TypeOf(future_arg).Output {
 }
 
 /// 便捷的全局spawnBlocking函数
-pub fn spawnBlocking(func: anytype) !JoinHandle(@TypeOf(@call(.auto, func, .{}))) {
+pub fn spawnBlocking(func: anytype) !@TypeOf(@call(.auto, func, .{})) {
     const runtime = try getGlobalRuntime();
     return runtime.spawnBlocking(func);
 }
@@ -278,7 +271,7 @@ pub fn asyncMain(comptime main_fn: anytype) !void {
     try runtime.start();
 
     // 执行主函数
-    const main_future = async_enhanced.async_block(main_fn);
+    const main_future = async_block_api.async_block(main_fn);
     _ = try runtime.blockOn(main_future);
 }
 

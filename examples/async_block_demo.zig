@@ -5,10 +5,10 @@
 const std = @import("std");
 const zokio = @import("zokio");
 
-// 导入简洁的async API
-const simple_async = @import("../src/future/simple_async.zig");
-const async_block = simple_async.async_block;
-const await_fn = simple_async.await_macro;
+// 导入核心async API
+const async_block_api = @import("../src/future/async_block.zig");
+const async_block = async_block_api.async_block;
+const await_fn = async_block_api.await_macro;
 
 /// 异步数据获取
 const DataFetcher = struct {
