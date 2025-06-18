@@ -188,11 +188,29 @@ pub fn build(b: *std.Build) void {
     const network_stress_step = b.step("stress-network", "运行网络压力测试");
     network_stress_step.dependOn(&network_stress_cmd.step);
 
+    // async/await专门压力测试
+    const async_await_stress = b.addExecutable(.{
+        .name = "async_await_benchmark",
+        .root_source_file = b.path("benchmarks/async_await_benchmark.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    async_await_stress.root_module.addImport("zokio", lib.root_module);
+    async_await_stress.root_module.addOptions("config", options);
+    if (libxev) |dep| {
+        async_await_stress.root_module.addImport("libxev", dep.module("xev"));
+    }
+
+    const async_await_stress_cmd = b.addRunArtifact(async_await_stress);
+    const async_await_stress_step = b.step("stress-async-await", "运行async/await专门压力测试");
+    async_await_stress_step.dependOn(&async_await_stress_cmd.step);
+
     // 综合压力测试
     const stress_all_step = b.step("stress-all", "运行所有压力测试");
     stress_all_step.dependOn(&run_benchmarks.step);
     stress_all_step.dependOn(&high_perf_stress_cmd.step);
     stress_all_step.dependOn(&network_stress_cmd.step);
+    stress_all_step.dependOn(&async_await_stress_cmd.step);
 
     // 全面测试
     const test_all_step = b.step("test-all", "运行所有测试");
