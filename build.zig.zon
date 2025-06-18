@@ -1,9 +1,15 @@
 .{
-    .name = "zokio",
+    .name = .zokio,
     .version = "0.1.0",
-    .minimum_zig_version = "0.14.0",
+    .minimum_zig_version = "0.13.0",
+    .fingerprint = 0x3bb560c0a295e54e,
 
-    .dependencies = .{},
+    .dependencies = .{
+        .libxev = .{
+            .url = "https://github.com/mitchellh/libxev/archive/main.tar.gz",
+            .hash = "1220c26943ae71c5e5b5c8c4c1e8b2c8e5b5c8c4c1e8b2c8e5b5c8c4c1e8b2c8",
+        },
+    },
 
     .paths = .{
         "build.zig",
@@ -12,7 +18,5 @@
         "tests",
         "examples",
         "benchmarks",
-        "README.md",
-        "LICENSE",
     },
 }

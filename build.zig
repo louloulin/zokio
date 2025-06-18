@@ -21,6 +21,12 @@ pub fn build(b: *std.Build) void {
     options.addOption(bool, "enable_simd", enable_simd);
     options.addOption(bool, "debug_mode", debug_mode);
 
+    // libxev依赖
+    const libxev = b.dependency("libxev", .{
+        .target = target,
+        .optimize = optimize,
+    });
+
     // 主库构建
     const lib = b.addStaticLibrary(.{
         .name = "zokio",
@@ -30,6 +36,7 @@ pub fn build(b: *std.Build) void {
     });
 
     lib.root_module.addOptions("config", options);
+    lib.root_module.addImport("libxev", libxev.module("libxev"));
 
     // 安装库
     b.installArtifact(lib);
@@ -41,6 +48,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     unit_tests.root_module.addOptions("config", options);
+    unit_tests.root_module.addImport("libxev", libxev.module("libxev"));
 
     const run_unit_tests = b.addRunArtifact(unit_tests);
     const test_step = b.step("test", "运行单元测试");
@@ -53,6 +61,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     integration_tests.root_module.addOptions("config", options);
+    integration_tests.root_module.addImport("libxev", libxev.module("libxev"));
     integration_tests.root_module.addImport("zokio", &lib.root_module);
 
     const run_integration_tests = b.addRunArtifact(integration_tests);
@@ -89,7 +98,6 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         });
         example.root_module.addOptions("config", options);
-        example.root_module.addImport("libxev", libxev.module("libxev"));
         example.root_module.addImport("zokio", &lib.root_module);
 
         const install_example = b.addInstallArtifact(example, .{});
@@ -104,7 +112,6 @@ pub fn build(b: *std.Build) void {
         .optimize = .Debug,
     });
     docs.root_module.addOptions("config", options);
-    docs.root_module.addImport("libxev", libxev.module("libxev"));
 
     const docs_step = b.step("docs", "生成API文档");
     const docs_install = b.addInstallDirectory(.{
