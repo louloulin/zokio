@@ -62,7 +62,7 @@ pub fn build(b: *std.Build) void {
     });
     integration_tests.root_module.addOptions("config", options);
     integration_tests.root_module.addImport("libxev", libxev.module("libxev"));
-    integration_tests.root_module.addImport("zokio", &lib.root_module);
+    integration_tests.root_module.addImport("zokio", lib.root_module);
 
     const run_integration_tests = b.addRunArtifact(integration_tests);
     const integration_test_step = b.step("test-integration", "运行集成测试");
@@ -77,7 +77,7 @@ pub fn build(b: *std.Build) void {
     });
     benchmarks.root_module.addOptions("config", options);
     benchmarks.root_module.addImport("libxev", libxev.module("libxev"));
-    benchmarks.root_module.addImport("zokio", &lib.root_module);
+    benchmarks.root_module.addImport("zokio", lib.root_module);
 
     const run_benchmarks = b.addRunArtifact(benchmarks);
     const benchmark_step = b.step("benchmark", "运行性能基准测试");
@@ -100,7 +100,7 @@ pub fn build(b: *std.Build) void {
         });
         example.root_module.addOptions("config", options);
         example.root_module.addImport("libxev", libxev.module("libxev"));
-        example.root_module.addImport("zokio", &lib.root_module);
+        example.root_module.addImport("zokio", lib.root_module);
 
         const install_example = b.addInstallArtifact(example, .{});
         const example_step = b.step(b.fmt("example-{s}", .{example_name}), b.fmt("构建{s}示例", .{example_name}));
