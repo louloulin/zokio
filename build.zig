@@ -145,6 +145,46 @@ pub fn build(b: *std.Build) void {
     });
     fmt_step.dependOn(&fmt_check.step);
 
+    // 高性能压力测试
+    const high_perf_stress = b.addExecutable(.{
+        .name = "high_performance_stress",
+        .root_source_file = b.path("benchmarks/high_performance_stress.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    high_perf_stress.root_module.addImport("zokio", lib.root_module);
+    high_perf_stress.root_module.addOptions("config", options);
+    if (libxev) |dep| {
+        high_perf_stress.root_module.addImport("libxev", dep.module("xev"));
+    }
+
+    const high_perf_stress_cmd = b.addRunArtifact(high_perf_stress);
+    const high_perf_stress_step = b.step("stress-high-perf", "运行高性能压力测试");
+    high_perf_stress_step.dependOn(&high_perf_stress_cmd.step);
+
+    // 网络压力测试
+    const network_stress = b.addExecutable(.{
+        .name = "network_stress",
+        .root_source_file = b.path("benchmarks/network_stress.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    network_stress.root_module.addImport("zokio", lib.root_module);
+    network_stress.root_module.addOptions("config", options);
+    if (libxev) |dep| {
+        network_stress.root_module.addImport("libxev", dep.module("xev"));
+    }
+
+    const network_stress_cmd = b.addRunArtifact(network_stress);
+    const network_stress_step = b.step("stress-network", "运行网络压力测试");
+    network_stress_step.dependOn(&network_stress_cmd.step);
+
+    // 综合压力测试
+    const stress_all_step = b.step("stress-all", "运行所有压力测试");
+    stress_all_step.dependOn(&run_benchmarks.step);
+    stress_all_step.dependOn(&high_perf_stress_cmd.step);
+    stress_all_step.dependOn(&network_stress_cmd.step);
+
     // 全面测试
     const test_all_step = b.step("test-all", "运行所有测试");
     test_all_step.dependOn(&run_unit_tests.step);
