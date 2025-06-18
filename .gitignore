@@ -40,9 +40,6 @@ coverage/
 perf.data*
 callgrind.out.*
 
-# 文档生成输出
-docs/
-doc/
 
 # 包管理器缓存
 .cache/
