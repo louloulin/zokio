@@ -1,0 +1,91 @@
+# Zig构建输出
+zig-out/
+zig-cache/
+.zig-cache/
+
+# 编译产物
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+
+# 调试文件
+*.dSYM/
+*.pdb
+
+# IDE和编辑器文件
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# 临时文件
+*.tmp
+*.temp
+*.log
+
+# 测试覆盖率报告
+coverage/
+*.gcov
+*.gcda
+*.gcno
+
+# 性能分析文件
+*.prof
+perf.data*
+callgrind.out.*
+
+# 文档生成输出
+docs/
+doc/
+
+# 包管理器缓存
+.cache/
+node_modules/
+
+# 环境配置文件
+.env
+.env.local
+.env.*.local
+
+# 备份文件
+*.bak
+*.backup
+*.orig
+
+# 压缩文件
+*.tar.gz
+*.zip
+*.7z
+
+# 系统文件
+.fuse_hidden*
+.nfs*
+
+# 本地配置
+local.zig
+config.local.zig
+
+# 基准测试结果
+benchmark_results/
+*.bench
+
+# 内存检查报告
+valgrind-*.log
+*.memcheck
+
+# 静态分析报告
+analysis/
+lint-results/
+
+# 发布构建
+release/
+dist/
+
+# 锁文件（如果使用包管理器）
+*.lock
