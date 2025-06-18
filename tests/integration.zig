@@ -73,6 +73,7 @@ test "调度器集成测试" {
     const config = zokio.scheduler.SchedulerConfig{
         .worker_threads = 2,
         .queue_capacity = 8,
+        .steal_batch_size = 2,
         .enable_work_stealing = true,
         .enable_statistics = true,
     };
@@ -81,7 +82,7 @@ test "调度器集成测试" {
 
     // 创建测试任务
     var test_task = zokio.scheduler.Task{
-        .id = zokio.TaskId.generate(),
+        .id = zokio.future.TaskId.generate(),
         .future_ptr = undefined,
         .vtable = undefined,
     };
@@ -166,8 +167,8 @@ test "同步原语集成测试" {
 
     // 测试互斥锁
     var lock_future = mutex.lock();
-    const waker = zokio.Waker.noop();
-    var ctx = zokio.Context.init(waker);
+    const waker = zokio.future.Waker.noop();
+    var ctx = zokio.future.Context.init(waker);
 
     const result = lock_future.poll(&ctx);
     try testing.expect(result.isReady());
