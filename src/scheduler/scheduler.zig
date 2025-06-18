@@ -177,9 +177,10 @@ pub fn WorkStealingQueue(comptime T: type, comptime capacity: u32) type {
                 const item = self.buffer[index].load(.unordered);
 
                 // 尝试原子更新head
-                switch (self.head.cmpxchgWeak(head, head +% 1, .acq_rel, .acquire)) {
-                    null => return item,
-                    else => |actual| head = actual,
+                if (self.head.cmpxchgWeak(head, head +% 1, .acq_rel, .acquire)) |actual| {
+                    head = actual;
+                } else {
+                    return item;
                 }
             }
         }
