@@ -182,8 +182,8 @@ pub fn ObjectPool(comptime T: type, comptime pool_size: usize) type {
         const Self = @This();
 
         // 编译时计算的池参数
-        const OBJECT_SIZE = @sizeOf(T);
         const OBJECT_ALIGN = @alignOf(T);
+        const OBJECT_SIZE = std.mem.alignForward(usize, @sizeOf(T), OBJECT_ALIGN);
         const POOL_BYTES = OBJECT_SIZE * pool_size;
 
         // 编译时对齐的内存池
@@ -208,13 +208,9 @@ pub fn ObjectPool(comptime T: type, comptime pool_size: usize) type {
             while (i > 0) {
                 i -= 1;
                 const offset = i * OBJECT_SIZE;
-                // 确保偏移量对齐到对象的对齐要求
-                const aligned_offset = std.mem.alignForward(usize, offset, OBJECT_ALIGN);
-                if (aligned_offset + OBJECT_SIZE <= POOL_BYTES) {
-                    const node = @as(*FreeNode, @ptrCast(@alignCast(&self.pool[aligned_offset])));
-                    node.next = current;
-                    current = node;
-                }
+                const node = @as(*FreeNode, @ptrCast(@alignCast(&self.pool[offset])));
+                node.next = current;
+                current = node;
             }
 
             self.free_list.store(current, .release);
