@@ -506,12 +506,12 @@ test "工作窃取队列基础功能" {
 
     // 测试弹出
     const popped = queue.pop().?;
-    try testing.expectEqual(@as(u32, 3), popped.value);
+    try testing.expectEqual(@as(u32, 3), popped.*.value);
     try testing.expectEqual(@as(u32, 2), queue.len());
 
     // 测试窃取
     const stolen = queue.steal().?;
-    try testing.expectEqual(@as(u32, 1), stolen.value);
+    try testing.expectEqual(@as(u32, 1), stolen.*.value);
     try testing.expectEqual(@as(u32, 1), queue.len());
 }
 
