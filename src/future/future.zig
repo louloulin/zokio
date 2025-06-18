@@ -577,10 +577,6 @@ pub fn delay(duration_ms: u64) Delay(0) {
 /// const result = await_fn(some_future);
 /// ```
 pub fn await_fn(future: anytype) @TypeOf(future).Output {
-    // 注意：这是一个简化的实现
-    // 在实际的async_block中，这应该与状态机集成
-    // 现在只是提供类型检查和语法糖
-
     // 编译时验证Future类型
     comptime {
         if (!@hasDecl(@TypeOf(future), "poll")) {
@@ -591,9 +587,20 @@ pub fn await_fn(future: anytype) @TypeOf(future).Output {
         }
     }
 
-    // 在实际实现中，这里会与async_block的状态机集成
-    // 现在返回一个占位符值
-    return undefined;
+    // 真正的await实现：轮询直到完成
+    var fut = future;
+    const waker = Waker.noop();
+    var ctx = Context.init(waker);
+
+    while (true) {
+        switch (fut.poll(&ctx)) {
+            .ready => |result| return result,
+            .pending => {
+                // 简单的让出CPU时间，模拟异步等待
+                std.time.sleep(1 * std.time.ns_per_ms);
+            },
+        }
+    }
 }
 
 // 注意：由于await是Zig的保留字，我们使用await_fn作为函数名

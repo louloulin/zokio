@@ -105,6 +105,7 @@ pub fn build(b: *std.Build) void {
         "advanced_sync_demo",
         "plan_api_demo",
         "complex_async_await_demo",
+        "real_async_await_demo",
     };
 
     for (examples) |example_name| {
