@@ -100,6 +100,9 @@ pub fn build(b: *std.Build) void {
         "async_await_demo",
         "enhanced_async_demo",
         "simple_enhanced_demo",
+        "nested_await_demo",
+        "simple_nested_await_demo",
+        "pure_async_await_demo",
     };
 
     for (examples) |example_name| {

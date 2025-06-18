@@ -48,6 +48,11 @@ pub const async_enhanced = @import("future/async_enhanced.zig");
 pub const spawn_api = @import("future/spawn.zig");
 pub const simple_runtime = @import("runtime/simple_runtime.zig");
 
+// 简洁的async API导出
+pub const simple_async = @import("future/simple_async.zig");
+pub const pure_async_block = simple_async.async_block;
+pub const await_fn = simple_async.await_macro;
+
 // 便捷的增强API导出
 pub const async_block = async_enhanced.async_block;
 pub const await_macro = async_enhanced.await_macro;

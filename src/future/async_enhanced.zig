@@ -43,8 +43,8 @@ pub const AsyncContext = struct {
     }
 
     /// await实现 - 等待Future完成
-    pub fn await_impl(self: *Self, future: anytype) !@TypeOf(future).Output {
-        var f = future;
+    pub fn await_impl(self: *Self, future_arg: anytype) !@TypeOf(future_arg).Output {
+        var f = future_arg;
 
         while (true) {
             switch (f.poll(self.ctx)) {
@@ -59,8 +59,8 @@ pub const AsyncContext = struct {
     }
 
     /// 便捷的await方法
-    pub fn await_future(self: *Self, future: anytype) !@TypeOf(future).Output {
-        return self.await_impl(future);
+    pub fn await_future(self: *Self, future_arg: anytype) !@TypeOf(future_arg).Output {
+        return self.await_impl(future_arg);
     }
 };
 
@@ -77,8 +77,8 @@ pub fn AsyncBlock(comptime FuncType: type) type {
 
         pub const Output = return_type;
 
-        /// 函数实现
-        func: FuncType,
+        /// 函数实现（使用函数指针）
+        func: *const fn () callconv(.C) return_type,
 
         /// 执行状态
         state: State = .initial,
