@@ -133,7 +133,7 @@ const FileProcessor = struct {
             processed_content[i] = std.ascii.toUpper(char);
         }
 
-        std.debug.print("内容处理完成，转换为大写\n");
+        std.debug.print("内容处理完成，转换为大写\n", .{});
 
         // 写入输出文件
         var writer = FileWriter{
@@ -146,7 +146,7 @@ const FileProcessor = struct {
             .pending => return .pending,
         }
 
-        std.debug.print("文件处理完成\n");
+        std.debug.print("文件处理完成\n", .{});
         return .{ .ready = {} };
     }
 };
@@ -170,7 +170,7 @@ const BatchFileProcessor = struct {
             }
         }
 
-        std.debug.print("所有文件处理任务完成\n");
+        std.debug.print("所有文件处理任务完成\n", .{});
         return .{ .ready = {} };
     }
 };

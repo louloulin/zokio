@@ -180,14 +180,14 @@ pub fn ZokioRuntime(comptime config: RuntimeConfig) type {
         }
 
         /// 编译时特化的spawn函数
-        pub fn spawn(self: *Self, comptime FutureType: anytype) !JoinHandle(@TypeOf(FutureType).Output) {
+        pub fn spawn(self: *Self, future_instance: anytype) !JoinHandle(@TypeOf(future_instance).Output) {
             // 编译时类型检查
-            comptime validateFutureType(@TypeOf(FutureType));
+            comptime validateFutureType(@TypeOf(future_instance));
 
             const task_id = future.TaskId.generate();
 
             // 创建任务句柄
-            const handle = JoinHandle(@TypeOf(FutureType).Output){
+            const handle = JoinHandle(@TypeOf(future_instance).Output){
                 .task_id = task_id,
             };
 
@@ -205,7 +205,7 @@ pub fn ZokioRuntime(comptime config: RuntimeConfig) type {
         }
 
         /// 编译时优化的block_on
-        pub fn blockOn(self: *Self, comptime FutureType: anytype) !@TypeOf(FutureType).Output {
+        pub fn blockOn(self: *Self, future_instance: anytype) !@TypeOf(future_instance).Output {
             // 编译时检查是否在异步上下文中
             comptime if (config.check_async_context) {
                 if (isInAsyncContext()) {
@@ -214,12 +214,12 @@ pub fn ZokioRuntime(comptime config: RuntimeConfig) type {
             };
 
             // 简化实现：直接轮询Future
-            var future_instance = FutureType;
+            var future_obj = future_instance;
             const waker = future.Waker.noop();
             var ctx = future.Context.init(waker);
 
             while (true) {
-                switch (future_instance.poll(&ctx)) {
+                switch (future_obj.poll(&ctx)) {
                     .ready => |value| return value,
                     .pending => {
                         // 轮询I/O事件

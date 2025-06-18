@@ -48,12 +48,12 @@ const TcpServer = struct {
             self.listener_fd = 1; // 模拟文件描述符
             self.running = true;
 
-            std.debug.print("服务器启动成功，等待连接...\n");
+            std.debug.print("服务器启动成功，等待连接...\n", .{});
             return .pending;
         }
 
         // 简化实现：模拟接受连接
-        std.debug.print("接受新连接\n");
+        std.debug.print("接受新连接\n", .{});
 
         // 在实际实现中，这里会：
         // 1. 异步接受新连接
@@ -105,7 +105,7 @@ pub fn main() !void {
     const address = try std.net.Address.parseIp("127.0.0.1", 8080);
 
     // 创建服务器任务
-    var server = TcpServer{
+    const server = TcpServer{
         .address = address,
     };
 

@@ -127,7 +127,7 @@ const HttpConnection = struct {
         defer response.deinit();
 
         // 模拟发送响应
-        std.debug.print("HTTP {} {} -> {} {s}\n", .{
+        std.debug.print("HTTP {} {s} -> {s} {s}\n", .{
             response.status_code,
             response.status_text,
             request.method,
@@ -156,12 +156,12 @@ const HttpServer = struct {
             self.listener_fd = 1;
             self.running = true;
 
-            std.debug.print("HTTP服务器启动成功，等待连接...\n");
+            std.debug.print("HTTP服务器启动成功，等待连接...\n", .{});
             return .pending;
         }
 
         // 简化实现：模拟处理HTTP连接
-        std.debug.print("接受新HTTP连接\n");
+        std.debug.print("接受新HTTP连接\n", .{});
 
         var connection = HttpConnection{
             .client_fd = 2,
