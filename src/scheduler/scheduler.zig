@@ -346,7 +346,7 @@ pub fn Scheduler(comptime config: SchedulerConfig) type {
         fn scheduleLocalFirst(self: *Self, task: *Task) void {
             // 尝试放入当前工作线程的本地队列
             if (getCurrentWorkerId()) |worker_id| {
-                if (self.local_queues[worker_id].push(&task)) {
+                if (self.local_queues[worker_id].push(task)) {
                     return;
                 }
             }
@@ -490,16 +490,16 @@ test "工作窃取队列基础功能" {
         value: u32,
     };
 
-    var queue = WorkStealingQueue(TestItem, 8).init();
+    var queue = WorkStealingQueue(*TestItem, 8).init();
 
-    const item1 = TestItem{ .value = 1 };
-    const item2 = TestItem{ .value = 2 };
-    const item3 = TestItem{ .value = 3 };
+    var item1 = TestItem{ .value = 1 };
+    var item2 = TestItem{ .value = 2 };
+    var item3 = TestItem{ .value = 3 };
 
     // 测试推入
-    try testing.expect(queue.push(item1));
-    try testing.expect(queue.push(item2));
-    try testing.expect(queue.push(item3));
+    try testing.expect(queue.push(&item1));
+    try testing.expect(queue.push(&item2));
+    try testing.expect(queue.push(&item3));
 
     try testing.expectEqual(@as(u32, 3), queue.len());
     try testing.expect(!queue.isEmpty());
@@ -539,7 +539,7 @@ test "调度器基础功能" {
 
     // 验证任务被调度到某个队列
     var found = false;
-    for (scheduler.local_queues) |*queue| {
+    for (&scheduler.local_queues) |*queue| {
         if (!queue.isEmpty()) {
             found = true;
             break;
