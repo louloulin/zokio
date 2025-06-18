@@ -1,5 +1,5 @@
 //! 指标模块
-//! 
+//!
 //! 提供运行时性能指标收集和报告功能。
 
 const std = @import("std");
@@ -11,15 +11,15 @@ pub const RuntimeMetrics = struct {
     tasks_spawned: utils.Atomic.Value(u64),
     tasks_completed: utils.Atomic.Value(u64),
     tasks_cancelled: utils.Atomic.Value(u64),
-    
+
     // 调度指标
     scheduler_polls: utils.Atomic.Value(u64),
     work_steals: utils.Atomic.Value(u64),
-    
+
     // I/O指标
     io_operations: utils.Atomic.Value(u64),
     io_completions: utils.Atomic.Value(u64),
-    
+
     pub fn init() RuntimeMetrics {
         return RuntimeMetrics{
             .tasks_spawned = utils.Atomic.Value(u64).init(0),
@@ -31,15 +31,15 @@ pub const RuntimeMetrics = struct {
             .io_completions = utils.Atomic.Value(u64).init(0),
         };
     }
-    
+
     pub fn recordTaskSpawn(self: *RuntimeMetrics) void {
         _ = self.tasks_spawned.fetchAdd(1, .monotonic);
     }
-    
+
     pub fn recordTaskCompletion(self: *RuntimeMetrics) void {
         _ = self.tasks_completed.fetchAdd(1, .monotonic);
     }
-    
+
     pub fn getSnapshot(self: *const RuntimeMetrics) MetricsSnapshot {
         return MetricsSnapshot{
             .tasks_spawned = self.tasks_spawned.load(.monotonic),
@@ -62,7 +62,7 @@ pub const MetricsSnapshot = struct {
     work_steals: u64,
     io_operations: u64,
     io_completions: u64,
-    
+
     pub fn format(
         self: MetricsSnapshot,
         comptime fmt: []const u8,
@@ -71,7 +71,7 @@ pub const MetricsSnapshot = struct {
     ) !void {
         _ = fmt;
         _ = options;
-        
+
         try writer.print(
             \\Runtime Metrics:
             \\  Tasks: spawned={}, completed={}, cancelled={}
@@ -93,14 +93,14 @@ pub const MetricsSnapshot = struct {
 // 测试
 test "运行时指标基础功能" {
     const testing = std.testing;
-    
+
     var metrics = RuntimeMetrics.init();
-    
+
     // 测试记录指标
     metrics.recordTaskSpawn();
     metrics.recordTaskSpawn();
     metrics.recordTaskCompletion();
-    
+
     // 测试快照
     const snapshot = metrics.getSnapshot();
     try testing.expectEqual(@as(u64, 2), snapshot.tasks_spawned);

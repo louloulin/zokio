@@ -15,10 +15,15 @@ pub const scheduler = @import("scheduler/scheduler.zig");
 pub const io = @import("io/io.zig");
 pub const sync = @import("sync/sync.zig");
 pub const time = @import("time/time.zig");
+pub const timer = @import("time/timer.zig");
 pub const memory = @import("memory/memory.zig");
 pub const metrics = @import("metrics/metrics.zig");
 pub const testing = @import("testing/testing.zig");
 pub const utils = @import("utils/utils.zig");
+
+// 新增的高级功能模块
+pub const fs = @import("fs/async_fs.zig");
+pub const tracing = @import("tracing/tracer.zig");
 
 // 平台能力检测
 pub const platform = @import("utils/platform.zig");
@@ -33,8 +38,26 @@ pub const Waker = future.Waker;
 // 便捷函数导出
 pub const ZokioRuntime = runtime.ZokioRuntime;
 pub const async_fn = future.async_fn;
-pub const spawn = runtime.spawn;
+pub const runtime_spawn = runtime.spawn;
 pub const block_on = runtime.block_on;
+
+// Future便捷函数导出
+pub const ready = future.ready;
+pub const pending = future.pending;
+pub const delay = future.delay;
+pub const timeout = future.timeout;
+pub const await_future = future.await_future;
+
+// 核心运行时导出
+pub const simple_runtime = @import("runtime/simple_runtime.zig");
+pub const SimpleRuntime = simple_runtime.SimpleRuntime;
+pub const RuntimeBuilder = simple_runtime.RuntimeBuilder;
+pub const builder = simple_runtime.builder;
+
+// 核心async/await API导出
+pub const async_block_api = @import("future/async_block.zig");
+pub const async_block = async_block_api.async_block;
+pub const await_fn = async_block_api.await_macro;
 
 // 配置类型导出
 pub const RuntimeConfig = runtime.RuntimeConfig;

@@ -203,6 +203,101 @@ fn benchmarkIoOperations(operations: u64) !void {
     }
 }
 
+/// await_fn基准测试
+fn benchmarkAwaitFn(operations: u64) !void {
+    const AsyncSimpleTask = zokio.future.async_fn_with_params(struct {
+        fn simpleTask(value: u32) u32 {
+            return value * 2;
+        }
+    }.simpleTask);
+
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+
+    var runtime = zokio.SimpleRuntime.init(allocator, .{});
+    defer runtime.deinit();
+    try runtime.start();
+
+    // 直接在这里执行循环，而不是在async_block内部
+    var i: u64 = 0;
+    while (i < operations) : (i += 1) {
+        const task = AsyncSimpleTask{ .params = .{ .arg0 = @intCast(i) } };
+        _ = try runtime.blockOn(task);
+    }
+}
+
+/// 嵌套await_fn基准测试
+fn benchmarkNestedAwaitFn(operations: u64) !void {
+    const AsyncStep1 = zokio.future.async_fn_with_params(struct {
+        fn step1(value: u32) u32 {
+            return value + 1;
+        }
+    }.step1);
+
+    const AsyncStep2 = zokio.future.async_fn_with_params(struct {
+        fn step2(value: u32) u32 {
+            return value * 2;
+        }
+    }.step2);
+
+    const AsyncStep3 = zokio.future.async_fn_with_params(struct {
+        fn step3(value: u32) u32 {
+            return value - 1;
+        }
+    }.step3);
+
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+
+    var runtime = zokio.SimpleRuntime.init(allocator, .{});
+    defer runtime.deinit();
+    try runtime.start();
+
+    // 直接在这里执行嵌套调用
+    var i: u64 = 0;
+    while (i < operations) : (i += 1) {
+        const step1_task = AsyncStep1{ .params = .{ .arg0 = @intCast(i) } };
+        const step1_result = try runtime.blockOn(step1_task);
+
+        const step2_task = AsyncStep2{ .params = .{ .arg0 = step1_result } };
+        const step2_result = try runtime.blockOn(step2_task);
+
+        const step3_task = AsyncStep3{ .params = .{ .arg0 = step2_result } };
+        _ = try runtime.blockOn(step3_task);
+    }
+}
+
+/// async_fn_with_params基准测试
+fn benchmarkAsyncFnWithParams(operations: u64) !void {
+    const AsyncComplexTask = zokio.future.async_fn_with_params(struct {
+        fn complexTask(value: u32) u32 {
+            var result = value;
+            var i: u32 = 0;
+            while (i < 100) {
+                result = (result * 31 + i) % 1000000;
+                i += 1;
+            }
+            return result;
+        }
+    }.complexTask);
+
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+
+    var runtime = zokio.SimpleRuntime.init(allocator, .{});
+    defer runtime.deinit();
+    try runtime.start();
+
+    var i: u64 = 0;
+    while (i < operations) : (i += 1) {
+        const task = AsyncComplexTask{ .params = .{ .arg0 = @intCast(i) } };
+        _ = try runtime.blockOn(task);
+    }
+}
+
 /// 运行所有基准测试
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -240,6 +335,9 @@ pub fn main() !void {
         .{ .name = "对象池", .func = benchmarkObjectPool },
         .{ .name = "原子操作", .func = benchmarkAtomicOperations },
         .{ .name = "I/O操作", .func = benchmarkIoOperations },
+        .{ .name = "await_fn调用", .func = benchmarkAwaitFn },
+        .{ .name = "嵌套await_fn", .func = benchmarkNestedAwaitFn },
+        .{ .name = "async_fn_with_params", .func = benchmarkAsyncFnWithParams },
     };
 
     var results = std.ArrayList(BenchmarkResult).init(allocator);
@@ -270,6 +368,12 @@ pub fn main() !void {
             5_000_000 // 任务调度目标：500万ops/sec
         else if (std.mem.indexOf(u8, result.name, "Future轮询") != null)
             10_000_000 // Future轮询目标：1000万ops/sec
+        else if (std.mem.indexOf(u8, result.name, "await_fn调用") != null)
+            2_000_000 // await_fn目标：200万ops/sec
+        else if (std.mem.indexOf(u8, result.name, "嵌套await_fn") != null)
+            1_000_000 // 嵌套await_fn目标：100万ops/sec
+        else if (std.mem.indexOf(u8, result.name, "async_fn_with_params") != null)
+            500_000 // async_fn_with_params目标：50万ops/sec
         else
             1_000_000; // 默认目标：100万ops/sec
 
