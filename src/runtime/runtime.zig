@@ -369,12 +369,12 @@ const PerformanceReport = struct {
 };
 
 /// 便捷函数
-pub fn spawn(comptime future_value: anytype) !JoinHandle(@TypeOf(future_value).Output) {
+pub fn spawn(future_value: anytype) !JoinHandle(@TypeOf(future_value).Output) {
     // 这需要全局运行时实例，简化实现
     @panic("Global spawn not implemented in this simplified version");
 }
 
-pub fn block_on(comptime future_value: anytype) !@TypeOf(future_value).Output {
+pub fn block_on(future_value: anytype) !@TypeOf(future_value).Output {
     // 这需要全局运行时实例，简化实现
     @panic("Global block_on not implemented in this simplified version");
 }
