@@ -286,7 +286,7 @@ pub fn async_fn(comptime func: anytype) type {
         // 添加Output类型定义
         pub const Output = return_type;
 
-        func_impl: @TypeOf(func),
+        func_impl: *const fn () return_type,
         state: State = .initial,
         result: ?return_type = null,
 
@@ -341,7 +341,7 @@ test "Poll类型基础功能" {
 
     // 测试pending状态
     const pending_poll = Poll(u32).pending;
-    try testing.expect(!pending_poll.isReady());
+    try testing.expect(pending_poll == .pending);
     try testing.expect(pending_poll.isPending());
 
     // 测试map操作

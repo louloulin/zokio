@@ -22,8 +22,7 @@ pub fn comptimeConcat(comptime strs: []const []const u8) []const u8 {
             pos += str.len;
         }
 
-        const final_result = result;
-        return &final_result;
+        return result[0..result.len];
     }
 }
 
