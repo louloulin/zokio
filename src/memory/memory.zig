@@ -230,7 +230,7 @@ pub fn ObjectPool(comptime T: type, comptime pool_size: usize) type {
         }
 
         pub fn release(self: *Self, obj: *T) void {
-            const node = @as(*FreeNode, @ptrCast(obj));
+            const node = @as(*FreeNode, @ptrCast(@alignCast(obj)));
 
             while (true) {
                 const head = self.free_list.load(.acquire);

@@ -45,7 +45,7 @@ pub const SchedulerConfig = struct {
             @compileError("Queue capacity must be a power of 2");
         }
 
-        if (self.steal_batch_size > self.queue_capacity / 2) {
+        if (self.steal_batch_size > self.queue_capacity / 4) {
             @compileError("Steal batch size too large");
         }
     }
@@ -133,7 +133,7 @@ pub fn WorkStealingQueue(comptime T: type, comptime capacity: u32) type {
             self.buffer[index].store(item, .relaxed);
 
             // 内存屏障确保写入可见性
-            self.tail.store(tail.wrapping_add(1), .release);
+            self.tail.store(tail +% 1, .release);
             return true;
         }
 
@@ -146,14 +146,14 @@ pub fn WorkStealingQueue(comptime T: type, comptime capacity: u32) type {
                 return null; // 队列空
             }
 
-            const new_tail = tail.wrapping_sub(1);
+            const new_tail = tail -% 1;
             self.tail.store(new_tail, .monotonic);
 
             const index = new_tail & MASK;
             const item = self.buffer[index].load(.relaxed);
 
             // 检查是否有并发窃取
-            if (self.head.compareAndSwap(head, head.wrapping_add(1), .acq_rel, .monotonic) != null) {
+            if (self.head.compareAndSwap(head, head +% 1, .acq_rel, .monotonic) != null) {
                 // 有并发窃取，恢复tail
                 self.tail.store(tail, .monotonic);
                 return null;
@@ -177,7 +177,7 @@ pub fn WorkStealingQueue(comptime T: type, comptime capacity: u32) type {
                 const item = self.buffer[index].load(.relaxed);
 
                 // 尝试原子更新head
-                switch (self.head.compareAndSwap(head, head.wrapping_add(1), .acq_rel, .acquire)) {
+                switch (self.head.compareAndSwap(head, head +% 1, .acq_rel, .acquire)) {
                     null => return item,
                     else => |actual| head = actual,
                 }
@@ -205,7 +205,7 @@ pub fn WorkStealingQueue(comptime T: type, comptime capacity: u32) type {
         pub fn len(self: *const Self) u32 {
             const tail = self.tail.load(.monotonic);
             const head = self.head.load(.monotonic);
-            return tail.wrapping_sub(head);
+            return tail -% head;
         }
 
         /// 检查队列是否为空

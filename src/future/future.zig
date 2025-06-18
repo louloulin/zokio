@@ -27,7 +27,10 @@ pub fn Poll(comptime T: type) type {
 
         /// 检查是否仍在等待
         pub fn isPending(self: Self) bool {
-            return !self.isReady();
+            return switch (self) {
+                .ready => false,
+                .pending => true,
+            };
         }
 
         /// 映射就绪值到新类型
@@ -280,6 +283,9 @@ pub fn async_fn(comptime func: anytype) type {
     return struct {
         const Self = @This();
 
+        // 添加Output类型定义
+        pub const Output = return_type;
+
         func_impl: @TypeOf(func),
         state: State = .initial,
         result: ?return_type = null,
@@ -399,11 +405,13 @@ test "async_fn基础功能" {
         }
     }.compute);
 
-    var future = TestFunc.init(struct {
+    const test_func = struct {
         fn compute() u32 {
             return 42;
         }
-    }.compute);
+    }.compute;
+
+    var future = TestFunc.init(test_func);
 
     const waker = Waker.noop();
     var ctx = Context.init(waker);

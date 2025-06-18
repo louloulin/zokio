@@ -1,5 +1,5 @@
 //! 工具函数和辅助类型
-//! 
+//!
 //! 提供Zokio运行时所需的各种工具函数和辅助类型。
 
 const std = @import("std");
@@ -14,14 +14,14 @@ pub fn comptimeConcat(comptime strs: []const []const u8) []const u8 {
         for (strs) |str| {
             total_len += str.len;
         }
-        
+
         var result: [total_len]u8 = undefined;
         var pos: usize = 0;
         for (strs) |str| {
-            @memcpy(result[pos..pos + str.len], str);
+            @memcpy(result[pos .. pos + str.len], str);
             pos += str.len;
         }
-        
+
         return result[0..];
     }
 }
@@ -77,7 +77,7 @@ pub fn OptimizedStruct(comptime fields: []const std.builtin.Type.StructField) ty
         }.lessThan);
         break :blk sorted;
     };
-    
+
     return @Type(.{
         .Struct = .{
             .layout = .auto,
@@ -89,15 +89,11 @@ pub fn OptimizedStruct(comptime fields: []const std.builtin.Type.StructField) ty
 }
 
 /// 编译时缓存行对齐分析
-pub fn analyzeCacheAlignment(comptime T: type) struct { 
-    size: usize, 
-    alignment: usize, 
-    cache_friendly: bool 
-} {
+pub fn analyzeCacheAlignment(comptime T: type) struct { size: usize, alignment: usize, cache_friendly: bool } {
     const size = @sizeOf(T);
     const alignment = @alignOf(T);
     const cache_line_size = platform.PlatformCapabilities.cache_line_size;
-    
+
     return .{
         .size = size,
         .alignment = alignment,
@@ -109,45 +105,7 @@ pub fn analyzeCacheAlignment(comptime T: type) struct {
 pub const Atomic = struct {
     /// 原子值包装器
     pub fn Value(comptime T: type) type {
-        return struct {
-            const Self = @This();
-            
-            value: T,
-            
-            pub fn init(initial_value: T) Self {
-                return Self{ .value = initial_value };
-            }
-            
-            pub fn load(self: *const Self, ordering: std.builtin.AtomicOrder) T {
-                return @atomicLoad(T, &self.value, ordering);
-            }
-            
-            pub fn store(self: *Self, value: T, ordering: std.builtin.AtomicOrder) void {
-                @atomicStore(T, &self.value, value, ordering);
-            }
-            
-            pub fn swap(self: *Self, value: T, ordering: std.builtin.AtomicOrder) T {
-                return @atomicRmw(T, &self.value, .Xchg, value, ordering);
-            }
-            
-            pub fn compareAndSwap(
-                self: *Self, 
-                expected: T, 
-                new_value: T, 
-                success_ordering: std.builtin.AtomicOrder, 
-                failure_ordering: std.builtin.AtomicOrder
-            ) ?T {
-                return @cmpxchgWeak(T, &self.value, expected, new_value, success_ordering, failure_ordering);
-            }
-            
-            pub fn fetchAdd(self: *Self, value: T, ordering: std.builtin.AtomicOrder) T {
-                return @atomicRmw(T, &self.value, .Add, value, ordering);
-            }
-            
-            pub fn fetchSub(self: *Self, value: T, ordering: std.builtin.AtomicOrder) T {
-                return @atomicRmw(T, &self.value, .Sub, value, ordering);
-            }
-        };
+        return std.atomic.Value(T);
     }
 };
 
@@ -155,10 +113,10 @@ pub const Atomic = struct {
 pub fn IntrusiveNode(comptime T: type) type {
     return struct {
         const Self = @This();
-        
+
         next: ?*Self = null,
         prev: ?*Self = null,
-        
+
         pub fn data(self: *Self) *T {
             return @fieldParentPtr("node", self);
         }
@@ -170,67 +128,67 @@ pub fn IntrusiveList(comptime T: type, comptime node_field: []const u8) type {
     return struct {
         const Self = @This();
         const Node = @TypeOf(@field(@as(T, undefined), node_field));
-        
+
         head: ?*Node = null,
         tail: ?*Node = null,
         len: usize = 0,
-        
+
         pub fn init() Self {
             return Self{};
         }
-        
+
         pub fn pushBack(self: *Self, item: *T) void {
             const node = &@field(item, node_field);
             node.next = null;
             node.prev = self.tail;
-            
+
             if (self.tail) |tail| {
                 tail.next = node;
             } else {
                 self.head = node;
             }
-            
+
             self.tail = node;
             self.len += 1;
         }
-        
+
         pub fn popFront(self: *Self) ?*T {
             const head = self.head orelse return null;
-            
+
             self.head = head.next;
             if (self.head) |new_head| {
                 new_head.prev = null;
             } else {
                 self.tail = null;
             }
-            
+
             self.len -= 1;
             head.next = null;
             head.prev = null;
-            
+
             return head.data();
         }
-        
+
         pub fn remove(self: *Self, item: *T) void {
             const node = &@field(item, node_field);
-            
+
             if (node.prev) |prev| {
                 prev.next = node.next;
             } else {
                 self.head = node.next;
             }
-            
+
             if (node.next) |next| {
                 next.prev = node.prev;
             } else {
                 self.tail = node.prev;
             }
-            
+
             node.next = null;
             node.prev = null;
             self.len -= 1;
         }
-        
+
         pub fn isEmpty(self: *const Self) bool {
             return self.len == 0;
         }
@@ -257,15 +215,15 @@ pub fn comptimeRandom(comptime seed: u64) u64 {
 // 测试
 test "工具函数基础功能" {
     const testing = std.testing;
-    
+
     // 测试编译时字符串连接
     const result = comptimeConcat(&[_][]const u8{ "Hello", " ", "World" });
     try testing.expectEqualStrings("Hello World", result);
-    
+
     // 测试类型名称
     const name = typeName(u32);
     try testing.expectEqualStrings("u32", name);
-    
+
     // 测试分支预测
     try testing.expect(likely(true));
     try testing.expect(!unlikely(false));
@@ -273,15 +231,15 @@ test "工具函数基础功能" {
 
 test "原子操作包装器" {
     const testing = std.testing;
-    
+
     var atomic_value = Atomic.Value(u32).init(42);
-    
+
     // 测试基本操作
     try testing.expectEqual(@as(u32, 42), atomic_value.load(.monotonic));
-    
+
     atomic_value.store(84, .monotonic);
     try testing.expectEqual(@as(u32, 84), atomic_value.load(.monotonic));
-    
+
     const old_value = atomic_value.swap(168, .monotonic);
     try testing.expectEqual(@as(u32, 84), old_value);
     try testing.expectEqual(@as(u32, 168), atomic_value.load(.monotonic));
@@ -289,35 +247,35 @@ test "原子操作包装器" {
 
 test "侵入式链表" {
     const testing = std.testing;
-    
+
     const TestItem = struct {
         value: u32,
         node: IntrusiveNode(@This()),
     };
-    
+
     var list = IntrusiveList(TestItem, "node").init();
-    
+
     var item1 = TestItem{ .value = 1, .node = .{} };
     var item2 = TestItem{ .value = 2, .node = .{} };
     var item3 = TestItem{ .value = 3, .node = .{} };
-    
+
     // 测试插入
     list.pushBack(&item1);
     list.pushBack(&item2);
     list.pushBack(&item3);
-    
+
     try testing.expectEqual(@as(usize, 3), list.len);
     try testing.expect(!list.isEmpty());
-    
+
     // 测试弹出
     const popped1 = list.popFront().?;
     try testing.expectEqual(@as(u32, 1), popped1.value);
     try testing.expectEqual(@as(usize, 2), list.len);
-    
+
     // 测试移除
     list.remove(&item2);
     try testing.expectEqual(@as(usize, 1), list.len);
-    
+
     const popped2 = list.popFront().?;
     try testing.expectEqual(@as(u32, 3), popped2.value);
     try testing.expect(list.isEmpty());
