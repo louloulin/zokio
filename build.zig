@@ -97,6 +97,7 @@ pub fn build(b: *std.Build) void {
         "tcp_echo_server",
         "http_server",
         "file_processor",
+        "async_await_demo",
     };
 
     for (examples) |example_name| {

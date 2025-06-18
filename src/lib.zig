@@ -36,6 +36,13 @@ pub const async_fn = future.async_fn;
 pub const spawn = runtime.spawn;
 pub const block_on = runtime.block_on;
 
+// Future便捷函数导出
+pub const ready = future.ready;
+pub const pending = future.pending;
+pub const delay = future.delay;
+pub const timeout = future.timeout;
+pub const await_future = future.await_future;
+
 // 配置类型导出
 pub const RuntimeConfig = runtime.RuntimeConfig;
 pub const IoConfig = io.IoConfig;
