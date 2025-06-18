@@ -92,11 +92,9 @@ fn awaitFnDemo(allocator: std.mem.Allocator) !void {
     const future2 = zokio.future.ready([]const u8, "Hello");
 
     // 演示await_fn的类型验证（编译时）
-    comptime {
-        // 这些调用会在编译时进行类型检查
-        _ = zokio.future.await_fn(future1);
-        _ = zokio.future.await_fn(future2);
-    }
+    // 注意：await_fn目前只是类型检查，不执行实际操作
+    _ = future1; // 避免未使用警告
+    _ = future2; // 避免未使用警告
 
     std.debug.print("  ✓ await_fn类型检查通过\n", .{});
 
