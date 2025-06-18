@@ -33,7 +33,7 @@ pub const Waker = future.Waker;
 // 便捷函数导出
 pub const ZokioRuntime = runtime.ZokioRuntime;
 pub const async_fn = future.async_fn;
-pub const spawn = runtime.spawn;
+pub const runtime_spawn = runtime.spawn;
 pub const block_on = runtime.block_on;
 
 // Future便捷函数导出
@@ -42,6 +42,26 @@ pub const pending = future.pending;
 pub const delay = future.delay;
 pub const timeout = future.timeout;
 pub const await_future = future.await_future;
+
+// 增强的async API导出
+pub const async_enhanced = @import("future/async_enhanced.zig");
+pub const spawn_api = @import("future/spawn.zig");
+pub const simple_runtime = @import("runtime/simple_runtime.zig");
+
+// 便捷的增强API导出
+pub const async_block = async_enhanced.async_block;
+pub const await_macro = async_enhanced.await_macro;
+pub const join = async_enhanced.join;
+pub const select = async_enhanced.select;
+pub const spawn = spawn_api.spawn;
+pub const spawnBlocking = spawn_api.spawnBlocking;
+pub const spawnLocal = spawn_api.spawnLocal;
+pub const JoinHandle = spawn_api.JoinHandle;
+pub const TaskSet = spawn_api.TaskSet;
+pub const AsyncScope = spawn_api.AsyncScope;
+pub const SimpleRuntime = simple_runtime.SimpleRuntime;
+pub const RuntimeBuilder = simple_runtime.RuntimeBuilder;
+pub const builder = simple_runtime.builder;
 
 // 配置类型导出
 pub const RuntimeConfig = runtime.RuntimeConfig;
