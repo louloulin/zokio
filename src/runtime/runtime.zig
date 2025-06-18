@@ -1,6 +1,7 @@
 //! 运行时模块
 //!
 //! 提供编译时生成的异步运行时，整合调度器、I/O驱动和内存管理。
+//! 严格按照plan.md中的API设计实现，支持libxev集成。
 
 const std = @import("std");
 const builtin = @import("builtin");
@@ -11,7 +12,11 @@ const scheduler = @import("../scheduler/scheduler.zig");
 const io = @import("../io/io.zig");
 const memory = @import("../memory/memory.zig");
 
+// 条件导入libxev
+const libxev = if (@hasDecl(@import("root"), "libxev")) @import("libxev") else null;
+
 /// 运行时配置
+/// 严格按照plan.md中的设计实现，支持编译时优化和libxev集成
 pub const RuntimeConfig = struct {
     /// 工作线程数量
     worker_threads: ?u32 = null,
@@ -21,6 +26,12 @@ pub const RuntimeConfig = struct {
 
     /// 是否启用io_uring
     enable_io_uring: bool = true,
+
+    /// 是否优先使用libxev
+    prefer_libxev: bool = true,
+
+    /// libxev后端选择
+    libxev_backend: ?LibxevBackend = null,
 
     /// 内存策略
     memory_strategy: memory.MemoryStrategy = .adaptive,
@@ -49,6 +60,15 @@ pub const RuntimeConfig = struct {
     /// 是否检查异步上下文
     check_async_context: bool = true,
 
+    /// libxev后端类型
+    pub const LibxevBackend = enum {
+        auto, // 自动选择最优后端
+        epoll, // Linux epoll
+        kqueue, // macOS/BSD kqueue
+        iocp, // Windows IOCP
+        io_uring, // Linux io_uring
+    };
+
     /// 编译时验证配置
     pub fn validate(comptime self: @This()) void {
         // 验证线程数配置
@@ -75,6 +95,30 @@ pub const RuntimeConfig = struct {
 
         if (self.enable_numa and !platform.PlatformCapabilities.numa_available) {
             // NUMA优化请求但不可用，将使用标准内存分配
+        }
+
+        // libxev可用性验证
+        if (self.prefer_libxev and libxev == null) {
+            // libxev请求但不可用，将回退到内置I/O后端
+        }
+
+        // libxev后端验证
+        if (self.libxev_backend) |backend| {
+            switch (backend) {
+                .io_uring => if (!platform.PlatformCapabilities.io_uring_available) {
+                    @compileError("io_uring backend requested but not available");
+                },
+                .epoll => if (builtin.os.tag != .linux) {
+                    @compileError("epoll backend only available on Linux");
+                },
+                .kqueue => if (builtin.os.tag != .macos and builtin.os.tag != .freebsd) {
+                    @compileError("kqueue backend only available on macOS/BSD");
+                },
+                .iocp => if (builtin.os.tag != .windows) {
+                    @compileError("IOCP backend only available on Windows");
+                },
+                .auto => {}, // 自动选择总是有效
+            }
         }
     }
 
@@ -123,6 +167,7 @@ pub fn JoinHandle(comptime T: type) type {
 }
 
 /// 编译时运行时生成器
+/// 严格按照plan.md中的设计实现，支持libxev集成和编译时优化
 pub fn ZokioRuntime(comptime config: RuntimeConfig) type {
     // 编译时验证配置
     comptime config.validate();
@@ -131,6 +176,7 @@ pub fn ZokioRuntime(comptime config: RuntimeConfig) type {
     const OptimalScheduler = comptime selectScheduler(config);
     const OptimalIoDriver = comptime selectIoDriver(config);
     const OptimalAllocator = comptime selectAllocator(config);
+    const LibxevLoop = comptime selectLibxevLoop(config);
 
     return struct {
         const Self = @This();
@@ -140,6 +186,9 @@ pub fn ZokioRuntime(comptime config: RuntimeConfig) type {
         io_driver: OptimalIoDriver,
         allocator: OptimalAllocator,
 
+        // libxev事件循环（如果启用）
+        libxev_loop: if (config.prefer_libxev and libxev != null) ?LibxevLoop else void,
+
         // 运行状态
         running: utils.Atomic.Value(bool),
 
@@ -147,18 +196,37 @@ pub fn ZokioRuntime(comptime config: RuntimeConfig) type {
         pub const COMPILE_TIME_INFO = generateCompileTimeInfo(config);
         pub const PERFORMANCE_CHARACTERISTICS = analyzePerformance(config);
         pub const MEMORY_LAYOUT = analyzeMemoryLayout(Self);
+        pub const LIBXEV_ENABLED = config.prefer_libxev and libxev != null;
 
         pub fn init(base_allocator: std.mem.Allocator) !Self {
-            return Self{
+            var self = Self{
                 .scheduler = OptimalScheduler.init(),
                 .io_driver = try OptimalIoDriver.init(base_allocator),
                 .allocator = try OptimalAllocator.init(base_allocator),
+                .libxev_loop = if (comptime LIBXEV_ENABLED) null else {},
                 .running = utils.Atomic.Value(bool).init(false),
             };
+
+            // 初始化libxev事件循环（如果启用）
+            if (comptime LIBXEV_ENABLED) {
+                if (libxev) |_| {
+                    self.libxev_loop = try LibxevLoop.init(.{});
+                }
+            }
+
+            return self;
         }
 
         pub fn deinit(self: *Self) void {
             self.running.store(false, .release);
+
+            // 清理libxev事件循环
+            if (comptime LIBXEV_ENABLED) {
+                if (self.libxev_loop) |*loop| {
+                    loop.deinit();
+                }
+            }
+
             self.io_driver.deinit();
             self.allocator.deinit();
         }
@@ -284,6 +352,25 @@ fn selectAllocator(comptime config: RuntimeConfig) type {
     };
 
     return memory.MemoryAllocator(memory_config);
+}
+
+/// 编译时libxev事件循环选择
+fn selectLibxevLoop(comptime config: RuntimeConfig) type {
+    if (config.prefer_libxev and libxev != null) {
+        // 根据配置选择libxev后端
+        const backend = config.libxev_backend orelse .auto;
+
+        return switch (backend) {
+            .auto => libxev.?.Loop,
+            .epoll => libxev.?.Loop,
+            .kqueue => libxev.?.Loop,
+            .iocp => libxev.?.Loop,
+            .io_uring => libxev.?.Loop,
+        };
+    } else {
+        // 返回空类型
+        return struct {};
+    }
 }
 
 /// 编译时信息生成

@@ -103,6 +103,7 @@ pub fn build(b: *std.Build) void {
         "timer_demo",
         "tracing_demo",
         "advanced_sync_demo",
+        "plan_api_demo",
     };
 
     for (examples) |example_name| {
