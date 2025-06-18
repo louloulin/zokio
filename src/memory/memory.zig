@@ -222,7 +222,7 @@ pub fn ObjectPool(comptime T: type, comptime pool_size: usize) type {
                 const head = self.free_list.load(.acquire) orelse return null;
 
                 const next = head.next;
-                if (self.free_list.compareAndSwap(head, next, .acq_rel, .acquire) == null) {
+                if (self.free_list.cmpxchgWeak(head, next, .acq_rel, .acquire) == null) {
                     _ = self.allocated_count.fetchAdd(1, .monotonic);
                     return @as(*T, @ptrCast(@alignCast(head)));
                 }
@@ -236,7 +236,7 @@ pub fn ObjectPool(comptime T: type, comptime pool_size: usize) type {
                 const head = self.free_list.load(.acquire);
                 node.next = head;
 
-                if (self.free_list.compareAndSwap(head, node, .acq_rel, .acquire) == null) {
+                if (self.free_list.cmpxchgWeak(head, node, .acq_rel, .acquire) == null) {
                     _ = self.allocated_count.fetchSub(1, .monotonic);
                     break;
                 }
@@ -292,7 +292,7 @@ const AllocationMetrics = struct {
         // 更新峰值使用量
         var peak = self.peak_usage.load(.monotonic);
         while (current > peak) {
-            if (self.peak_usage.compareAndSwap(peak, current, .acq_rel, .monotonic) == null) {
+            if (self.peak_usage.cmpxchgWeak(peak, current, .acq_rel, .monotonic) == null) {
                 break;
             }
             peak = self.peak_usage.load(.monotonic);

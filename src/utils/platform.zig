@@ -91,7 +91,7 @@ fn checkKernelVersion(comptime min_version: std.SemanticVersion) bool {
 pub fn CpuOptimizations(comptime arch: std.Target.Cpu.Arch) type {
     return struct {
         /// 编译时生成架构特定的原子操作
-        pub fn atomicLoad(comptime T: type, ptr: *const T, ordering: std.builtin.AtomicOrder) T {
+        pub fn atomicLoad(comptime T: type, ptr: *const T, comptime ordering: std.builtin.AtomicOrder) T {
             return switch (comptime arch) {
                 .x86_64 => x86_64_atomic_load(T, ptr, ordering),
                 .aarch64 => aarch64_atomic_load(T, ptr, ordering),
@@ -99,7 +99,7 @@ pub fn CpuOptimizations(comptime arch: std.Target.Cpu.Arch) type {
             };
         }
 
-        pub fn atomicStore(comptime T: type, ptr: *T, value: T, ordering: std.builtin.AtomicOrder) void {
+        pub fn atomicStore(comptime T: type, ptr: *T, value: T, comptime ordering: std.builtin.AtomicOrder) void {
             return switch (comptime arch) {
                 .x86_64 => x86_64_atomic_store(T, ptr, value, ordering),
                 .aarch64 => aarch64_atomic_store(T, ptr, value, ordering),
@@ -138,19 +138,19 @@ pub fn CpuOptimizations(comptime arch: std.Target.Cpu.Arch) type {
         }
 
         // 架构特定实现（占位符）
-        fn x86_64_atomic_load(comptime T: type, ptr: *const T, ordering: std.builtin.AtomicOrder) T {
+        fn x86_64_atomic_load(comptime T: type, ptr: *const T, comptime ordering: std.builtin.AtomicOrder) T {
             return @atomicLoad(T, ptr, ordering);
         }
 
-        fn x86_64_atomic_store(comptime T: type, ptr: *T, value: T, ordering: std.builtin.AtomicOrder) void {
+        fn x86_64_atomic_store(comptime T: type, ptr: *T, value: T, comptime ordering: std.builtin.AtomicOrder) void {
             @atomicStore(T, ptr, value, ordering);
         }
 
-        fn aarch64_atomic_load(comptime T: type, ptr: *const T, ordering: std.builtin.AtomicOrder) T {
+        fn aarch64_atomic_load(comptime T: type, ptr: *const T, comptime ordering: std.builtin.AtomicOrder) T {
             return @atomicLoad(T, ptr, ordering);
         }
 
-        fn aarch64_atomic_store(comptime T: type, ptr: *T, value: T, ordering: std.builtin.AtomicOrder) void {
+        fn aarch64_atomic_store(comptime T: type, ptr: *T, value: T, comptime ordering: std.builtin.AtomicOrder) void {
             @atomicStore(T, ptr, value, ordering);
         }
 

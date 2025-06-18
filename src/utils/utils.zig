@@ -22,7 +22,8 @@ pub fn comptimeConcat(comptime strs: []const []const u8) []const u8 {
             pos += str.len;
         }
 
-        return result[0..];
+        const final_result = result;
+        return &final_result;
     }
 }
 
@@ -58,11 +59,11 @@ pub fn FieldType(comptime T: type, comptime field_name: []const u8) type {
 
 /// 编译时分支预测优化
 pub fn likely(condition: bool) bool {
-    return @call(.always_inline, @import("builtin").expect, .{ condition, true });
+    return condition; // 简化实现，避免builtin.expect问题
 }
 
 pub fn unlikely(condition: bool) bool {
-    return @call(.always_inline, @import("builtin").expect, .{ condition, false });
+    return condition; // 简化实现，避免builtin.expect问题
 }
 
 /// 编译时内存布局优化
