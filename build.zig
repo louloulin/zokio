@@ -76,6 +76,7 @@ pub fn build(b: *std.Build) void {
         .optimize = .ReleaseFast,
     });
     benchmarks.root_module.addOptions("config", options);
+    benchmarks.root_module.addImport("libxev", libxev.module("libxev"));
     benchmarks.root_module.addImport("zokio", &lib.root_module);
 
     const run_benchmarks = b.addRunArtifact(benchmarks);
@@ -98,6 +99,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         });
         example.root_module.addOptions("config", options);
+        example.root_module.addImport("libxev", libxev.module("libxev"));
         example.root_module.addImport("zokio", &lib.root_module);
 
         const install_example = b.addInstallArtifact(example, .{});
@@ -112,6 +114,7 @@ pub fn build(b: *std.Build) void {
         .optimize = .Debug,
     });
     docs.root_module.addOptions("config", options);
+    docs.root_module.addImport("libxev", libxev.module("libxev"));
 
     const docs_step = b.step("docs", "生成API文档");
     const docs_install = b.addInstallDirectory(.{
