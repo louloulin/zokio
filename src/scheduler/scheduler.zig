@@ -142,7 +142,7 @@ pub fn WorkStealingQueue(comptime T: type, comptime capacity: u32) type {
             const tail = self.tail.load(.monotonic);
             const head = self.head.load(.monotonic);
 
-            if (head == tail) {
+            if (head >= tail) {
                 return null; // 队列空
             }
 
@@ -151,13 +151,6 @@ pub fn WorkStealingQueue(comptime T: type, comptime capacity: u32) type {
 
             const index = new_tail & MASK;
             const item = self.buffer[index].load(.unordered);
-
-            // 检查是否有并发窃取
-            if (self.head.cmpxchgWeak(head, head +% 1, .acq_rel, .monotonic) != null) {
-                // 有并发窃取，恢复tail
-                self.tail.store(tail, .monotonic);
-                return null;
-            }
 
             return item;
         }
