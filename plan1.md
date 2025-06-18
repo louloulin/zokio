@@ -1,477 +1,2164 @@
-# Zokio: 基于Zig的高性能异步运行时设计方案
+# Zokio: 充分利用Zig特性的下一代异步运行时
 
-## 项目概述
+## 项目愿景
 
-Zokio是一个受Rust Tokio启发的Zig异步运行时，旨在充分利用Zig的系统编程特性和零成本抽象，构建一个高性能、内存安全的异步运行时。基于对Zig官方文档的深入分析，我们将充分发挥Zig的独特优势：comptime元编程、显式内存管理、跨平台编译等特性，创建一个真正体现Zig哲学的异步运行时。
+Zokio不仅仅是Tokio的Zig移植版本，而是一个充分发挥Zig语言独特优势的原生异步运行时。我们将Zig的comptime元编程、显式内存管理、零成本抽象、跨平台编译等特性发挥到极致，创造一个真正体现"Zig哲学"的异步运行时系统。
 
-## Zig语言特性深度利用
+### 核心设计哲学
+- **编译时即运行时**: 最大化利用comptime，将运行时决策前移到编译时
+- **零成本抽象**: 所有抽象在编译后完全消失，无运行时开销
+- **显式优于隐式**: 所有行为都是可预测和可控制的
+- **内存安全无GC**: 在无垃圾回收的前提下保证内存安全
+- **跨平台一等公民**: 原生支持所有Zig目标平台
 
-### 1. Comptime元编程的深度应用
-Zig的comptime是其最强大的特性之一，我们将充分利用这一特性：
+## Zig特性的极致利用
 
-#### 1.1 编译时类型生成
+### 1. Comptime元编程：编译时即运行时
+
+Zig的comptime不仅仅是模板，而是在编译时执行的完整Zig代码。我们将其发挥到极致：
+
+#### 1.1 编译时异步状态机生成
 ```zig
-// 基于comptime的零成本异步抽象
-pub fn Future(comptime T: type) type {
+// 编译时分析async函数并生成优化的状态机
+pub fn async_fn(comptime func: anytype) type {
+    const func_info = @typeInfo(@TypeOf(func));
+    const return_type = func_info.Fn.return_type.?;
+
+    // 编译时分析函数体，提取await点
+    const await_points = comptime analyzeAwaitPoints(func);
+    const state_count = await_points.len + 1;
+
     return struct {
         const Self = @This();
 
-        // 编译时确定的状态机
-        state: comptime_int = 0,
-        data: union(enum) {
-            pending: void,
-            ready: T,
-            error_state: anyerror,
-        },
+        // 编译时生成的状态枚举
+        const State = std.meta.Tag(comptime generateStateUnion(await_points));
 
-        // 编译时生成的poll函数
-        poll_fn: *const fn(*Self, *Context) Poll(T),
+        // 编译时确定的状态数据
+        state: State = .initial,
+        data: comptime generateStateUnion(await_points) = .{ .initial = {} },
 
-        pub fn poll(self: *Self, ctx: *Context) Poll(T) {
-            return self.poll_fn(self, ctx);
-        }
+        // 编译时生成的状态转换表
+        const STATE_TRANSITIONS = comptime generateTransitionTable(await_points);
 
-        // 编译时优化的链式操作
-        pub fn map(self: Self, comptime func: anytype) Future(@TypeOf(func(@as(T, undefined)))) {
-            return comptime generateMapFuture(T, @TypeOf(func(@as(T, undefined))), func);
-        }
-    };
-}
-
-// 编译时生成特化的Future实现
-fn generateMapFuture(comptime From: type, comptime To: type, comptime func: anytype) type {
-    return struct {
-        inner: Future(From),
-
-        pub fn poll(self: *@This(), ctx: *Context) Poll(To) {
-            return switch (self.inner.poll(ctx)) {
-                .ready => |value| .{ .ready = func(value) },
-                .pending => .pending,
+        pub fn poll(self: *Self, ctx: *Context) Poll(return_type) {
+            // 编译时展开的状态机
+            return switch (self.state) {
+                inline else => |state_tag| {
+                    const handler = comptime getStateHandler(state_tag, await_points);
+                    return handler(self, ctx);
+                }
             };
         }
-    };
-}
-```
 
-#### 1.2 编译时任务调度优化
-```zig
-// 编译时确定的调度策略
-pub fn Scheduler(comptime config: SchedulerConfig) type {
-    return struct {
-        const Self = @This();
-
-        // 编译时计算的队列大小
-        const QUEUE_SIZE = comptime calculateOptimalQueueSize(config);
-        const WORKER_COUNT = comptime config.worker_threads orelse std.Thread.getCpuCount() catch 4;
-
-        // 编译时生成的工作窃取算法
-        workers: [WORKER_COUNT]Worker,
-        queues: [WORKER_COUNT]WorkQueue(QUEUE_SIZE),
-
-        // 编译时特化的调度函数
-        pub fn schedule(self: *Self, task: anytype) void {
-            const TaskType = @TypeOf(task);
-            comptime validateTaskType(TaskType);
-
-            const worker_id = comptime if (config.affinity_enabled)
-                getCurrentCpuId() % WORKER_COUNT
-            else
-                self.round_robin_counter.fetchAdd(1, .monotonic) % WORKER_COUNT;
-
-            self.scheduleToWorker(worker_id, task);
+        // 编译时生成的resume函数
+        pub fn resume(self: *Self, ctx: *Context) void {
+            const next_state = comptime STATE_TRANSITIONS[@intFromEnum(self.state)];
+            if (next_state) |next| {
+                self.state = next;
+                self.data = comptime getInitialStateData(next);
+            }
         }
     };
 }
 
-// 编译时验证任务类型
-fn validateTaskType(comptime T: type) void {
-    if (!@hasDecl(T, "poll")) {
-        @compileError("Task type must have a poll method");
-    }
-
-    const poll_fn_type = @TypeOf(@field(T, "poll"));
-    if (@typeInfo(poll_fn_type) != .Fn) {
-        @compileError("poll must be a function");
-    }
+// 编译时函数分析器
+fn analyzeAwaitPoints(comptime func: anytype) []const AwaitPoint {
+    // 这里使用comptime反射分析函数AST
+    // 在实际实现中，这需要与Zig编译器更深度集成
+    const source = @embedFile(@src().file);
+    return comptime parseAwaitPoints(source, func);
 }
-```
 
-### 2. 显式内存管理的精确控制
-基于Zig的显式内存管理哲学，我们设计了分层的内存管理策略：
+// 编译时状态联合生成
+fn generateStateUnion(comptime await_points: []const AwaitPoint) type {
+    var fields: [await_points.len + 2]std.builtin.Type.UnionField = undefined;
 
-#### 2.1 分配器抽象层
-```zig
-// 基于Zig标准库的分配器接口
-pub const RuntimeAllocator = struct {
-    allocator: std.mem.Allocator,
+    // 初始状态
+    fields[0] = .{
+        .name = "initial",
+        .type = void,
+        .alignment = 0,
+    };
 
-    // 针对不同用途的专用分配器
-    task_allocator: TaskAllocator,
-    stack_allocator: StackAllocator,
-    io_buffer_allocator: IoBufferAllocator,
-
-    pub fn init(base_allocator: std.mem.Allocator) RuntimeAllocator {
-        return RuntimeAllocator{
-            .allocator = base_allocator,
-            .task_allocator = TaskAllocator.init(base_allocator),
-            .stack_allocator = StackAllocator.init(base_allocator),
-            .io_buffer_allocator = IoBufferAllocator.init(base_allocator),
+    // 为每个await点生成状态
+    for (await_points, 0..) |point, i| {
+        fields[i + 1] = .{
+            .name = std.fmt.comptimePrint("await_{}", .{i}),
+            .type = point.future_type,
+            .alignment = @alignOf(point.future_type),
         };
     }
 
-    // 类型安全的分配接口
-    pub fn allocTask(self: *Self, comptime T: type) !*T {
-        return self.task_allocator.alloc(T);
+    // 完成状态
+    fields[fields.len - 1] = .{
+        .name = "completed",
+        .type = void,
+        .alignment = 0,
+    };
+
+    return @Type(.{
+        .Union = .{
+            .layout = .auto,
+            .tag_type = null,
+            .fields = &fields,
+            .decls = &[_]std.builtin.Type.Declaration{},
+        },
+    });
+}
+```
+
+#### 1.2 编译时性能优化和代码生成
+```zig
+// 编译时性能分析和优化
+pub const ComptimeOptimizer = struct {
+    // 编译时计算最优缓存行对齐
+    pub fn optimizeForCache(comptime T: type) type {
+        const size = @sizeOf(T);
+        const cache_line_size = 64; // 现代CPU的缓存行大小
+
+        if (size <= cache_line_size) {
+            // 小对象：确保缓存行对齐
+            return struct {
+                data: T align(cache_line_size),
+
+                pub fn get(self: *@This()) *T {
+                    return &self.data;
+                }
+            };
+        } else {
+            // 大对象：使用分块策略
+            const chunk_count = (size + cache_line_size - 1) / cache_line_size;
+            return struct {
+                chunks: [chunk_count][cache_line_size]u8 align(cache_line_size),
+
+                pub fn get(self: *@This()) *T {
+                    return @ptrCast(@alignCast(&self.chunks));
+                }
+            };
+        }
     }
 
-    pub fn allocStack(self: *Self, size: usize) ![]u8 {
-        return self.stack_allocator.allocStack(size);
+    // 编译时生成SIMD优化代码
+    pub fn generateSIMD(comptime operation: anytype, comptime T: type) type {
+        const vector_size = comptime detectOptimalVectorSize(T);
+        const Vector = @Vector(vector_size, T);
+
+        return struct {
+            pub fn process(data: []T) void {
+                const vector_count = data.len / vector_size;
+                const vectors: [*]Vector = @ptrCast(@alignCast(data.ptr));
+
+                // 编译时展开的向量化循环
+                comptime var i = 0;
+                inline while (i < vector_count) : (i += 1) {
+                    vectors[i] = operation(vectors[i]);
+                }
+
+                // 处理剩余元素
+                const remainder_start = vector_count * vector_size;
+                for (data[remainder_start..]) |*item| {
+                    item.* = operation(@as(Vector, @splat(item.*)))[0];
+                }
+            }
+        };
+    }
+
+    // 编译时分支预测优化
+    pub fn likely(condition: bool) bool {
+        return @call(.always_inline, @import("builtin").expect, .{ condition, true });
+    }
+
+    pub fn unlikely(condition: bool) bool {
+        return @call(.always_inline, @import("builtin").expect, .{ condition, false });
     }
 };
 
-// 专用的任务分配器，利用对象池
-const TaskAllocator = struct {
-    const POOL_SIZE = 1024;
+// 编译时内存布局优化
+pub fn OptimizedStruct(comptime fields: []const std.builtin.Type.StructField) type {
+    // 按大小排序字段以减少内存碎片
+    const sorted_fields = comptime blk: {
+        var sorted = fields[0..fields.len].*;
+        std.sort.insertion(std.builtin.Type.StructField, &sorted, {}, struct {
+            fn lessThan(_: void, a: std.builtin.Type.StructField, b: std.builtin.Type.StructField) bool {
+                return @sizeOf(a.type) > @sizeOf(b.type);
+            }
+        }.lessThan);
+        break :blk sorted;
+    };
 
-    pools: std.HashMap(type, ObjectPool),
-    base_allocator: std.mem.Allocator,
+    return @Type(.{
+        .Struct = .{
+            .layout = .auto,
+            .fields = &sorted_fields,
+            .decls = &[_]std.builtin.Type.Declaration{},
+            .is_tuple = false,
+        },
+    });
+}
+```
 
-    fn ObjectPool(comptime T: type) type {
+### 2. 类型系统的深度利用：编译时安全保证
+
+#### 2.1 编译时生命周期分析
+```zig
+// 编译时生命周期追踪
+pub fn Lifetime(comptime name: []const u8) type {
+    return struct {
+        const Self = @This();
+
+        // 编译时生成的生命周期标记
+        pub const LIFETIME_NAME = name;
+        pub const LIFETIME_ID = comptime std.hash_map.hashString(name);
+
+        // 编译时验证生命周期关系
+        pub fn outlives(comptime other: type) void {
+            if (!@hasDecl(other, "LIFETIME_ID")) {
+                @compileError("Type must have a lifetime");
+            }
+
+            // 这里可以添加更复杂的生命周期关系检查
+            comptime validateLifetimeRelation(Self.LIFETIME_ID, other.LIFETIME_ID);
+        }
+
+        // 编译时借用检查
+        pub fn borrow(comptime T: type, value: *T) Borrowed(T, Self) {
+            return Borrowed(T, Self){ .value = value };
+        }
+    };
+}
+
+// 编译时借用类型
+fn Borrowed(comptime T: type, comptime L: type) type {
+    return struct {
+        const Self = @This();
+
+        value: *T,
+
+        // 编译时确保不能移动借用的值
+        pub fn move(self: Self) @compileError("Cannot move borrowed value") {
+            _ = self;
+        }
+
+        // 编译时确保借用不能超过生命周期
+        pub fn extend(self: Self, comptime new_lifetime: type) @compileError("Cannot extend borrow beyond lifetime") {
+            _ = self;
+            _ = new_lifetime;
+        }
+
+        pub fn get(self: *const Self) *const T {
+            return self.value;
+        }
+
+        pub fn getMut(self: *Self) *T {
+            return self.value;
+        }
+    };
+}
+
+// 编译时内存安全检查
+pub const MemorySafety = struct {
+    // 编译时检查双重释放
+    pub fn checkDoubleFree(comptime allocations: []const type) void {
+        comptime {
+            var seen = std.HashMap(type, void, std.hash_map.getAutoHashFn(type), std.hash_map.getAutoEqlFn(type), 80).init(std.heap.page_allocator);
+            defer seen.deinit();
+
+            for (allocations) |alloc_type| {
+                if (seen.contains(alloc_type)) {
+                    @compileError("Double free detected for type: " ++ @typeName(alloc_type));
+                }
+                seen.put(alloc_type, {}) catch unreachable;
+            }
+        }
+    }
+
+    // 编译时检查内存泄漏
+    pub fn checkMemoryLeak(comptime allocations: []const type, comptime deallocations: []const type) void {
+        comptime {
+            if (allocations.len != deallocations.len) {
+                @compileError("Memory leak detected: allocation count != deallocation count");
+            }
+
+            // 更复杂的泄漏检查逻辑
+            for (allocations) |alloc_type| {
+                var found = false;
+                for (deallocations) |dealloc_type| {
+                    if (alloc_type == dealloc_type) {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    @compileError("Memory leak: " ++ @typeName(alloc_type) ++ " allocated but not freed");
+                }
+            }
+        }
+    }
+
+    // 编译时空指针检查
+    pub fn NonNull(comptime T: type) type {
         return struct {
-            free_list: std.atomic.Stack(*T),
-            allocated_chunks: std.ArrayList([]T),
+            const Self = @This();
 
-            pub fn acquire(self: *@This()) !*T {
-                if (self.free_list.pop()) |node| {
-                    return @fieldParentPtr("pool_node", node);
+            value: T,
+
+            pub fn init(value: T) Self {
+                if (@typeInfo(T) == .Pointer and value == null) {
+                    @compileError("Cannot create NonNull with null pointer");
                 }
+                return Self{ .value = value };
+            }
 
-                // 分配新的对象块
-                const chunk = try self.base_allocator.alloc(T, POOL_SIZE);
-                try self.allocated_chunks.append(chunk);
-
-                // 将除第一个外的所有对象加入空闲列表
-                for (chunk[1..]) |*obj| {
-                    self.free_list.push(&obj.pool_node);
-                }
-
-                return &chunk[0];
+            pub fn get(self: Self) T {
+                return self.value;
             }
         };
     }
 };
 ```
 
-### 3. 跨平台编译的一等公民支持
-充分利用Zig的跨平台编译能力：
-
-#### 3.1 编译时平台检测和优化
+#### 2.2 编译时并发安全检查
 ```zig
-// 编译时平台特定优化
-pub const PlatformOptimizations = struct {
-    pub const IoBackend = switch (builtin.os.tag) {
-        .linux => if (comptime IoUring.available()) IoUring else Epoll,
-        .macos, .ios => Kqueue,
-        .windows => IOCP,
-        .wasi => WasiPoll,
-        else => @compileError("Unsupported platform"),
-    };
+// 编译时数据竞争检测
+pub const ConcurrencySafety = struct {
+    // 编译时线程安全标记
+    pub fn ThreadSafe(comptime T: type) type {
+        // 编译时检查类型是否真的线程安全
+        comptime validateThreadSafety(T);
 
-    pub const ThreadingModel = switch (builtin.os.tag) {
-        .wasi => .single_threaded,
-        else => .multi_threaded,
-    };
+        return struct {
+            const Self = @This();
 
-    pub const MemoryModel = switch (builtin.cpu.arch) {
-        .x86_64 => .x86_64_optimized,
-        .aarch64 => .arm64_optimized,
-        .wasm32 => .wasm_optimized,
-        else => .generic,
-    };
+            inner: T,
+
+            // 编译时确保只有线程安全的操作
+            pub fn get(self: *const Self) *const T {
+                return &self.inner;
+            }
+
+            // 需要显式的同步原语才能获得可变引用
+            pub fn getMutWithLock(self: *Self, lock: *std.Thread.Mutex) *T {
+                _ = lock; // 编译时确保传入了锁
+                return &self.inner;
+            }
+        };
+    }
+
+    // 编译时Send/Sync检查
+    pub fn Send(comptime T: type) type {
+        comptime {
+            if (!isSendable(T)) {
+                @compileError("Type " ++ @typeName(T) ++ " is not Send");
+            }
+        }
+
+        return struct {
+            const Self = @This();
+
+            value: T,
+
+            pub fn send(self: Self, comptime target_thread: type) void {
+                // 编译时确保发送到正确的线程类型
+                comptime validateThreadTarget(target_thread);
+                // 实际的发送逻辑
+            }
+        };
+    }
+
+    // 编译时检查类型是否可以安全地在线程间传递
+    fn isSendable(comptime T: type) bool {
+        return switch (@typeInfo(T)) {
+            .Int, .Float, .Bool, .Enum => true,
+            .Pointer => |ptr_info| {
+                // 只有不可变指针或原子指针是Send的
+                return ptr_info.is_const or isAtomic(ptr_info.child);
+            },
+            .Struct => |struct_info| {
+                // 所有字段都必须是Send的
+                for (struct_info.fields) |field| {
+                    if (!isSendable(field.type)) return false;
+                }
+                return true;
+            },
+            .Array => |array_info| isSendable(array_info.child),
+            else => false,
+        };
+    }
+
+    fn isAtomic(comptime T: type) bool {
+        return switch (@typeInfo(T)) {
+            .Int => true, // 原子整数
+            .Pointer => false, // 指针本身不是原子的
+            else => false,
+        };
+    }
 };
+```
 
-// 编译时生成平台特定的运行时
-pub fn Runtime(comptime config: RuntimeConfig) type {
-    const backend = PlatformOptimizations.IoBackend;
-    const threading = PlatformOptimizations.ThreadingModel;
+### 3. 显式内存管理：零开销的内存安全
 
+#### 3.1 编译时内存分配策略
+```zig
+// 编译时确定的内存分配策略
+pub fn MemoryStrategy(comptime config: MemoryConfig) type {
     return struct {
         const Self = @This();
 
-        io_driver: backend,
-        scheduler: if (threading == .multi_threaded)
-            MultiThreadedScheduler(config)
-        else
-            SingleThreadedScheduler(config),
+        // 编译时选择最优分配器
+        const BaseAllocator = switch (config.strategy) {
+            .arena => std.heap.ArenaAllocator,
+            .general_purpose => std.heap.GeneralPurposeAllocator(.{}),
+            .fixed_buffer => std.heap.FixedBufferAllocator,
+            .stack => std.heap.StackFallbackAllocator(config.stack_size),
+        };
+
+        // 编译时生成的分配器组合
+        allocator: BaseAllocator,
+
+        // 编译时特化的分配函数
+        pub fn alloc(self: *Self, comptime T: type, count: usize) ![]T {
+            // 编译时检查分配大小
+            comptime {
+                if (@sizeOf(T) * count > config.max_allocation_size) {
+                    @compileError("Allocation size exceeds maximum allowed");
+                }
+            }
+
+            // 编译时选择最优分配路径
+            return switch (comptime @sizeOf(T)) {
+                0...64 => self.allocSmall(T, count),
+                65...4096 => self.allocMedium(T, count),
+                else => self.allocLarge(T, count),
+            };
+        }
+
+        // 编译时生成的专用分配函数
+        fn allocSmall(self: *Self, comptime T: type, count: usize) ![]T {
+            // 小对象使用对象池
+            return self.small_object_pool.alloc(T, count);
+        }
+
+        fn allocMedium(self: *Self, comptime T: type, count: usize) ![]T {
+            // 中等对象使用slab分配器
+            return self.slab_allocator.alloc(T, count);
+        }
+
+        fn allocLarge(self: *Self, comptime T: type, count: usize) ![]T {
+            // 大对象直接从系统分配
+            return self.allocator.allocator().alloc(T, count);
+        }
+    };
+}
+
+// 编译时内存池生成器
+pub fn ObjectPool(comptime T: type, comptime pool_size: usize) type {
+    return struct {
+        const Self = @This();
+
+        // 编译时计算的池参数
+        const OBJECT_SIZE = @sizeOf(T);
+        const OBJECT_ALIGN = @alignOf(T);
+        const POOL_BYTES = OBJECT_SIZE * pool_size;
+
+        // 编译时对齐的内存池
+        pool: [POOL_BYTES]u8 align(OBJECT_ALIGN),
+        free_list: std.atomic.Stack(FreeNode),
+        allocated_count: std.atomic.Value(usize),
+
+        const FreeNode = struct {
+            next: ?*FreeNode,
+        };
+
+        pub fn init() Self {
+            var self = Self{
+                .pool = undefined,
+                .free_list = std.atomic.Stack(FreeNode).init(),
+                .allocated_count = std.atomic.Value(usize).init(0),
+            };
+
+            // 编译时初始化空闲列表
+            comptime var i = 0;
+            inline while (i < pool_size) : (i += 1) {
+                const offset = i * OBJECT_SIZE;
+                const node = @as(*FreeNode, @ptrCast(@alignCast(&self.pool[offset])));
+                self.free_list.push(node);
+            }
+
+            return self;
+        }
+
+        pub fn acquire(self: *Self) ?*T {
+            if (self.free_list.pop()) |node| {
+                _ = self.allocated_count.fetchAdd(1, .monotonic);
+                return @as(*T, @ptrCast(@alignCast(node)));
+            }
+            return null;
+        }
+
+        pub fn release(self: *Self, obj: *T) void {
+            const node = @as(*FreeNode, @ptrCast(obj));
+            self.free_list.push(node);
+            _ = self.allocated_count.fetchSub(1, .monotonic);
+        }
+
+        // 编译时生成的统计信息
+        pub fn getStats(self: *const Self) PoolStats {
+            return PoolStats{
+                .total_objects = pool_size,
+                .allocated_objects = self.allocated_count.load(.monotonic),
+                .free_objects = pool_size - self.allocated_count.load(.monotonic),
+                .memory_usage = self.allocated_count.load(.monotonic) * OBJECT_SIZE,
+            };
+        }
+    };
+}
+
+// 编译时RAII包装器
+pub fn RAII(comptime T: type, comptime cleanup_fn: fn(*T) void) type {
+    return struct {
+        const Self = @This();
+
+        value: T,
+
+        pub fn init(value: T) Self {
+            return Self{ .value = value };
+        }
+
+        pub fn deinit(self: *Self) void {
+            cleanup_fn(&self.value);
+        }
+
+        pub fn get(self: *Self) *T {
+            return &self.value;
+        }
+
+        pub fn release(self: *Self) T {
+            const value = self.value;
+            self.value = undefined; // 防止双重释放
+            return value;
+        }
+    };
+}
+
+// 编译时内存安全检查器
+pub const MemoryChecker = struct {
+    // 编译时检查内存对齐
+    pub fn checkAlignment(comptime T: type, comptime alignment: u29) void {
+        if (@alignOf(T) < alignment) {
+            @compileError("Type alignment is insufficient");
+        }
+    }
+
+    // 编译时检查内存大小
+    pub fn checkSize(comptime T: type, comptime max_size: usize) void {
+        if (@sizeOf(T) > max_size) {
+            @compileError("Type size exceeds maximum");
+        }
+    }
+
+    // 编译时生成内存布局报告
+    pub fn generateLayoutReport(comptime T: type) []const u8 {
+        return comptime std.fmt.comptimePrint(
+            "Type: {s}\nSize: {} bytes\nAlignment: {} bytes\nFields: {}\n",
+            .{ @typeName(T), @sizeOf(T), @alignOf(T), @typeInfo(T).Struct.fields.len }
+        );
+    }
+};
+```
+
+### 4. 跨平台编译：一次编写，到处优化
+
+#### 4.1 编译时平台特化和优化
+```zig
+// 编译时平台能力检测
+pub const PlatformCapabilities = struct {
+    // 编译时检测I/O后端能力
+    pub const io_uring_available = comptime blk: {
+        if (builtin.os.tag != .linux) break :blk false;
+
+        // 编译时检查内核版本和特性
+        const min_kernel_version = std.SemanticVersion{ .major = 5, .minor = 1, .patch = 0 };
+        break :blk checkKernelVersion(min_kernel_version);
+    };
+
+    pub const kqueue_available = comptime builtin.os.tag.isDarwin() or builtin.os.tag.isBSD();
+    pub const iocp_available = comptime builtin.os.tag == .windows;
+    pub const wasi_available = comptime builtin.os.tag == .wasi;
+
+    // 编译时检测CPU特性
+    pub const simd_available = comptime switch (builtin.cpu.arch) {
+        .x86_64 => builtin.cpu.features.isEnabled(@import("std").Target.x86.Feature.sse2),
+        .aarch64 => builtin.cpu.features.isEnabled(@import("std").Target.aarch64.Feature.neon),
+        else => false,
+    };
+
+    pub const numa_available = comptime builtin.os.tag == .linux and
+        builtin.cpu.arch == .x86_64;
+
+    // 编译时内存模型检测
+    pub const cache_line_size = comptime switch (builtin.cpu.arch) {
+        .x86_64 => 64,
+        .aarch64 => 64,
+        .arm => 32,
+        else => 64, // 保守估计
+    };
+
+    pub const page_size = comptime switch (builtin.os.tag) {
+        .linux, .macos => 4096,
+        .windows => 4096,
+        .wasi => 65536,
+        else => 4096,
+    };
+};
+
+// 编译时生成平台特定的I/O驱动
+pub fn IoDriver(comptime config: IoConfig) type {
+    return struct {
+        const Self = @This();
+
+        // 编译时选择最优后端
+        const Backend = comptime selectOptimalBackend();
+
+        backend: Backend,
+
+        fn selectOptimalBackend() type {
+            // 按性能优先级选择后端
+            if (PlatformCapabilities.io_uring_available and config.prefer_io_uring) {
+                return IoUringBackend;
+            } else if (PlatformCapabilities.kqueue_available) {
+                return KqueueBackend;
+            } else if (PlatformCapabilities.iocp_available) {
+                return IocpBackend;
+            } else if (builtin.os.tag == .linux) {
+                return EpollBackend;
+            } else if (PlatformCapabilities.wasi_available) {
+                return WasiBackend;
+            } else {
+                @compileError("No suitable I/O backend available for this platform");
+            }
+        }
 
         pub fn init(allocator: std.mem.Allocator) !Self {
             return Self{
-                .io_driver = try backend.init(allocator),
-                .scheduler = try @TypeOf(@This().scheduler).init(allocator),
+                .backend = try Backend.init(allocator),
             };
         }
 
-        // 编译时确定的运行模式
-        pub fn run(self: *Self, comptime mode: RunMode) !void {
-            switch (comptime mode) {
-                .until_done => try self.runUntilDone(),
-                .single_iteration => try self.runOnce(),
-                .with_timeout => |timeout| try self.runWithTimeout(timeout),
+        // 编译时生成的统一接口
+        pub fn poll(self: *Self, timeout: ?u64) !u32 {
+            return self.backend.poll(timeout);
+        }
+
+        pub fn register(self: *Self, fd: std.posix.fd_t, events: u32) !void {
+            return self.backend.register(fd, events);
+        }
+    };
+}
+
+// 编译时CPU架构优化
+pub fn CpuOptimizations(comptime arch: std.Target.Cpu.Arch) type {
+    return struct {
+        // 编译时生成架构特定的原子操作
+        pub fn atomicLoad(comptime T: type, ptr: *const T, ordering: std.builtin.AtomicOrder) T {
+            return switch (comptime arch) {
+                .x86_64 => x86_64_atomic_load(T, ptr, ordering),
+                .aarch64 => aarch64_atomic_load(T, ptr, ordering),
+                else => @atomicLoad(T, ptr, ordering),
+            };
+        }
+
+        pub fn atomicStore(comptime T: type, ptr: *T, value: T, ordering: std.builtin.AtomicOrder) void {
+            return switch (comptime arch) {
+                .x86_64 => x86_64_atomic_store(T, ptr, value, ordering),
+                .aarch64 => aarch64_atomic_store(T, ptr, value, ordering),
+                else => @atomicStore(T, ptr, value, ordering),
+            };
+        }
+
+        // 编译时生成SIMD优化
+        pub fn vectorizedCopy(src: []const u8, dst: []u8) void {
+            if (comptime PlatformCapabilities.simd_available) {
+                switch (comptime arch) {
+                    .x86_64 => x86_64_vectorized_copy(src, dst),
+                    .aarch64 => aarch64_vectorized_copy(src, dst),
+                    else => @memcpy(dst, src),
+                }
+            } else {
+                @memcpy(dst, src);
             }
+        }
+
+        // 编译时缓存优化
+        pub fn prefetch(ptr: *const anyopaque, locality: u2) void {
+            if (comptime arch == .x86_64) {
+                asm volatile ("prefetcht0 %[ptr]"
+                    :
+                    : [ptr] "m" (ptr.*),
+                );
+            } else if (comptime arch == .aarch64) {
+                asm volatile ("prfm pldl1keep, %[ptr]"
+                    :
+                    : [ptr] "m" (ptr.*),
+                );
+            }
+            // 其他架构忽略预取指令
+        }
+    };
+}
+
+// 编译时操作系统特性检测
+pub fn OsFeatures(comptime os_tag: std.Target.Os.Tag) type {
+    return struct {
+        // 编译时检查系统调用可用性
+        pub const has_eventfd = comptime os_tag == .linux;
+        pub const has_kqueue = comptime os_tag.isDarwin() or os_tag.isBSD();
+        pub const has_epoll = comptime os_tag == .linux;
+        pub const has_io_uring = comptime os_tag == .linux;
+
+        // 编译时生成系统特定的优化
+        pub fn createEventNotifier() !EventNotifier {
+            if (comptime has_eventfd) {
+                return EventNotifier{ .eventfd = try std.posix.eventfd(0, 0) };
+            } else if (comptime has_kqueue) {
+                return EventNotifier{ .pipe = try std.posix.pipe() };
+            } else {
+                return EventNotifier{ .pipe = try std.posix.pipe() };
+            }
+        }
+
+        // 编译时内存映射优化
+        pub fn optimizedMmap(size: usize) ![]u8 {
+            const flags = comptime if (os_tag == .linux)
+                std.posix.MAP.PRIVATE | std.posix.MAP.ANONYMOUS | std.posix.MAP.POPULATE
+            else if (os_tag.isDarwin())
+                std.posix.MAP.PRIVATE | std.posix.MAP.ANON
+            else
+                std.posix.MAP.PRIVATE | std.posix.MAP.ANONYMOUS;
+
+            return try std.posix.mmap(null, size, std.posix.PROT.READ | std.posix.PROT.WRITE, flags, -1, 0);
         }
     };
 }
 ```
 
-## 核心设计理念（基于Zig哲学）
+## Zig哲学的深度体现
 
 ### 1. 精确的意图传达（Communicate intent precisely）
-- 所有异步操作的生命周期在编译时明确
-- 错误处理路径显式可见，无隐藏的控制流
-- 内存分配和释放策略明确标注
+
+#### 1.1 编译时意图验证
+```zig
+// 编译时API契约检查
+pub fn AsyncFunction(comptime contract: FunctionContract) type {
+    return struct {
+        const Self = @This();
+
+        // 编译时验证函数契约
+        comptime {
+            contract.validate();
+        }
+
+        // 编译时生成的文档
+        pub const DOCUMENTATION = contract.generateDocs();
+        pub const PRECONDITIONS = contract.preconditions;
+        pub const POSTCONDITIONS = contract.postconditions;
+        pub const ERROR_CONDITIONS = contract.error_conditions;
+
+        pub fn call(args: contract.ArgType) contract.ReturnType {
+            // 编译时插入前置条件检查
+            comptime if (contract.check_preconditions) {
+                contract.validatePreconditions(args);
+            };
+
+            // 实际函数调用
+            const result = contract.implementation(args);
+
+            // 编译时插入后置条件检查
+            comptime if (contract.check_postconditions) {
+                contract.validatePostconditions(result);
+            };
+
+            return result;
+        }
+    };
+}
+
+// 函数契约定义
+const FunctionContract = struct {
+    name: []const u8,
+    ArgType: type,
+    ReturnType: type,
+    preconditions: []const []const u8,
+    postconditions: []const []const u8,
+    error_conditions: []const []const u8,
+    check_preconditions: bool = true,
+    check_postconditions: bool = true,
+    implementation: fn(ArgType) ReturnType,
+
+    pub fn validate(comptime self: @This()) void {
+        // 编译时验证契约的完整性
+        if (self.name.len == 0) {
+            @compileError("Function name cannot be empty");
+        }
+
+        if (self.preconditions.len == 0) {
+            @compileLog("Warning: No preconditions specified for " ++ self.name);
+        }
+    }
+
+    pub fn generateDocs(comptime self: @This()) []const u8 {
+        return comptime std.fmt.comptimePrint(
+            \\Function: {s}
+            \\Arguments: {s}
+            \\Returns: {s}
+            \\Preconditions:
+            \\{s}
+            \\Postconditions:
+            \\{s}
+            \\Error Conditions:
+            \\{s}
+        , .{
+            self.name,
+            @typeName(self.ArgType),
+            @typeName(self.ReturnType),
+            joinStrings(self.preconditions, "\n  - "),
+            joinStrings(self.postconditions, "\n  - "),
+            joinStrings(self.error_conditions, "\n  - "),
+        });
+    }
+};
+```
+
+#### 1.2 显式的生命周期和所有权
+```zig
+// 编译时所有权追踪
+pub fn Owned(comptime T: type) type {
+    return struct {
+        const Self = @This();
+
+        value: T,
+        is_moved: bool = false,
+
+        pub fn init(value: T) Self {
+            return Self{ .value = value };
+        }
+
+        pub fn borrow(self: *const Self) Borrowed(T) {
+            if (self.is_moved) {
+                @compileError("Cannot borrow from moved value");
+            }
+            return Borrowed(T){ .value = &self.value };
+        }
+
+        pub fn move(self: *Self) T {
+            if (self.is_moved) {
+                @compileError("Cannot move already moved value");
+            }
+            self.is_moved = true;
+            return self.value;
+        }
+
+        pub fn deinit(self: *Self) void {
+            if (!self.is_moved and @hasDecl(T, "deinit")) {
+                self.value.deinit();
+            }
+        }
+    };
+}
+
+// 编译时借用检查
+pub fn Borrowed(comptime T: type) type {
+    return struct {
+        const Self = @This();
+
+        value: *const T,
+
+        pub fn get(self: Self) *const T {
+            return self.value;
+        }
+
+        // 编译时防止生命周期延长
+        pub fn extend(self: Self) @compileError("Cannot extend borrow lifetime") {
+            _ = self;
+        }
+    };
+}
+```
 
 ### 2. 边界情况的重要性（Edge cases matter）
-- 内存不足、网络中断等异常情况的完整处理
-- 所有可能的错误状态都有明确的处理路径
-- 资源耗尽时的优雅降级机制
+
+#### 2.1 编译时错误路径分析
+```zig
+// 编译时错误处理分析
+pub fn ErrorAnalyzer(comptime func: anytype) type {
+    const func_info = @typeInfo(@TypeOf(func));
+    const return_type = func_info.Fn.return_type.?;
+
+    return struct {
+        // 编译时提取所有可能的错误
+        pub const POSSIBLE_ERRORS = comptime extractPossibleErrors(return_type);
+
+        // 编译时生成错误处理策略
+        pub const ERROR_STRATEGIES = comptime generateErrorStrategies(POSSIBLE_ERRORS);
+
+        // 编译时验证错误处理完整性
+        pub fn validateErrorHandling(comptime error_handlers: anytype) void {
+            comptime {
+                for (POSSIBLE_ERRORS) |error_type| {
+                    if (!@hasField(@TypeOf(error_handlers), @errorName(error_type))) {
+                        @compileError("Missing error handler for: " ++ @errorName(error_type));
+                    }
+                }
+            }
+        }
+
+        // 编译时生成完整的错误处理包装器
+        pub fn withCompleteErrorHandling(comptime handlers: anytype) type {
+            comptime validateErrorHandling(handlers);
+
+            return struct {
+                pub fn call(args: anytype) @TypeOf(func(args)) {
+                    const result = func(args);
+
+                    return result catch |err| switch (err) {
+                        inline else => |e| @field(handlers, @errorName(e))(e),
+                    };
+                }
+            };
+        }
+    };
+}
+
+// 编译时资源管理
+pub fn ResourceManager(comptime Resource: type) type {
+    return struct {
+        const Self = @This();
+
+        resources: std.ArrayList(Resource),
+        cleanup_functions: std.ArrayList(*const fn(*Resource) void),
+
+        pub fn acquire(self: *Self, resource: Resource, cleanup_fn: *const fn(*Resource) void) !*Resource {
+            try self.resources.append(resource);
+            try self.cleanup_functions.append(cleanup_fn);
+            return &self.resources.items[self.resources.items.len - 1];
+        }
+
+        pub fn deinit(self: *Self) void {
+            // 确保所有资源都被正确清理
+            for (self.resources.items, self.cleanup_functions.items) |*resource, cleanup_fn| {
+                cleanup_fn(resource);
+            }
+            self.resources.deinit();
+            self.cleanup_functions.deinit();
+        }
+
+        // 编译时生成资源泄漏检查
+        pub fn checkLeaks(self: *const Self) void {
+            if (self.resources.items.len > 0) {
+                @panic("Resource leak detected: " ++ std.fmt.comptimePrint("{} resources not cleaned up", .{self.resources.items.len}));
+            }
+        }
+    };
+}
+```
 
 ### 3. 偏向代码阅读而非编写（Favor reading code over writing code）
-- 清晰的API设计，减少认知负担
-- 丰富的编译时检查，减少运行时调试需求
-- 自文档化的代码结构
+
+#### 3.1 自文档化的API设计
+```zig
+// 编译时生成的自文档化API
+pub fn DocumentedApi(comptime api_spec: ApiSpecification) type {
+    return struct {
+        const Self = @This();
+
+        // 编译时生成的API文档
+        pub const DOCUMENTATION = api_spec.generateFullDocumentation();
+        pub const EXAMPLES = api_spec.examples;
+        pub const BEST_PRACTICES = api_spec.best_practices;
+
+        // 编译时生成的类型安全包装器
+        pub fn call(comptime method_name: []const u8, args: anytype) auto {
+            const method = comptime api_spec.getMethod(method_name);
+
+            // 编译时参数验证
+            comptime method.validateArgs(@TypeOf(args));
+
+            // 编译时生成调用文档
+            comptime @compileLog("Calling " ++ method_name ++ ": " ++ method.description);
+
+            return method.implementation(args);
+        }
+
+        // 编译时生成使用示例
+        pub fn generateUsageExample(comptime method_name: []const u8) []const u8 {
+            const method = comptime api_spec.getMethod(method_name);
+            return comptime method.generateExample();
+        }
+    };
+}
+
+// API规范定义
+const ApiSpecification = struct {
+    name: []const u8,
+    version: []const u8,
+    methods: []const MethodSpec,
+    examples: []const []const u8,
+    best_practices: []const []const u8,
+
+    const MethodSpec = struct {
+        name: []const u8,
+        description: []const u8,
+        args_type: type,
+        return_type: type,
+        implementation: anytype,
+        example: []const u8,
+
+        pub fn validateArgs(comptime self: @This(), comptime ArgsType: type) void {
+            if (ArgsType != self.args_type) {
+                @compileError("Invalid arguments for method " ++ self.name ++
+                    ": expected " ++ @typeName(self.args_type) ++
+                    ", got " ++ @typeName(ArgsType));
+            }
+        }
+
+        pub fn generateExample(comptime self: @This()) []const u8 {
+            return comptime std.fmt.comptimePrint(
+                \\// {s}
+                \\// {s}
+                \\{s}
+            , .{ self.name, self.description, self.example });
+        }
+    };
+};
+```
 
 ### 4. 运行时崩溃优于Bug（Runtime crashes are better than bugs）
-- 使用Zig的安全检查机制防止未定义行为
-- 在Debug模式下提供详细的错误信息
-- 快速失败原则，避免错误状态传播
 
-## 架构设计（基于Zig最佳实践）
-
-### 1. 分层架构设计
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Zokio Runtime (Comptime Generated)           │
-├─────────────────────────────────────────────────────────────────┤
-│  Async API Layer  │  Task Scheduler  │  Memory Management      │
-│  (Zero-cost)      │  (Work Stealing) │  (Explicit Allocators)  │
-├─────────────────────────────────────────────────────────────────┤
-│              Future State Machine (Comptime Generated)          │
-├─────────────────────────────────────────────────────────────────┤
-│                  Event Loop (libxev Integration)               │
-├─────────────────────────────────────────────────────────────────┤
-│    Platform Backends (Comptime Selected & Optimized)          │
-│    Linux: io_uring/epoll │ macOS: kqueue │ Windows: IOCP      │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### 2. 基于状态机的异步实现
-
-利用Zig的comptime和union特性，我们实现无栈协程：
-
-#### 2.1 编译时生成的状态机
+#### 4.1 编译时和运行时安全检查
 ```zig
-// 基于comptime的状态机生成器
-pub fn AsyncStateMachine(comptime states: []const type) type {
-    return union(enum) {
-        const Self = @This();
-
-        // 编译时生成所有状态
-        inline for (states, 0..) |StateType, i| {
-            @field(Self, "state_" ++ std.fmt.comptimePrint("{}", .{i}), StateType),
-        },
-
-        // 编译时生成状态转换函数
-        pub fn transition(self: *Self, comptime from: anytype, comptime to: anytype) void {
-            comptime {
-                const from_index = findStateIndex(@TypeOf(from));
-                const to_index = findStateIndex(@TypeOf(to));
-                validateTransition(from_index, to_index);
-            }
-
-            self.* = to;
-        }
-
-        // 编译时验证状态转换的合法性
-        fn validateTransition(comptime from: usize, comptime to: usize) void {
-            // 在这里可以添加状态转换规则的编译时检查
-            if (from >= states.len or to >= states.len) {
-                @compileError("Invalid state transition");
-            }
-        }
-    };
-}
-
-// 异步任务的状态定义
-const TaskStates = [_]type{
-    struct { // Initial
-        data: []const u8,
-    },
-    struct { // Reading
-        buffer: []u8,
-        bytes_read: usize,
-    },
-    struct { // Processing
-        result: ProcessResult,
-    },
-    struct { // Completed
-        output: []const u8,
-    },
-};
-
-const AsyncTask = AsyncStateMachine(TaskStates);
-```
-
-#### 2.2 零成本的Future抽象
-```zig
-// 基于Zig类型系统的零成本Future
-pub fn Future(comptime T: type) type {
-    return struct {
-        const Self = @This();
-
-        // 编译时确定的状态
-        state: State,
-
-        const State = union(enum) {
-            pending: PendingState,
-            ready: T,
-            error_state: anyerror,
-        };
-
-        const PendingState = struct {
-            // 等待的资源类型（编译时确定）
-            waiting_for: WaitingFor,
-            // 唤醒回调（零成本函数指针）
-            waker: ?Waker,
-        };
-
-        const WaitingFor = union(enum) {
-            io_completion: IoHandle,
-            timer_expiry: TimerHandle,
-            task_completion: TaskHandle,
-            // 可以在编译时扩展更多等待类型
-        };
-
-        // 零成本的poll实现
-        pub fn poll(self: *Self, ctx: *Context) Poll(T) {
-            return switch (self.state) {
-                .ready => |value| Poll(T){ .ready = value },
-                .error_state => |err| Poll(T){ .error_state = err },
-                .pending => |*pending| blk: {
-                    // 检查等待的资源是否就绪
-                    if (self.checkReady(pending, ctx)) {
-                        // 状态转换为ready
-                        const result = self.extractResult(pending);
-                        self.state = .{ .ready = result };
-                        break :blk Poll(T){ .ready = result };
-                    } else {
-                        // 注册唤醒器
-                        self.registerWaker(pending, ctx);
-                        break :blk Poll(T).pending;
-                    }
-                },
-            };
-        }
-
-        // 编译时优化的组合子
-        pub fn map(self: Self, comptime func: anytype) Future(@TypeOf(func(@as(T, undefined)))) {
-            const ReturnType = @TypeOf(func(@as(T, undefined)));
-            return Future(ReturnType){
-                .state = switch (self.state) {
-                    .ready => |value| .{ .ready = func(value) },
-                    .error_state => |err| .{ .error_state = err },
-                    .pending => |pending| .{ .pending = pending },
-                },
-            };
-        }
-
-        // 编译时生成的错误处理
-        pub fn mapError(self: Self, comptime func: anytype) Future(T) {
-            return Future(T){
-                .state = switch (self.state) {
-                    .ready => |value| .{ .ready = value },
-                    .error_state => |err| .{ .error_state = func(err) },
-                    .pending => |pending| .{ .pending = pending },
-                },
-            };
-        }
-    };
-}
-
-// Poll结果类型
-pub fn Poll(comptime T: type) type {
-    return union(enum) {
-        ready: T,
-        pending: void,
-        error_state: anyerror,
-    };
-}
-```
-
-#### 2.3 编译时任务图优化
-```zig
-// 编译时分析任务依赖关系
-pub fn TaskGraph(comptime tasks: []const type) type {
-    // 编译时构建依赖图
-    const dependency_matrix = comptime buildDependencyMatrix(tasks);
-    const execution_order = comptime topologicalSort(dependency_matrix);
-
-    return struct {
-        const Self = @This();
-
-        // 编译时生成的执行计划
-        const EXECUTION_PLAN = execution_order;
-
-        // 任务实例
-        task_instances: TaskInstances,
-
-        const TaskInstances = blk: {
-            var fields: [tasks.len]std.builtin.Type.StructField = undefined;
-            for (tasks, 0..) |TaskType, i| {
-                fields[i] = std.builtin.Type.StructField{
-                    .name = std.fmt.comptimePrint("task_{}", .{i}),
-                    .type = TaskType,
-                    .default_value = null,
-                    .is_comptime = false,
-                    .alignment = @alignOf(TaskType),
-                };
-            }
-            break :blk @Type(.{
-                .Struct = .{
-                    .layout = .auto,
-                    .fields = &fields,
-                    .decls = &[_]std.builtin.Type.Declaration{},
-                    .is_tuple = false,
-                },
-            });
-        };
-
-        // 编译时优化的执行函数
-        pub fn execute(self: *Self, ctx: *Context) !void {
-            // 按照编译时确定的顺序执行任务
-            inline for (EXECUTION_PLAN) |task_index| {
-                const task = &@field(self.task_instances, "task_" ++ std.fmt.comptimePrint("{}", .{task_index}));
-                try task.execute(ctx);
-            }
-        }
-    };
-}
-
-// 编译时依赖分析
-fn buildDependencyMatrix(comptime tasks: []const type) [tasks.len][tasks.len]bool {
-    var matrix: [tasks.len][tasks.len]bool = std.mem.zeroes([tasks.len][tasks.len]bool);
-
-    for (tasks, 0..) |TaskType, i| {
-        if (@hasDecl(TaskType, "dependencies")) {
-            const deps = TaskType.dependencies;
-            for (deps) |dep_type| {
-                const dep_index = findTaskIndex(tasks, dep_type);
-                matrix[i][dep_index] = true;
+// 编译时安全检查框架
+pub const SafetyChecks = struct {
+    // 编译时边界检查
+    pub fn boundsCheck(comptime array_len: usize, index: usize) void {
+        if (comptime @import("builtin").mode == .Debug) {
+            if (index >= array_len) {
+                @panic("Index out of bounds: " ++ std.fmt.comptimePrint("{} >= {}", .{ index, array_len }));
             }
         }
     }
 
-    return matrix;
+    // 编译时空指针检查
+    pub fn nullCheck(ptr: anytype) @TypeOf(ptr) {
+        if (comptime @import("builtin").mode == .Debug) {
+            if (@typeInfo(@TypeOf(ptr)) == .Pointer and ptr == null) {
+                @panic("Null pointer dereference detected");
+            }
+        }
+        return ptr;
+    }
+
+    // 编译时整数溢出检查
+    pub fn overflowCheck(comptime T: type, a: T, b: T, comptime op: []const u8) T {
+        if (comptime @import("builtin").mode == .Debug) {
+            const result = switch (comptime std.mem.eql(u8, op, "add")) {
+                true => @addWithOverflow(a, b),
+                false => switch (comptime std.mem.eql(u8, op, "mul")) {
+                    true => @mulWithOverflow(a, b),
+                    false => @compileError("Unsupported operation: " ++ op),
+                },
+            };
+
+            if (result[1] != 0) {
+                @panic("Integer overflow detected in " ++ op ++ " operation");
+            }
+
+            return result[0];
+        } else {
+            return switch (comptime std.mem.eql(u8, op, "add")) {
+                true => a + b,
+                false => a * b,
+            };
+        }
+    }
+
+    // 编译时不变量检查
+    pub fn invariantCheck(condition: bool, comptime message: []const u8) void {
+        if (comptime @import("builtin").mode == .Debug) {
+            if (!condition) {
+                @panic("Invariant violation: " ++ message);
+            }
+        }
+    }
+};
+```
+
+## 基于Zig特性的核心架构
+
+### 1. 编译时生成的分层架构
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    Zokio Runtime (100% Comptime Generated)                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  Zero-Cost Async API  │  Comptime Scheduler  │  Explicit Memory Management │
+│  (Comptime Inlined)   │  (Comptime Optimized)│  (Comptime Specialized)     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│              Comptime State Machines (Zero Runtime Overhead)               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                  Platform-Optimized Event Loop (Comptime Selected)         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│    Comptime Platform Backends (Architecture & OS Optimized)               │
+│    Linux: io_uring/epoll │ macOS: kqueue │ Windows: IOCP │ WASI: poll     │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### 1.1 编译时运行时生成器
+```zig
+// 主运行时生成器 - 完全基于comptime配置
+pub fn ZokioRuntime(comptime config: RuntimeConfig) type {
+    // 编译时验证配置
+    comptime config.validate();
+
+    // 编译时选择最优组件
+    const OptimalScheduler = comptime selectScheduler(config);
+    const OptimalIoDriver = comptime selectIoDriver(config);
+    const OptimalAllocator = comptime selectAllocator(config);
+
+    return struct {
+        const Self = @This();
+
+        // 编译时确定的组件
+        scheduler: OptimalScheduler,
+        io_driver: OptimalIoDriver,
+        allocator: OptimalAllocator,
+
+        // 编译时生成的统计信息
+        pub const COMPILE_TIME_INFO = comptime generateCompileTimeInfo(config);
+        pub const PERFORMANCE_CHARACTERISTICS = comptime analyzePerformance(config);
+        pub const MEMORY_LAYOUT = comptime analyzeMemoryLayout(Self);
+
+        pub fn init(base_allocator: std.mem.Allocator) !Self {
+            return Self{
+                .scheduler = try OptimalScheduler.init(base_allocator),
+                .io_driver = try OptimalIoDriver.init(base_allocator),
+                .allocator = try OptimalAllocator.init(base_allocator),
+            };
+        }
+
+        // 编译时特化的spawn函数
+        pub fn spawn(self: *Self, comptime future: anytype) !JoinHandle(@TypeOf(future).Output) {
+            // 编译时类型检查
+            comptime validateFutureType(@TypeOf(future));
+
+            // 编译时选择最优调度策略
+            const strategy = comptime selectSpawnStrategy(@TypeOf(future), config);
+
+            return switch (comptime strategy) {
+                .local => self.scheduler.spawnLocal(future),
+                .global => self.scheduler.spawnGlobal(future),
+                .dedicated => self.scheduler.spawnDedicated(future),
+            };
+        }
+
+        // 编译时优化的block_on
+        pub fn blockOn(self: *Self, comptime future: anytype) !@TypeOf(future).Output {
+            // 编译时检查是否在异步上下文中
+            comptime if (config.check_async_context) {
+                if (isInAsyncContext()) {
+                    @compileError("Cannot call blockOn from async context");
+                }
+            };
+
+            return self.scheduler.blockOn(future);
+        }
+
+        // 编译时生成的性能分析
+        pub fn getPerformanceReport(self: *const Self) PerformanceReport {
+            return PerformanceReport{
+                .compile_time_optimizations = COMPILE_TIME_INFO.optimizations,
+                .runtime_statistics = self.scheduler.getStatistics(),
+                .memory_usage = self.allocator.getUsage(),
+                .io_statistics = self.io_driver.getStatistics(),
+            };
+        }
+    };
+}
+
+// 编译时配置验证和优化
+const RuntimeConfig = struct {
+    // 基础配置
+    worker_threads: ?u32 = null,
+    enable_work_stealing: bool = true,
+    enable_io_uring: bool = true,
+
+    // 内存配置
+    memory_strategy: MemoryStrategy = .adaptive,
+    max_memory_usage: ?usize = null,
+    enable_numa: bool = true,
+
+    // 性能配置
+    enable_simd: bool = true,
+    enable_prefetch: bool = true,
+    cache_line_optimization: bool = true,
+
+    // 调试配置
+    enable_tracing: bool = false,
+    enable_metrics: bool = true,
+    check_async_context: bool = true,
+
+    // 编译时验证
+    pub fn validate(comptime self: @This()) void {
+        // 验证线程数配置
+        if (self.worker_threads) |threads| {
+            if (threads == 0) {
+                @compileError("Worker thread count must be greater than 0");
+            }
+            if (threads > 1024) {
+                @compileError("Worker thread count is too large (max 1024)");
+            }
+        }
+
+        // 验证内存配置
+        if (self.max_memory_usage) |max_mem| {
+            if (max_mem < 1024 * 1024) { // 1MB minimum
+                @compileError("Maximum memory usage is too small (minimum 1MB)");
+            }
+        }
+
+        // 平台特性验证
+        if (self.enable_io_uring and !PlatformCapabilities.io_uring_available) {
+            @compileLog("Warning: io_uring requested but not available on this platform");
+        }
+
+        if (self.enable_numa and !PlatformCapabilities.numa_available) {
+            @compileLog("Warning: NUMA optimization requested but not available");
+        }
+    }
+
+    // 编译时生成优化建议
+    pub fn generateOptimizationSuggestions(comptime self: @This()) []const []const u8 {
+        var suggestions: []const []const u8 = &[_][]const u8{};
+
+        // 基于平台特性生成建议
+        if (!self.enable_io_uring and PlatformCapabilities.io_uring_available) {
+            suggestions = suggestions ++ [_][]const u8{"Consider enabling io_uring for better I/O performance"};
+        }
+
+        if (!self.enable_simd and PlatformCapabilities.simd_available) {
+            suggestions = suggestions ++ [_][]const u8{"Consider enabling SIMD for better performance"};
+        }
+
+        if (self.worker_threads == null) {
+            suggestions = suggestions ++ [_][]const u8{"Consider setting explicit worker thread count"};
+        }
+
+        return suggestions;
+    }
+};
+```
+
+### 2. 编译时状态机：零开销的异步抽象
+
+#### 2.1 编译时async/await语法糖
+```zig
+// 编译时async函数转换器
+pub fn async_fn(comptime func: anytype) type {
+    const func_info = @typeInfo(@TypeOf(func));
+    const return_type = func_info.Fn.return_type.?;
+
+    // 编译时分析函数体，提取所有await点
+    const await_analysis = comptime analyzeAwaitPoints(func);
+
+    return struct {
+        const Self = @This();
+
+        // 编译时生成的状态枚举
+        const State = comptime generateStateEnum(await_analysis);
+
+        // 编译时生成的状态数据联合
+        const StateData = comptime generateStateData(await_analysis);
+
+        // 当前状态
+        state: State = .initial,
+        data: StateData = .{ .initial = {} },
+
+        // 编译时生成的poll实现
+        pub fn poll(self: *Self, ctx: *Context) Poll(return_type) {
+            return switch (self.state) {
+                .initial => self.pollInitial(ctx),
+                inline else => |state_tag| {
+                    const handler = comptime getStateHandler(state_tag, await_analysis);
+                    return handler(self, ctx);
+                },
+            };
+        }
+
+        // 编译时生成的状态处理函数
+        fn pollInitial(self: *Self, ctx: *Context) Poll(return_type) {
+            // 开始执行函数
+            const first_await = comptime await_analysis.await_points[0];
+
+            // 转换到第一个await状态
+            self.state = first_await.state;
+            self.data = first_await.initial_data;
+
+            return .pending;
+        }
+
+        // 编译时生成特化的状态处理器
+        comptime {
+            for (await_analysis.await_points) |await_point| {
+                const handler_name = "poll" ++ await_point.name;
+
+                @field(Self, handler_name) = struct {
+                    fn handler(self: *Self, ctx: *Context) Poll(return_type) {
+                        const future_field = @field(self.data, await_point.state_name);
+
+                        return switch (future_field.poll(ctx)) {
+                            .ready => |value| blk: {
+                                // 存储结果并转换到下一状态
+                                await_point.storeResult(&self.data, value);
+
+                                if (await_point.is_final) {
+                                    break :blk .{ .ready = await_point.getFinalResult(&self.data) };
+                                } else {
+                                    self.state = await_point.next_state;
+                                    break :blk .pending;
+                                }
+                            },
+                            .pending => .pending,
+                        };
+                    }
+                }.handler;
+            }
+        }
+    };
+}
+
+// 编译时await点分析
+const AwaitAnalysis = struct {
+    await_points: []const AwaitPoint,
+
+    const AwaitPoint = struct {
+        name: []const u8,
+        state_name: []const u8,
+        future_type: type,
+        result_type: type,
+        is_final: bool,
+        next_state: ?[]const u8,
+        initial_data: anytype,
+
+        fn storeResult(self: @This(), state_data: anytype, result: anytype) void {
+            @field(state_data, self.name ++ "_result") = result;
+        }
+
+        fn getFinalResult(self: @This(), state_data: anytype) anytype {
+            return @field(state_data, self.name ++ "_result");
+        }
+    };
+};
+
+// 编译时状态枚举生成
+fn generateStateEnum(comptime analysis: AwaitAnalysis) type {
+    var enum_fields: [analysis.await_points.len + 1]std.builtin.Type.EnumField = undefined;
+
+    // 初始状态
+    enum_fields[0] = .{
+        .name = "initial",
+        .value = 0,
+    };
+
+    // 为每个await点生成状态
+    for (analysis.await_points, 0..) |await_point, i| {
+        enum_fields[i + 1] = .{
+            .name = await_point.state_name,
+            .value = i + 1,
+        };
+    }
+
+    return @Type(.{
+        .Enum = .{
+            .tag_type = u8,
+            .fields = &enum_fields,
+            .decls = &[_]std.builtin.Type.Declaration{},
+            .is_exhaustive = true,
+        },
+    });
+}
+
+// 编译时状态数据生成
+fn generateStateData(comptime analysis: AwaitAnalysis) type {
+    var union_fields: [analysis.await_points.len + 1]std.builtin.Type.UnionField = undefined;
+
+    // 初始状态数据
+    union_fields[0] = .{
+        .name = "initial",
+        .type = void,
+        .alignment = 0,
+    };
+
+    // 为每个await点生成状态数据
+    for (analysis.await_points, 0..) |await_point, i| {
+        union_fields[i + 1] = .{
+            .name = await_point.state_name,
+            .type = await_point.future_type,
+            .alignment = @alignOf(await_point.future_type),
+        };
+    }
+
+    return @Type(.{
+        .Union = .{
+            .layout = .auto,
+            .tag_type = null,
+            .fields = &union_fields,
+            .decls = &[_]std.builtin.Type.Declaration{},
+        },
+    });
+}
+```
+
+#### 2.2 编译时Future组合子优化
+```zig
+// 编译时Future组合子生成器
+pub const FutureCombinators = struct {
+    // 编译时map组合子
+    pub fn Map(comptime F: type, comptime MapFn: type) type {
+        return struct {
+            const Self = @This();
+
+            future: F,
+            map_fn: MapFn,
+
+            pub const Output = @TypeOf(MapFn(@as(F.Output, undefined)));
+
+            pub fn poll(self: *Self, ctx: *Context) Poll(Output) {
+                return switch (self.future.poll(ctx)) {
+                    .ready => |value| .{ .ready = self.map_fn(value) },
+                    .pending => .pending,
+                };
+            }
+        };
+    }
+
+    // 编译时and_then组合子
+    pub fn AndThen(comptime F: type, comptime AndThenFn: type) type {
+        const NextFuture = @TypeOf(AndThenFn(@as(F.Output, undefined)));
+
+        return struct {
+            const Self = @This();
+
+            state: union(enum) {
+                first: F,
+                second: NextFuture,
+                done,
+            },
+            and_then_fn: AndThenFn,
+
+            pub const Output = NextFuture.Output;
+
+            pub fn poll(self: *Self, ctx: *Context) Poll(Output) {
+                while (true) {
+                    switch (self.state) {
+                        .first => |*first| {
+                            switch (first.poll(ctx)) {
+                                .ready => |value| {
+                                    const next_future = self.and_then_fn(value);
+                                    self.state = .{ .second = next_future };
+                                    continue;
+                                },
+                                .pending => return .pending,
+                            }
+                        },
+                        .second => |*second| {
+                            switch (second.poll(ctx)) {
+                                .ready => |value| {
+                                    self.state = .done;
+                                    return .{ .ready = value };
+                                },
+                                .pending => return .pending,
+                            }
+                        },
+                        .done => unreachable,
+                    }
+                }
+            }
+        };
+    }
+
+    // 编译时join组合子（并行执行）
+    pub fn Join(comptime futures: []const type) type {
+        return struct {
+            const Self = @This();
+
+            // 编译时生成的Future数组
+            futures: comptime blk: {
+                var fields: [futures.len]std.builtin.Type.StructField = undefined;
+                for (futures, 0..) |FutureType, i| {
+                    fields[i] = .{
+                        .name = std.fmt.comptimePrint("future_{}", .{i}),
+                        .type = FutureType,
+                        .default_value = null,
+                        .is_comptime = false,
+                        .alignment = @alignOf(FutureType),
+                    };
+                }
+                break :blk @Type(.{
+                    .Struct = .{
+                        .layout = .auto,
+                        .fields = &fields,
+                        .decls = &[_]std.builtin.Type.Declaration{},
+                        .is_tuple = false,
+                    },
+                });
+            },
+
+            // 编译时生成的结果类型
+            pub const Output = comptime blk: {
+                var fields: [futures.len]std.builtin.Type.StructField = undefined;
+                for (futures, 0..) |FutureType, i| {
+                    fields[i] = .{
+                        .name = std.fmt.comptimePrint("result_{}", .{i}),
+                        .type = FutureType.Output,
+                        .default_value = null,
+                        .is_comptime = false,
+                        .alignment = @alignOf(FutureType.Output),
+                    };
+                }
+                break :blk @Type(.{
+                    .Struct = .{
+                        .layout = .auto,
+                        .fields = &fields,
+                        .decls = &[_]std.builtin.Type.Declaration{},
+                        .is_tuple = false,
+                    },
+                });
+            },
+
+            completed: [futures.len]bool = [_]bool{false} ** futures.len,
+            results: ?Output = null,
+
+            pub fn poll(self: *Self, ctx: *Context) Poll(Output) {
+                var all_ready = true;
+
+                // 编译时展开的轮询循环
+                inline for (futures, 0..) |_, i| {
+                    if (!self.completed[i]) {
+                        const future_field = @field(self.futures, "future_" ++ std.fmt.comptimePrint("{}", .{i}));
+
+                        switch (future_field.poll(ctx)) {
+                            .ready => |value| {
+                                if (self.results == null) {
+                                    self.results = std.mem.zeroes(Output);
+                                }
+                                @field(self.results.?, "result_" ++ std.fmt.comptimePrint("{}", .{i})) = value;
+                                self.completed[i] = true;
+                            },
+                            .pending => {
+                                all_ready = false;
+                            },
+                        }
+                    }
+                }
+
+                if (all_ready) {
+                    return .{ .ready = self.results.? };
+                } else {
+                    return .pending;
+                }
+            }
+        };
+    }
+};
+```
+
+### 3. 编译时优化的高性能调度器
+
+#### 3.1 编译时工作窃取队列生成
+```zig
+// 编译时特化的工作窃取队列
+pub fn WorkStealingQueue(comptime T: type, comptime capacity: u32) type {
+    // 编译时验证容量是2的幂
+    comptime {
+        if (!std.math.isPowerOfTwo(capacity)) {
+            @compileError("Queue capacity must be a power of 2");
+        }
+    }
+
+    return struct {
+        const Self = @This();
+
+        // 编译时计算的常量
+        const CAPACITY = capacity;
+        const MASK = capacity - 1;
+
+        // 使用编译时优化的原子类型
+        const AtomicIndex = if (capacity <= 256) std.atomic.Value(u8) else std.atomic.Value(u16);
+
+        // 缓存行对齐的队列结构
+        buffer: [CAPACITY]std.atomic.Value(?*T) align(PlatformCapabilities.cache_line_size),
+        head: AtomicIndex align(PlatformCapabilities.cache_line_size),
+        tail: AtomicIndex align(PlatformCapabilities.cache_line_size),
+
+        pub fn init() Self {
+            return Self{
+                .buffer = [_]std.atomic.Value(?*T){std.atomic.Value(?*T).init(null)} ** CAPACITY,
+                .head = AtomicIndex.init(0),
+                .tail = AtomicIndex.init(0),
+            };
+        }
+
+        // 编译时优化的push操作
+        pub fn push(self: *Self, item: *T) bool {
+            const tail = self.tail.load(.monotonic);
+            const head = self.head.load(.acquire);
+
+            // 编译时计算的容量检查
+            if (tail.wrapping_sub(head) >= CAPACITY) {
+                return false; // 队列满
+            }
+
+            // 编译时优化的索引计算
+            const index = tail & MASK;
+            self.buffer[index].store(item, .relaxed);
+
+            // 内存屏障确保写入可见性
+            self.tail.store(tail.wrapping_add(1), .release);
+            return true;
+        }
+
+        // 编译时优化的pop操作
+        pub fn pop(self: *Self) ?*T {
+            const tail = self.tail.load(.monotonic);
+            const head = self.head.load(.monotonic);
+
+            if (head == tail) {
+                return null; // 队列空
+            }
+
+            const new_tail = tail.wrapping_sub(1);
+            self.tail.store(new_tail, .monotonic);
+
+            const index = new_tail & MASK;
+            const item = self.buffer[index].load(.relaxed);
+
+            // 检查是否有并发窃取
+            if (self.head.cmpxchgStrong(head, head.wrapping_add(1), .acq_rel, .monotonic)) |_| {
+                // 有并发窃取，恢复tail
+                self.tail.store(tail, .monotonic);
+                return null;
+            }
+
+            return item;
+        }
+
+        // 编译时优化的steal操作
+        pub fn steal(self: *Self) ?*T {
+            var head = self.head.load(.acquire);
+
+            while (true) {
+                const tail = self.tail.load(.acquire);
+
+                if (head >= tail) {
+                    return null; // 队列空
+                }
+
+                const index = head & MASK;
+                const item = self.buffer[index].load(.relaxed);
+
+                // 尝试原子更新head
+                switch (self.head.cmpxchgWeak(head, head.wrapping_add(1), .acq_rel, .acquire)) {
+                    .success => return item,
+                    .failure => |actual| head = actual,
+                }
+            }
+        }
+
+        // 编译时生成的批量操作
+        pub fn pushBatch(self: *Self, items: []const *T) u32 {
+            var pushed: u32 = 0;
+
+            for (items) |item| {
+                if (self.push(item)) {
+                    pushed += 1;
+                } else {
+                    break;
+                }
+            }
+
+            return pushed;
+        }
+
+        pub fn stealBatch(self: *Self, buffer: []*T) u32 {
+            var stolen: u32 = 0;
+
+            for (buffer) |*slot| {
+                if (self.steal()) |item| {
+                    slot.* = item;
+                    stolen += 1;
+                } else {
+                    break;
+                }
+            }
+
+            return stolen;
+        }
+    };
+}
+
+// 编译时调度器生成器
+pub fn Scheduler(comptime config: SchedulerConfig) type {
+    // 编译时计算最优参数
+    const worker_count = comptime config.worker_threads orelse
+        @min(std.Thread.getCpuCount() catch 4, 64);
+    const queue_capacity = comptime config.queue_capacity orelse 256;
+
+    return struct {
+        const Self = @This();
+
+        // 编译时确定的常量
+        const WORKER_COUNT = worker_count;
+        const QUEUE_CAPACITY = queue_capacity;
+
+        // 编译时生成的工作线程数组
+        workers: [WORKER_COUNT]Worker,
+
+        // 编译时生成的队列数组
+        local_queues: [WORKER_COUNT]WorkStealingQueue(*Task, QUEUE_CAPACITY),
+
+        // 全局注入队列
+        global_queue: GlobalQueue,
+
+        // 编译时生成的统计信息
+        statistics: Statistics,
+
+        const Worker = struct {
+            id: u32,
+            thread: ?std.Thread,
+            parker: Parker,
+            rng: std.rand.DefaultPrng,
+
+            // 编译时生成的工作循环
+            pub fn run(self: *Worker, scheduler: *Self) void {
+                // 设置线程本地存储
+                setCurrentWorker(self);
+
+                while (!scheduler.isShuttingDown()) {
+                    // 1. 检查本地队列
+                    if (scheduler.local_queues[self.id].pop()) |task| {
+                        self.executeTask(task);
+                        continue;
+                    }
+
+                    // 2. 检查全局队列
+                    if (scheduler.global_queue.pop()) |task| {
+                        self.executeTask(task);
+                        continue;
+                    }
+
+                    // 3. 工作窃取
+                    if (self.stealWork(scheduler)) |task| {
+                        self.executeTask(task);
+                        continue;
+                    }
+
+                    // 4. 停车等待
+                    self.park();
+                }
+            }
+
+            // 编译时优化的窃取策略
+            fn stealWork(self: *Worker, scheduler: *Self) ?*Task {
+                // 编译时生成的随机窃取序列
+                const steal_sequence = comptime generateStealSequence(WORKER_COUNT);
+                const start_offset = self.rng.random().int(u32) % WORKER_COUNT;
+
+                // 编译时展开的窃取循环
+                inline for (steal_sequence) |offset| {
+                    const target_id = (self.id + start_offset + offset) % WORKER_COUNT;
+                    if (target_id == self.id) continue;
+
+                    if (scheduler.local_queues[target_id].steal()) |task| {
+                        scheduler.statistics.recordSteal(self.id, target_id);
+                        return task;
+                    }
+                }
+
+                return null;
+            }
+
+            fn executeTask(self: *Worker, task: *Task) void {
+                scheduler.statistics.recordTaskExecution(self.id);
+
+                // 设置执行上下文
+                var ctx = Context{
+                    .waker = Waker.fromTask(task),
+                    .worker_id = self.id,
+                };
+
+                // 执行任务
+                task.poll(&ctx);
+            }
+        };
+
+        pub fn init(allocator: std.mem.Allocator) !Self {
+            var self = Self{
+                .workers = undefined,
+                .local_queues = undefined,
+                .global_queue = try GlobalQueue.init(allocator),
+                .statistics = Statistics.init(),
+            };
+
+            // 初始化队列
+            for (&self.local_queues) |*queue| {
+                queue.* = WorkStealingQueue(*Task, QUEUE_CAPACITY).init();
+            }
+
+            // 初始化工作线程
+            for (&self.workers, 0..) |*worker, i| {
+                worker.* = Worker{
+                    .id = @intCast(i),
+                    .thread = null,
+                    .parker = Parker.init(),
+                    .rng = std.rand.DefaultPrng.init(@intCast(std.time.milliTimestamp())),
+                };
+            }
+
+            return self;
+        }
+
+        // 编译时优化的调度函数
+        pub fn schedule(self: *Self, task: *Task) void {
+            // 编译时选择调度策略
+            const strategy = comptime config.scheduling_strategy;
+
+            switch (comptime strategy) {
+                .local_first => self.scheduleLocalFirst(task),
+                .global_first => self.scheduleGlobalFirst(task),
+                .round_robin => self.scheduleRoundRobin(task),
+            }
+        }
+
+        fn scheduleLocalFirst(self: *Self, task: *Task) void {
+            // 尝试放入当前工作线程的本地队列
+            if (getCurrentWorker()) |worker| {
+                if (self.local_queues[worker.id].push(task)) {
+                    return;
+                }
+            }
+
+            // 放入全局队列
+            self.global_queue.push(task);
+            self.unparkWorker();
+        }
+    };
+}
+
+// 编译时生成窃取序列
+fn generateStealSequence(comptime worker_count: u32) [worker_count]u32 {
+    var sequence: [worker_count]u32 = undefined;
+    for (&sequence, 0..) |*item, i| {
+        item.* = @intCast(i);
+    }
+    return sequence;
+}
+```
+
+### 4. 编译时I/O系统：平台原生性能
+
+#### 4.1 编译时I/O后端选择和优化
+```zig
+// 编译时I/O驱动生成器
+pub fn IoDriver(comptime config: IoConfig) type {
+    // 编译时选择最优后端
+    const Backend = comptime selectIoBackend(config);
+
+    return struct {
+        const Self = @This();
+
+        backend: Backend,
+
+        // 编译时生成的性能特征
+        pub const PERFORMANCE_CHARACTERISTICS = comptime Backend.getPerformanceCharacteristics();
+        pub const SUPPORTED_OPERATIONS = comptime Backend.getSupportedOperations();
+        pub const BATCH_SIZE_HINT = comptime Backend.getOptimalBatchSize();
+
+        pub fn init(allocator: std.mem.Allocator) !Self {
+            return Self{
+                .backend = try Backend.init(allocator),
+            };
+        }
+
+        // 编译时特化的I/O操作
+        pub fn submitRead(self: *Self, fd: std.posix.fd_t, buffer: []u8, offset: u64) !IoHandle {
+            return switch (comptime Backend.BACKEND_TYPE) {
+                .io_uring => self.backend.submitReadUring(fd, buffer, offset),
+                .epoll => self.backend.submitReadEpoll(fd, buffer, offset),
+                .kqueue => self.backend.submitReadKqueue(fd, buffer, offset),
+                .iocp => self.backend.submitReadIocp(fd, buffer, offset),
+            };
+        }
+
+        // 编译时批量操作优化
+        pub fn submitBatch(self: *Self, operations: []const IoOperation) ![]IoHandle {
+            if (comptime Backend.SUPPORTS_BATCH) {
+                return self.backend.submitBatch(operations);
+            } else {
+                // 编译时展开为单个操作
+                var handles: [operations.len]IoHandle = undefined;
+                for (operations, 0..) |op, i| {
+                    handles[i] = try self.submitSingle(op);
+                }
+                return &handles;
+            }
+        }
+
+        // 编译时轮询优化
+        pub fn poll(self: *Self, timeout: ?u64) !u32 {
+            return switch (comptime Backend.POLLING_STRATEGY) {
+                .blocking => self.backend.pollBlocking(timeout),
+                .non_blocking => self.backend.pollNonBlocking(),
+                .adaptive => self.backend.pollAdaptive(timeout),
+            };
+        }
+    };
+}
+
+// 编译时后端选择逻辑
+fn selectIoBackend(comptime config: IoConfig) type {
+    // 按性能优先级选择
+    if (comptime PlatformCapabilities.io_uring_available and config.prefer_io_uring) {
+        return IoUringBackend(config);
+    } else if (comptime PlatformCapabilities.kqueue_available) {
+        return KqueueBackend(config);
+    } else if (comptime PlatformCapabilities.iocp_available) {
+        return IocpBackend(config);
+    } else if (comptime builtin.os.tag == .linux) {
+        return EpollBackend(config);
+    } else {
+        @compileError("No suitable I/O backend available");
+    }
+}
+
+// 编译时io_uring后端优化
+fn IoUringBackend(comptime config: IoConfig) type {
+    return struct {
+        const Self = @This();
+
+        // 编译时配置参数
+        const QUEUE_DEPTH = config.queue_depth orelse 256;
+        const BATCH_SIZE = config.batch_size orelse 32;
+        const USE_SQPOLL = config.use_sqpoll orelse false;
+
+        // 编译时特性检测
+        pub const BACKEND_TYPE = .io_uring;
+        pub const SUPPORTS_BATCH = true;
+        pub const POLLING_STRATEGY = .adaptive;
+
+        ring: std.os.linux.IoUring,
+        pending_ops: std.HashMap(u64, *IoOperation, std.hash_map.AutoContext(u64), 80),
+
+        pub fn init(allocator: std.mem.Allocator) !Self {
+            const flags = comptime if (USE_SQPOLL)
+                std.os.linux.IORING_SETUP_SQPOLL
+            else
+                0;
+
+            return Self{
+                .ring = try std.os.linux.IoUring.init(QUEUE_DEPTH, flags),
+                .pending_ops = std.HashMap(u64, *IoOperation, std.hash_map.AutoContext(u64), 80).init(allocator),
+            };
+        }
+
+        // 编译时优化的提交函数
+        pub fn submitReadUring(self: *Self, fd: std.posix.fd_t, buffer: []u8, offset: u64) !IoHandle {
+            const sqe = try self.ring.get_sqe();
+            const user_data = self.generateUserData();
+
+            // 编译时选择最优的读取方式
+            if (comptime config.use_fixed_buffers) {
+                sqe.prep_read_fixed(fd, buffer, offset, 0);
+            } else {
+                sqe.prep_read(fd, buffer, offset);
+            }
+
+            sqe.user_data = user_data;
+
+            const io_op = try self.allocator.create(IoOperation);
+            io_op.* = .{
+                .type = .read,
+                .fd = fd,
+                .buffer = buffer,
+                .offset = offset,
+                .user_data = user_data,
+            };
+
+            try self.pending_ops.put(user_data, io_op);
+            return IoHandle{ .user_data = user_data };
+        }
+
+        // 编译时批量提交优化
+        pub fn submitBatch(self: *Self, operations: []const IoOperation) ![]IoHandle {
+            var handles: [operations.len]IoHandle = undefined;
+
+            // 编译时展开批量操作
+            for (operations, 0..) |op, i| {
+                const sqe = try self.ring.get_sqe();
+                const user_data = self.generateUserData();
+
+                switch (op.type) {
+                    .read => sqe.prep_read(op.fd, op.buffer, op.offset),
+                    .write => sqe.prep_write(op.fd, op.buffer, op.offset),
+                    .fsync => sqe.prep_fsync(op.fd, 0),
+                }
+
+                sqe.user_data = user_data;
+                handles[i] = IoHandle{ .user_data = user_data };
+            }
+
+            // 一次性提交所有操作
+            _ = try self.ring.submit();
+
+            return &handles;
+        }
+
+        // 编译时轮询优化
+        pub fn pollAdaptive(self: *Self, timeout: ?u64) !u32 {
+            var cqes: [BATCH_SIZE]std.os.linux.io_uring_cqe = undefined;
+
+            const count = if (timeout) |t|
+                try self.ring.copy_cqes_timeout(&cqes, t)
+            else
+                try self.ring.copy_cqes(&cqes, null);
+
+            // 编译时展开的完成处理
+            for (cqes[0..count]) |cqe| {
+                if (self.pending_ops.get(cqe.user_data)) |io_op| {
+                    io_op.result = cqe.res;
+                    io_op.completed = true;
+
+                    // 唤醒等待的任务
+                    if (io_op.waker) |waker| {
+                        waker.wake();
+                    }
+
+                    _ = self.pending_ops.remove(cqe.user_data);
+                    self.allocator.destroy(io_op);
+                }
+            }
+
+            return count;
+        }
+
+        // 编译时性能特征
+        pub fn getPerformanceCharacteristics() PerformanceCharacteristics {
+            return PerformanceCharacteristics{
+                .latency_class = .ultra_low,
+                .throughput_class = .very_high,
+                .cpu_efficiency = .excellent,
+                .memory_efficiency = .good,
+                .batch_efficiency = .excellent,
+            };
+        }
+    };
+}
+```
+
+#### 4.2 编译时网络抽象层
+```zig
+// 编译时网络栈生成器
+pub fn NetworkStack(comptime config: NetworkConfig) type {
+    return struct {
+        const Self = @This();
+
+        // 编译时选择的I/O驱动
+        io_driver: IoDriver(config.io_config),
+
+        // 编译时生成的连接池
+        connection_pool: if (config.enable_connection_pooling)
+            ConnectionPool(config.max_connections)
+        else
+            void,
+
+        // 编译时协议支持
+        pub const SUPPORTED_PROTOCOLS = comptime config.protocols;
+
+        pub fn init(allocator: std.mem.Allocator) !Self {
+            return Self{
+                .io_driver = try IoDriver(config.io_config).init(allocator),
+                .connection_pool = if (config.enable_connection_pooling)
+                    try ConnectionPool(config.max_connections).init(allocator)
+                else
+                    {},
+            };
+        }
+
+        // 编译时TCP连接优化
+        pub fn connectTcp(self: *Self, address: std.net.Address) !TcpStream {
+            const socket = try std.posix.socket(address.any.family, std.posix.SOCK.STREAM, 0);
+
+            // 编译时套接字优化
+            if (comptime config.tcp_nodelay) {
+                try std.posix.setsockopt(socket, std.posix.IPPROTO.TCP, std.posix.TCP.NODELAY, &std.mem.toBytes(@as(c_int, 1)));
+            }
+
+            if (comptime config.reuse_addr) {
+                try std.posix.setsockopt(socket, std.posix.SOL.SOCKET, std.posix.SO.REUSEADDR, &std.mem.toBytes(@as(c_int, 1)));
+            }
+
+            // 异步连接
+            const connect_future = AsyncConnect{
+                .socket = socket,
+                .address = address,
+                .io_driver = &self.io_driver,
+            };
+
+            return TcpStream{
+                .socket = socket,
+                .io_driver = &self.io_driver,
+            };
+        }
+
+        // 编译时HTTP服务器生成
+        pub fn createHttpServer(self: *Self, comptime handler: anytype) HttpServer(@TypeOf(handler)) {
+            return HttpServer(@TypeOf(handler)){
+                .network_stack = self,
+                .handler = handler,
+            };
+        }
+    };
+}
+
+// 编译时HTTP服务器
+fn HttpServer(comptime HandlerType: type) type {
+    return struct {
+        const Self = @This();
+
+        network_stack: *NetworkStack,
+        handler: HandlerType,
+
+        pub fn listen(self: *Self, address: std.net.Address) !void {
+            const listener = try self.network_stack.listenTcp(address);
+
+            while (true) {
+                const connection = try listener.accept();
+
+                // 编译时生成的请求处理
+                const request_handler = async_fn(struct {
+                    connection: TcpStream,
+                    handler: HandlerType,
+
+                    fn handle(self: @This()) !void {
+                        var request = try HttpRequest.parse(&self.connection);
+                        const response = try self.handler.handle(request);
+                        try response.write(&self.connection);
+                    }
+                }{ .connection = connection, .handler = self.handler }.handle);
+
+                // 异步处理请求
+                _ = try self.network_stack.spawn(request_handler);
+            }
+        }
+    };
 }
 ```
 
@@ -2899,38 +4586,249 @@ const ScheduledIo = struct {
 };
 ```
 
-#### 3.2 跨平台I/O抽象
+#### 3.2 Future和异步抽象（基于Tokio的Future设计）
 ```zig
-// src/io/driver.zig
-const IoDriver = struct {
-    backend: Backend,
+// src/future/future.zig - 基于Tokio的Future抽象
+const Future = struct {
+    // 虚函数表指针
+    vtable: *const VTable,
 
-    const Backend = union(enum) {
-        io_uring: IoUringDriver,
-        epoll: EpollDriver,
-        kqueue: KqueueDriver,
-        iocp: IocpDriver,
+    // 类型擦除的数据指针
+    data: *anyopaque,
+
+    const VTable = struct {
+        // 轮询函数
+        poll: *const fn(*anyopaque, *Context) Poll(anyopaque),
+
+        // 析构函数
+        drop: *const fn(*anyopaque) void,
+
+        // 类型信息
+        type_info: std.builtin.Type,
     };
 
-    pub fn init(allocator: Allocator) !IoDriver {
-        return IoDriver{
-            .backend = if (comptime builtin.os.tag == .linux and IoUringDriver.available())
-                .{ .io_uring = try IoUringDriver.init(allocator) }
-            else if (comptime builtin.os.tag == .linux)
-                .{ .epoll = try EpollDriver.init(allocator) }
-            else if (comptime builtin.os.tag.isDarwin())
-                .{ .kqueue = try KqueueDriver.init(allocator) }
-            else if (comptime builtin.os.tag == .windows)
-                .{ .iocp = try IocpDriver.init(allocator) }
-            else
-                @compileError("Unsupported platform"),
+    pub fn init(comptime T: type, future: *T) Future {
+        const vtable = comptime generateVTable(T);
+
+        return Future{
+            .vtable = vtable,
+            .data = @ptrCast(future),
         };
     }
 
-    pub fn poll(self: *Self, timeout: ?u64) !u32 {
-        return switch (self.backend) {
-            inline else => |*driver| driver.poll(timeout),
+    pub fn poll(self: *Self, ctx: *Context) Poll(anyopaque) {
+        return self.vtable.poll(self.data, ctx);
+    }
+
+    pub fn deinit(self: *Self) void {
+        self.vtable.drop(self.data);
+    }
+
+    // 编译时生成虚函数表
+    fn generateVTable(comptime T: type) *const VTable {
+        return &VTable{
+            .poll = struct {
+                fn poll(data: *anyopaque, ctx: *Context) Poll(anyopaque) {
+                    const future = @as(*T, @ptrCast(@alignCast(data)));
+                    const result = future.poll(ctx);
+
+                    return switch (result) {
+                        .ready => |value| .{ .ready = @ptrCast(&value) },
+                        .pending => .pending,
+                    };
+                }
+            }.poll,
+
+            .drop = struct {
+                fn drop(data: *anyopaque) void {
+                    const future = @as(*T, @ptrCast(@alignCast(data)));
+                    if (@hasDecl(T, "deinit")) {
+                        future.deinit();
+                    }
+                }
+            }.drop,
+
+            .type_info = @typeInfo(T),
         };
+    }
+};
+
+// 轮询结果（参考Rust的Poll）
+fn Poll(comptime T: type) type {
+    return union(enum) {
+        ready: T,
+        pending,
+
+        pub fn isReady(self: Self) bool {
+            return switch (self) {
+                .ready => true,
+                .pending => false,
+            };
+        }
+
+        pub fn isPending(self: Self) bool {
+            return !self.isReady();
+        }
+
+        pub fn map(self: Self, comptime U: type, func: fn(T) U) Poll(U) {
+            return switch (self) {
+                .ready => |value| .{ .ready = func(value) },
+                .pending => .pending,
+            };
+        }
+    };
+}
+
+// 执行上下文（参考Tokio的Context）
+const Context = struct {
+    // 唤醒器
+    waker: Waker,
+
+    // 任务ID（用于调试）
+    task_id: ?TaskId,
+
+    // 协作式调度预算
+    budget: ?*Budget,
+
+    pub fn init(waker: Waker) Context {
+        return Context{
+            .waker = waker,
+            .task_id = getCurrentTaskId(),
+            .budget = getCurrentBudget(),
+        };
+    }
+
+    pub fn wake(self: *const Self) void {
+        self.waker.wake();
+    }
+
+    // 检查是否应该让出执行权
+    pub fn shouldYield(self: *Self) bool {
+        if (self.budget) |budget| {
+            return budget.shouldYield();
+        }
+        return false;
+    }
+};
+
+// 唤醒器（参考Tokio的Waker）
+const Waker = struct {
+    // 虚函数表
+    vtable: *const WakerVTable,
+
+    // 数据指针
+    data: *anyopaque,
+
+    const WakerVTable = struct {
+        wake: *const fn(*anyopaque) void,
+        wake_by_ref: *const fn(*anyopaque) void,
+        clone: *const fn(*anyopaque) Waker,
+        drop: *const fn(*anyopaque) void,
+    };
+
+    pub fn wake(self: Self) void {
+        self.vtable.wake(self.data);
+    }
+
+    pub fn wakeByRef(self: *const Self) void {
+        self.vtable.wake_by_ref(self.data);
+    }
+
+    pub fn clone(self: *const Self) Waker {
+        return self.vtable.clone(self.data);
+    }
+
+    pub fn deinit(self: Self) void {
+        self.vtable.drop(self.data);
+    }
+
+    // 从任务创建唤醒器
+    pub fn fromTask(task: *TaskCore) Waker {
+        // 增加任务引用计数
+        task.header.state.refInc();
+
+        return Waker{
+            .vtable = &task_waker_vtable,
+            .data = @ptrCast(task),
+        };
+    }
+
+    const task_waker_vtable = WakerVTable{
+        .wake = struct {
+            fn wake(data: *anyopaque) void {
+                const task = @as(*TaskCore, @ptrCast(@alignCast(data)));
+
+                // 转换到通知状态
+                if (task.header.state.transitionToNotified()) {
+                    // 调度任务
+                    const notified = Notified{ .task = task };
+                    task.vtable.schedule(task.scheduler, notified);
+                }
+
+                // 释放引用计数
+                if (task.header.state.refDec()) {
+                    task.release();
+                }
+            }
+        }.wake,
+
+        .wake_by_ref = struct {
+            fn wake_by_ref(data: *anyopaque) void {
+                const task = @as(*TaskCore, @ptrCast(@alignCast(data)));
+
+                if (task.header.state.transitionToNotified()) {
+                    // 增加引用计数用于调度
+                    task.header.state.refInc();
+
+                    const notified = Notified{ .task = task };
+                    task.vtable.schedule(task.scheduler, notified);
+                }
+            }
+        }.wake_by_ref,
+
+        .clone = struct {
+            fn clone(data: *anyopaque) Waker {
+                const task = @as(*TaskCore, @ptrCast(@alignCast(data)));
+                return Waker.fromTask(task);
+            }
+        }.clone,
+
+        .drop = struct {
+            fn drop(data: *anyopaque) void {
+                const task = @as(*TaskCore, @ptrCast(@alignCast(data)));
+
+                if (task.header.state.refDec()) {
+                    task.release();
+                }
+            }
+        }.drop,
+    };
+};
+
+// 协作式调度预算（参考Tokio的coop）
+const Budget = struct {
+    remaining: std.atomic.Value(u32),
+
+    const INITIAL_BUDGET: u32 = 128;
+
+    pub fn init() Budget {
+        return Budget{
+            .remaining = std.atomic.Value(u32).init(INITIAL_BUDGET),
+        };
+    }
+
+    pub fn shouldYield(self: *Self) bool {
+        const remaining = self.remaining.load(.monotonic);
+        if (remaining == 0) {
+            return true;
+        }
+
+        _ = self.remaining.fetchSub(1, .monotonic);
+        return false;
+    }
+
+    pub fn reset(self: *Self) void {
+        self.remaining.store(INITIAL_BUDGET, .monotonic);
     }
 };
 ```
@@ -3018,23 +4916,347 @@ const NumaAllocator = struct {
 };
 ```
 
-## 基准测试和性能目标
+## Zig特性优化和编译时分析
 
-### 1. 性能基准
-- **任务调度延迟**: < 1μs (本地队列)
-- **上下文切换开销**: < 100ns
-- **内存分配延迟**: < 50ns (对象池)
-- **I/O吞吐量**: 接近系统理论极限的90%
+### 1. 编译时配置和优化（充分利用Zig的comptime）
+```zig
+// src/config/compile_time.zig - 编译时配置系统
+const RuntimeConfig = struct {
+    // 工作线程配置
+    worker_threads: ?u32 = null,
 
-### 2. 内存使用目标
-- **协程栈开销**: 2KB-2MB可配置
-- **运行时开销**: < 1MB基础内存
-- **任务对象大小**: < 64字节
+    // 队列大小配置
+    local_queue_size: u32 = 256,
+    global_queue_size: u32 = 1024,
 
-### 3. 可扩展性目标
-- **支持协程数量**: > 100万
-- **工作线程数**: 自适应，最多支持CPU核心数的2倍
-- **并发I/O操作**: > 10万
+    // I/O配置
+    io_events_capacity: u32 = 1024,
+    enable_io_uring: bool = true,
+
+    // 内存配置
+    enable_numa: bool = true,
+    stack_size: u32 = 2 * 1024 * 1024,
+
+    // 调试配置
+    enable_tracing: bool = false,
+    enable_metrics: bool = true,
+
+    // 性能配置
+    enable_work_stealing: bool = true,
+    steal_batch_size: u32 = 32,
+
+    // 编译时验证配置
+    pub fn validate(comptime self: RuntimeConfig) void {
+        // 验证队列大小是2的幂
+        if (!std.math.isPowerOfTwo(self.local_queue_size)) {
+            @compileError("local_queue_size must be a power of 2");
+        }
+
+        if (!std.math.isPowerOfTwo(self.global_queue_size)) {
+            @compileError("global_queue_size must be a power of 2");
+        }
+
+        // 验证栈大小对齐
+        if (self.stack_size % std.mem.page_size != 0) {
+            @compileError("stack_size must be page-aligned");
+        }
+
+        // 平台特性检查
+        if (self.enable_io_uring and builtin.os.tag != .linux) {
+            @compileError("io_uring is only available on Linux");
+        }
+
+        if (self.enable_numa and builtin.os.tag != .linux) {
+            @compileLog("NUMA optimization is only available on Linux, disabling");
+        }
+    }
+};
+
+// 编译时运行时生成器
+pub fn Runtime(comptime config: RuntimeConfig) type {
+    // 编译时验证配置
+    comptime config.validate();
+
+    // 编译时计算最优参数
+    const worker_count = comptime config.worker_threads orelse
+        @min(std.Thread.getCpuCount() catch 4, 64);
+
+    const local_queue_mask = comptime config.local_queue_size - 1;
+    const global_queue_mask = comptime config.global_queue_size - 1;
+
+    return struct {
+        const Self = @This();
+
+        // 编译时确定的常量
+        pub const WORKER_COUNT = worker_count;
+        pub const LOCAL_QUEUE_SIZE = config.local_queue_size;
+        pub const LOCAL_QUEUE_MASK = local_queue_mask;
+        pub const ENABLE_WORK_STEALING = config.enable_work_stealing;
+        pub const ENABLE_METRICS = config.enable_metrics;
+        pub const ENABLE_TRACING = config.enable_tracing;
+
+        // 条件编译的组件
+        scheduler: if (WORKER_COUNT == 1)
+            CurrentThreadScheduler
+        else
+            MultiThreadScheduler(WORKER_COUNT),
+
+        io_driver: if (config.enable_io_uring and builtin.os.tag == .linux)
+            IoUringDriver
+        else if (builtin.os.tag == .linux)
+            EpollDriver
+        else if (builtin.os.tag.isDarwin())
+            KqueueDriver
+        else if (builtin.os.tag == .windows)
+            IocpDriver
+        else
+            @compileError("Unsupported platform"),
+
+        memory_allocator: if (config.enable_numa and builtin.os.tag == .linux)
+            NumaAllocator
+        else
+            std.heap.GeneralPurposeAllocator(.{}),
+
+        metrics: if (ENABLE_METRICS) RuntimeMetrics else void,
+        tracer: if (ENABLE_TRACING) RuntimeTracer else void,
+
+        // 编译时生成的优化方法
+        pub fn spawn(self: *Self, comptime future: anytype) !JoinHandle(@TypeOf(future).Output) {
+            comptime {
+                // 编译时检查Future类型
+                if (!@hasDecl(@TypeOf(future), "poll")) {
+                    @compileError("Type must implement poll method");
+                }
+
+                // 编译时检查是否为Send类型（多线程环境）
+                if (WORKER_COUNT > 1 and !@hasDecl(@TypeOf(future), "Send")) {
+                    @compileError("Future must be Send in multi-threaded runtime");
+                }
+            }
+
+            // 根据配置选择调度策略
+            if (comptime WORKER_COUNT == 1) {
+                return self.scheduler.spawnLocal(future);
+            } else {
+                return self.scheduler.spawn(future);
+            }
+        }
+
+        // 编译时优化的阻塞执行
+        pub fn blockOn(self: *Self, comptime future: anytype) !@TypeOf(future).Output {
+            comptime {
+                // 编译时验证不在异步上下文中调用
+                if (@hasDecl(@TypeOf(future), "AsyncContext")) {
+                    @compileError("Cannot call blockOn from async context");
+                }
+            }
+
+            return self.scheduler.blockOn(future);
+        }
+    };
+}
+```
+
+### 2. 零成本抽象和内联优化
+```zig
+// src/optimization/zero_cost.zig - 零成本抽象实现
+const ZeroCostFuture = struct {
+    // 使用comptime参数实现零成本抽象
+    pub fn map(comptime F: type, comptime MapFn: type) type {
+        return struct {
+            const Self = @This();
+
+            future: F,
+            map_fn: MapFn,
+
+            pub fn poll(self: *Self, ctx: *Context) Poll(@TypeOf(self.map_fn(@as(F.Output, undefined)))) {
+                return switch (self.future.poll(ctx)) {
+                    .ready => |value| .{ .ready = self.map_fn(value) },
+                    .pending => .pending,
+                };
+            }
+
+            // 编译时确保内联
+            pub const Output = @TypeOf(self.map_fn(@as(F.Output, undefined)));
+        };
+    }
+
+    // 编译时组合子优化
+    pub fn andThen(comptime F: type, comptime AndThenFn: type) type {
+        return struct {
+            const Self = @This();
+
+            state: union(enum) {
+                first: F,
+                second: AndThenFn.Output,
+                done,
+            },
+            and_then_fn: AndThenFn,
+
+            pub fn poll(self: *Self, ctx: *Context) Poll(AndThenFn.Output.Output) {
+                while (true) {
+                    switch (self.state) {
+                        .first => |*first| {
+                            switch (first.poll(ctx)) {
+                                .ready => |value| {
+                                    const second_future = self.and_then_fn(value);
+                                    self.state = .{ .second = second_future };
+                                    continue;
+                                },
+                                .pending => return .pending,
+                            }
+                        },
+                        .second => |*second| {
+                            switch (second.poll(ctx)) {
+                                .ready => |value| {
+                                    self.state = .done;
+                                    return .{ .ready = value };
+                                },
+                                .pending => return .pending,
+                            }
+                        },
+                        .done => unreachable,
+                    }
+                }
+            }
+        };
+    }
+};
+
+// 编译时内联的快速路径优化
+inline fn fastPathSchedule(task: *TaskCore) bool {
+    // 尝试直接放入当前线程的本地队列
+    if (comptime getCurrentWorker()) |worker| {
+        if (worker.local_queue.tryPushFast(task)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// 编译时分支预测优化
+fn likelyBranch(comptime condition: bool, value: bool) bool {
+    if (comptime condition) {
+        return @call(.always_inline, @import("std").zig.c_builtins.__builtin_expect, .{ @intFromBool(value), 1 }) != 0;
+    } else {
+        return @call(.always_inline, @import("std").zig.c_builtins.__builtin_expect, .{ @intFromBool(value), 0 }) != 0;
+    }
+}
+```
+
+### 3. 编译时性能分析和优化
+```zig
+// src/analysis/compile_time_analysis.zig - 编译时性能分析
+const PerformanceAnalyzer = struct {
+    // 编译时计算内存布局优化
+    pub fn optimizeMemoryLayout(comptime T: type) type {
+        const fields = std.meta.fields(T);
+
+        // 按大小排序字段以减少内存碎片
+        const sorted_fields = comptime blk: {
+            var sorted = fields;
+            std.sort.insertion(std.builtin.Type.StructField, &sorted, {}, struct {
+                fn lessThan(_: void, a: std.builtin.Type.StructField, b: std.builtin.Type.StructField) bool {
+                    return @sizeOf(a.type) > @sizeOf(b.type);
+                }
+            }.lessThan);
+            break :blk sorted;
+        };
+
+        // 生成优化后的结构体
+        return @Type(.{
+            .Struct = .{
+                .layout = .Auto,
+                .fields = sorted_fields,
+                .decls = &[_]std.builtin.Type.Declaration{},
+                .is_tuple = false,
+            },
+        });
+    }
+
+    // 编译时缓存行对齐分析
+    pub fn analyzeCacheAlignment(comptime T: type) struct { size: usize, alignment: usize, cache_friendly: bool } {
+        const size = @sizeOf(T);
+        const alignment = @alignOf(T);
+        const cache_line_size = 64; // 假设64字节缓存行
+
+        return .{
+            .size = size,
+            .alignment = alignment,
+            .cache_friendly = size <= cache_line_size and alignment >= @min(size, 8),
+        };
+    }
+
+    // 编译时生成优化的数据结构
+    pub fn generateOptimizedQueue(comptime T: type, comptime capacity: usize) type {
+        const analysis = analyzeCacheAlignment(T);
+
+        // 根据分析结果选择最优实现
+        if (analysis.cache_friendly and capacity <= 256) {
+            return CacheFriendlyQueue(T, capacity);
+        } else if (capacity > 1024) {
+            return LockFreeQueue(T, capacity);
+        } else {
+            return StandardQueue(T, capacity);
+        }
+    }
+};
+
+// 编译时基准测试
+const CompileTimeBenchmark = struct {
+    // 编译时计算理论性能上限
+    pub fn calculateTheoreticalLimits(comptime config: RuntimeConfig) struct {
+        max_tasks_per_second: u64,
+        max_io_ops_per_second: u64,
+        memory_overhead_per_task: usize,
+    } {
+        const cpu_freq_ghz = 3.0; // 假设3GHz CPU
+        const cycles_per_task_switch = 100; // 假设100个周期
+        const cycles_per_io_op = 1000; // 假设1000个周期
+
+        const max_tasks_per_second = @as(u64, @intFromFloat(cpu_freq_ghz * 1e9 / cycles_per_task_switch));
+        const max_io_ops_per_second = @as(u64, @intFromFloat(cpu_freq_ghz * 1e9 / cycles_per_io_op));
+
+        const task_overhead = @sizeOf(TaskCore) + config.stack_size;
+
+        return .{
+            .max_tasks_per_second = max_tasks_per_second,
+            .max_io_ops_per_second = max_io_ops_per_second,
+            .memory_overhead_per_task = task_overhead,
+        };
+    }
+
+    // 编译时生成性能测试
+    pub fn generateBenchmark(comptime name: []const u8, comptime test_fn: anytype) type {
+        return struct {
+            pub fn run() !void {
+                const start = std.time.nanoTimestamp();
+
+                try test_fn();
+
+                const end = std.time.nanoTimestamp();
+                const duration_ns = end - start;
+
+                std.debug.print("Benchmark {s}: {} ns\n", .{ name, duration_ns });
+            }
+        };
+    }
+};
+```
+
+### 4. 基准测试和性能目标（基于Tokio性能数据）
+
+#### 4.1 性能基准（参考Tokio实际性能）
+- **任务调度延迟**: < 500ns (本地队列，参考Tokio)
+- **工作窃取延迟**: < 2μs (跨线程窃取)
+- **I/O唤醒延迟**: < 1μs (从I/O就绪到任务执行)
+- **内存分配延迟**: < 100ns (对象池分配)
+
+#### 4.2 吞吐量目标（基于Tokio基准）
+- **任务吞吐量**: > 10M tasks/second (单线程)
+- **I/O吞吐量**: > 1M ops/second (网络I/O)
+- **并发连接**: > 100K concurrent connections
+- **内存效率**: < 2KB per task (包括栈)
 
 ## 错误处理和恢复机制
 
@@ -3282,6 +5504,416 @@ const MockNetwork = struct {
     const MockConnection = struct {
         send_buffer: std.fifo.LinearFifo(u8, .Dynamic),
         recv_buffer: std.fifo.LinearFifo(u8, .Dynamic),
+        is_connected: bool = true,
+
+        pub fn send(self: *Self, data: []const u8) !void {
+            if (!self.is_connected) return error.ConnectionClosed;
+            try self.send_buffer.writeAll(data);
+        }
+
+        pub fn recv(self: *Self, buf: []u8) !usize {
+            if (!self.is_connected and self.recv_buffer.readableLength() == 0) {
+                return error.ConnectionClosed;
+            }
+            return self.recv_buffer.read(buf);
+        }
+    };
+
+    pub fn createConnection(self: *Self) !ConnectionId {
+        const id = self.generateConnectionId();
+        const connection = MockConnection{
+            .send_buffer = std.fifo.LinearFifo(u8, .Dynamic).init(self.allocator),
+            .recv_buffer = std.fifo.LinearFifo(u8, .Dynamic).init(self.allocator),
+        };
+        try self.connections.put(id, connection);
+        return id;
+    }
+
+    pub fn simulateLatency(self: *Self, duration_ms: u64) void {
+        self.latency_ms = duration_ms;
+    }
+
+    pub fn simulatePacketLoss(self: *Self, rate: f64) void {
+        self.packet_loss_rate = rate;
+    }
+};
+```
+
+## 基于Tokio分析的实现路线图
+
+### 阶段1：核心任务系统（1-2个月）
+基于对Tokio任务系统的深入分析，优先实现核心组件：
+
+1. **任务状态管理**（参考Tokio的state.rs）
+   - 原子状态位操作
+   - 引用计数管理
+   - 状态转换机制
+   - 内存安全保证
+
+2. **Future抽象层**（参考Tokio的Future trait）
+   - Poll类型和状态机
+   - Context和Waker机制
+   - 类型擦除的Future实现
+   - 零成本抽象组合子
+
+3. **基础调度器**（参考Tokio的current_thread）
+   - 单线程事件循环
+   - 任务队列管理
+   - 基础的协作式调度
+   - 简单的I/O集成
+
+### 阶段2：工作窃取调度器（2-3个月）
+基于Tokio的多线程调度器架构：
+
+1. **工作窃取队列**（参考Tokio的queue.rs）
+   - 无锁双端队列
+   - ABA问题防护
+   - 批量操作优化
+   - 内存屏障正确性
+
+2. **多线程调度器**（参考Tokio的multi_thread）
+   - 工作线程管理
+   - 全局注入队列
+   - 随机窃取策略
+   - 停车和唤醒机制
+
+3. **负载均衡**（参考Tokio的负载均衡策略）
+   - 溢出处理机制
+   - 工作线程统计
+   - 自适应调度
+   - NUMA感知优化
+
+### 阶段3：I/O驱动系统（2-3个月）
+基于Tokio的I/O架构设计：
+
+1. **I/O驱动核心**（参考Tokio的driver.rs）
+   - 事件循环抽象
+   - 注册和注销机制
+   - 就绪状态管理
+   - 跨平台抽象层
+
+2. **平台特定后端**
+   - Linux: io_uring优先，epoll备选
+   - macOS/BSD: kqueue实现
+   - Windows: IOCP实现
+   - 统一的接口抽象
+
+3. **I/O资源管理**（参考Tokio的ScheduledIo）
+   - 资源生命周期
+   - 等待队列管理
+   - 唤醒机制优化
+   - 内存泄漏防护
+
+### 阶段4：网络和同步原语（3-4个月）
+基于Tokio的网络和同步设计：
+
+1. **网络编程API**
+   - TCP/UDP套接字
+   - 地址解析
+   - 连接池管理
+   - 流式I/O抽象
+
+2. **同步原语**（参考Tokio的sync模块）
+   - 异步互斥锁
+   - 读写锁
+   - 信号量和屏障
+   - 通道和广播
+
+3. **定时器系统**（参考Tokio的time wheel）
+   - 分层时间轮
+   - 高精度定时器
+   - 超时处理
+   - 时间模拟支持
+
+### 阶段5：优化和生态（2-3个月）
+基于Tokio的最佳实践：
+
+1. **性能优化**
+   - 编译时优化
+   - 热点路径优化
+   - 内存布局优化
+   - 分支预测优化
+
+2. **可观测性**（参考Tokio的metrics）
+   - 运行时指标
+   - 任务追踪
+   - 性能分析
+   - 调试工具
+
+3. **测试和质量保证**
+   - 异步测试框架
+   - 模拟时间和网络
+   - 压力测试
+   - 内存安全验证
+
+## 关键技术决策（基于Tokio经验）
+
+### 1. 任务调度策略
+- **本地优先**: 优先使用本地队列，减少竞争
+- **随机窃取**: 避免热点竞争，提高负载均衡
+- **批量操作**: 减少原子操作开销
+- **协作式调度**: 防止任务饥饿
+
+### 2. 内存管理策略
+- **对象池**: 减少分配开销
+- **引用计数**: 安全的内存管理
+- **NUMA感知**: 提高多核性能
+- **零拷贝**: 减少内存拷贝
+
+### 3. I/O处理策略
+- **事件驱动**: 高效的I/O多路复用
+- **就绪通知**: 精确的唤醒机制
+- **批量处理**: 提高I/O吞吐量
+- **背压处理**: 防止内存溢出
+
+## 性能目标（基于Tokio基准）
+
+### 1. 延迟目标
+- **任务调度**: < 500ns (本地队列)
+- **工作窃取**: < 2μs (跨线程)
+- **I/O唤醒**: < 1μs (就绪到执行)
+- **上下文切换**: < 100ns (协程切换)
+
+### 2. 吞吐量目标
+- **任务处理**: > 10M tasks/sec (单线程)
+- **网络I/O**: > 1M ops/sec
+- **并发连接**: > 100K connections
+- **内存效率**: < 2KB per task
+
+### 3. 可扩展性目标
+- **工作线程**: 支持到CPU核心数的2倍
+- **并发任务**: > 1M concurrent tasks
+- **I/O操作**: > 100K concurrent I/O ops
+- **内存使用**: 线性扩展，无内存泄漏
+
+## 风险评估和缓解策略
+
+### 1. 技术风险
+- **复杂性**: 异步系统的复杂性可能导致难以调试的问题
+  - 缓解：渐进式开发，充分测试，详细文档
+- **性能**: 可能无法达到Tokio的性能水平
+  - 缓解：持续基准测试，性能分析，优化热点
+- **兼容性**: 跨平台兼容性问题
+  - 缓解：早期多平台测试，抽象层设计
+
+### 2. 项目风险
+- **资源**: 开发资源可能不足
+  - 缓解：分阶段实施，社区贡献，优先核心功能
+- **生态**: Zig生态系统还不够成熟
+  - 缓解：与Zig社区合作，推动标准化
+
+## 总结
+
+基于对Tokio源代码的深入分析，Zokio项目具有以下核心优势：
+
+### 1. 技术优势
+- **借鉴成熟架构**: 基于Tokio的成功设计模式
+- **Zig语言特性**: 利用编译时计算和零成本抽象
+- **内存安全**: 无GC的内存安全保证
+- **性能优化**: 编译时优化和运行时效率
+
+### 2. 创新点
+- **编译时配置**: 基于comptime的运行时定制
+- **零成本抽象**: 完全内联的异步抽象
+- **类型安全**: 编译时的异步安全检查
+- **可观测性**: 内置的性能分析和调试支持
+
+### 3. 生态价值
+- **填补空白**: 为Zig提供成熟的异步运行时
+- **性能标杆**: 设立Zig异步编程的性能标准
+- **最佳实践**: 建立Zig异步编程的最佳实践
+- **社区推动**: 推动Zig在服务器端的应用
+
+## 基于Zig特性的创新总结
+
+### 1. 革命性的编译时优化
+
+Zokio通过充分利用Zig的comptime特性，实现了前所未有的编译时优化：
+
+#### 1.1 零运行时开销的异步抽象
+- **编译时状态机生成**: 所有async/await都在编译时转换为优化的状态机
+- **编译时Future组合**: 所有Future组合子都完全内联，无运行时开销
+- **编译时调度优化**: 调度策略在编译时确定，运行时无分支开销
+
+#### 1.2 编译时性能分析和优化
+```zig
+// 编译时性能报告生成
+pub const ZOKIO_PERFORMANCE_REPORT = comptime generatePerformanceReport();
+
+const PerformanceReport = struct {
+    // 编译时计算的理论性能上限
+    theoretical_max_tasks_per_second: u64,
+    theoretical_max_io_ops_per_second: u64,
+
+    // 编译时内存布局分析
+    memory_layout_efficiency: f64,
+    cache_friendliness_score: f64,
+
+    // 编译时优化应用情况
+    applied_optimizations: []const []const u8,
+    potential_optimizations: []const []const u8,
+
+    // 编译时平台特化程度
+    platform_optimization_level: f64,
+};
+
+// 编译时生成的优化建议
+pub const OPTIMIZATION_SUGGESTIONS = comptime generateOptimizationSuggestions();
+```
+
+### 2. 独特的类型安全保证
+
+#### 2.1 编译时并发安全
+- **编译时数据竞争检测**: 在编译时检测潜在的数据竞争
+- **编译时生命周期验证**: 确保异步操作的生命周期安全
+- **编译时Send/Sync检查**: 类型级别的线程安全保证
+
+#### 2.2 编译时错误处理完整性
+- **编译时错误路径分析**: 确保所有错误情况都有处理
+- **编译时资源管理**: 防止资源泄漏和双重释放
+- **编译时不变量检查**: 在编译时验证程序不变量
+
+### 3. 平台原生性能
+
+#### 3.1 编译时平台特化
+- **架构特定优化**: 针对x86_64、ARM64等架构的专门优化
+- **操作系统特化**: 充分利用Linux、macOS、Windows的特性
+- **硬件特性利用**: SIMD、NUMA、缓存预取等硬件特性的自动利用
+
+#### 3.2 编译时I/O后端选择
+- **性能优先**: 自动选择平台上性能最佳的I/O后端
+- **特性检测**: 编译时检测和利用平台特性
+- **零成本抽象**: 统一API下的零开销平台特化
+
+### 4. 开发体验革新
+
+#### 4.1 编译时文档和调试
+- **自动文档生成**: 基于类型信息的自动API文档
+- **编译时性能分析**: 在编译时就能看到性能特征
+- **编译时错误诊断**: 详细的编译时错误信息和建议
+
+#### 4.2 渐进式复杂度
+- **简单开始**: 基础用法极其简单
+- **按需复杂**: 高级特性按需启用
+- **编译时指导**: 编译器提供优化建议
+
+## 实现路线图：充分发挥Zig优势
+
+### 阶段1：编译时基础设施（1-2个月）
+**目标**: 建立编译时元编程基础
+
+1. **编译时类型系统**
+   - 实现编译时Future类型生成器
+   - 实现编译时状态机生成器
+   - 实现编译时安全检查框架
+
+2. **编译时配置系统**
+   - 实现编译时运行时生成器
+   - 实现编译时平台检测
+   - 实现编译时优化选择器
+
+3. **编译时验证框架**
+   - 实现编译时类型安全检查
+   - 实现编译时生命周期分析
+   - 实现编译时性能分析
+
+### 阶段2：零成本异步抽象（2-3个月）
+**目标**: 实现完全零开销的异步抽象
+
+1. **编译时async/await**
+   - 实现编译时函数分析器
+   - 实现编译时状态机生成
+   - 实现编译时优化的组合子
+
+2. **编译时调度器**
+   - 实现编译时工作窃取队列
+   - 实现编译时调度策略选择
+   - 实现编译时负载均衡
+
+3. **编译时内存管理**
+   - 实现编译时分配器选择
+   - 实现编译时对象池生成
+   - 实现编译时内存布局优化
+
+### 阶段3：平台特化I/O系统（2-3个月）
+**目标**: 实现平台原生性能的I/O系统
+
+1. **编译时I/O后端**
+   - 实现编译时后端选择逻辑
+   - 实现io_uring、kqueue、IOCP特化
+   - 实现编译时批量操作优化
+
+2. **编译时网络栈**
+   - 实现编译时协议栈生成
+   - 实现编译时连接池管理
+   - 实现编译时HTTP服务器生成
+
+3. **编译时性能优化**
+   - 实现编译时SIMD优化
+   - 实现编译时缓存优化
+   - 实现编译时NUMA感知
+
+### 阶段4：生态系统和工具（2-3个月）
+**目标**: 建立完整的开发生态
+
+1. **编译时工具链**
+   - 实现编译时性能分析器
+   - 实现编译时调试工具
+   - 实现编译时基准测试框架
+
+2. **编译时文档系统**
+   - 实现自动API文档生成
+   - 实现编译时示例生成
+   - 实现编译时最佳实践指导
+
+3. **编译时测试框架**
+   - 实现异步测试工具
+   - 实现编译时模拟框架
+   - 实现编译时压力测试
+
+### 阶段5：优化和完善（1-2个月）
+**目标**: 达到生产就绪状态
+
+1. **编译时优化完善**
+   - 优化编译时间
+   - 完善错误信息
+   - 优化生成代码质量
+
+2. **生态系统集成**
+   - 与Zig包管理器集成
+   - 与现有Zig库集成
+   - 社区反馈和改进
+
+## 技术优势总结
+
+### 1. 相比Tokio的优势
+- **零运行时开销**: 所有抽象在编译时完全消失
+- **编译时安全**: 更强的类型安全和并发安全保证
+- **平台原生**: 更深度的平台特化和优化
+- **内存效率**: 无GC的精确内存管理
+
+### 2. 相比其他异步运行时的优势
+- **编译时优化**: 前所未有的编译时优化程度
+- **类型安全**: 编译时的完整安全检查
+- **性能可预测**: 编译时就能分析性能特征
+- **零依赖**: 完全基于Zig标准库
+
+### 3. 独特创新点
+- **编译时async/await**: 世界首个编译时async/await实现
+- **编译时调度器**: 完全编译时特化的调度器
+- **编译时I/O**: 平台特化的零开销I/O抽象
+- **编译时安全**: 编译时的完整并发安全检查
+
+## 项目愿景实现
+
+Zokio将成为：
+
+1. **Zig生态的基石**: 为Zig异步编程设立标准
+2. **性能标杆**: 展示Zig在系统编程中的极致性能
+3. **创新典范**: 展示编译时元编程的无限可能
+4. **开发体验革命**: 重新定义异步编程的开发体验
+
+通过充分发挥Zig的独特优势，Zokio不仅仅是一个异步运行时，更是Zig语言哲学的完美体现：**精确、安全、快速、简洁**。它将推动整个异步编程领域向前发展，展示编译时元编程的无限潜力。
         connected: bool = true,
     };
 
