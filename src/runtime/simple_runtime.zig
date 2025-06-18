@@ -64,7 +64,9 @@ pub const SimpleRuntime = struct {
         self.running = true;
 
         // 在实际实现中，这里会启动工作线程
-        std.debug.print("简化运行时已启动\n", .{});
+        if (!@import("builtin").is_test) {
+            std.debug.print("简化运行时已启动\n", .{});
+        }
     }
 
     /// 关闭运行时
@@ -74,7 +76,9 @@ pub const SimpleRuntime = struct {
         self.running = false;
 
         // 在实际实现中，这里会停止工作线程
-        std.debug.print("简化运行时已关闭\n", .{});
+        if (!@import("builtin").is_test) {
+            std.debug.print("简化运行时已关闭\n", .{});
+        }
     }
 
     /// 阻塞执行Future直到完成
