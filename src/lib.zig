@@ -15,10 +15,15 @@ pub const scheduler = @import("scheduler/scheduler.zig");
 pub const io = @import("io/io.zig");
 pub const sync = @import("sync/sync.zig");
 pub const time = @import("time/time.zig");
+pub const timer = @import("time/timer.zig");
 pub const memory = @import("memory/memory.zig");
 pub const metrics = @import("metrics/metrics.zig");
 pub const testing = @import("testing/testing.zig");
 pub const utils = @import("utils/utils.zig");
+
+// 新增的高级功能模块
+pub const fs = @import("fs/async_fs.zig");
+pub const tracing = @import("tracing/tracer.zig");
 
 // 平台能力检测
 pub const platform = @import("utils/platform.zig");

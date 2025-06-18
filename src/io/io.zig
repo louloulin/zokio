@@ -394,6 +394,119 @@ fn WasiBackend(comptime config: IoConfig) type {
     return EpollBackend(config); // 简化为使用相同实现
 }
 
+/// 网络地址抽象
+pub const NetworkAddress = struct {
+    ip: []const u8,
+    port: u16,
+
+    pub fn parse(address_str: []const u8) !NetworkAddress {
+        const colon_pos = std.mem.lastIndexOf(u8, address_str, ":") orelse return error.InvalidAddress;
+
+        return NetworkAddress{
+            .ip = address_str[0..colon_pos],
+            .port = try std.fmt.parseInt(u16, address_str[colon_pos + 1 ..], 10),
+        };
+    }
+
+    pub fn toString(self: NetworkAddress, allocator: std.mem.Allocator) ![]u8 {
+        return std.fmt.allocPrint(allocator, "{s}:{d}", .{ self.ip, self.port });
+    }
+};
+
+/// TCP连接抽象
+pub const TcpStream = struct {
+    fd: std.posix.fd_t,
+    io_driver: *anyopaque, // 指向IoDriver的指针
+    local_addr: ?NetworkAddress = null,
+    remote_addr: ?NetworkAddress = null,
+
+    pub fn init(fd: std.posix.fd_t, io_driver: *anyopaque) TcpStream {
+        return TcpStream{
+            .fd = fd,
+            .io_driver = io_driver,
+        };
+    }
+
+    /// 异步读取数据
+    pub fn read(self: *TcpStream, buffer: []u8) !IoHandle {
+        _ = self;
+        _ = buffer;
+        // 这里需要调用IoDriver的submitRead方法
+        // 简化实现，实际需要类型转换
+        return IoHandle.generate();
+    }
+
+    /// 异步写入数据
+    pub fn write(self: *TcpStream, data: []const u8) !IoHandle {
+        _ = self;
+        _ = data;
+        // 这里需要调用IoDriver的submitWrite方法
+        // 简化实现，实际需要类型转换
+        return IoHandle.generate();
+    }
+
+    /// 关闭连接
+    pub fn close(self: *TcpStream) void {
+        std.posix.close(self.fd);
+    }
+
+    /// 设置TCP_NODELAY选项
+    pub fn setNodelay(self: *TcpStream, enable: bool) !void {
+        const value: c_int = if (enable) 1 else 0;
+        try std.posix.setsockopt(self.fd, std.posix.IPPROTO.TCP, std.posix.TCP.NODELAY, std.mem.asBytes(&value));
+    }
+
+    /// 设置SO_REUSEADDR选项
+    pub fn setReuseAddr(self: *TcpStream, enable: bool) !void {
+        const value: c_int = if (enable) 1 else 0;
+        try std.posix.setsockopt(self.fd, std.posix.SOL.SOCKET, std.posix.SO.REUSEADDR, std.mem.asBytes(&value));
+    }
+};
+
+/// TCP监听器
+pub const TcpListener = struct {
+    fd: std.posix.fd_t,
+    io_driver: *anyopaque,
+    local_addr: NetworkAddress,
+
+    pub fn bind(address: NetworkAddress, io_driver: *anyopaque) !TcpListener {
+        const fd = try std.posix.socket(std.posix.AF.INET, std.posix.SOCK.STREAM, 0);
+        errdefer std.posix.close(fd);
+
+        // 设置地址重用
+        const reuse: c_int = 1;
+        try std.posix.setsockopt(fd, std.posix.SOL.SOCKET, std.posix.SO.REUSEADDR, std.mem.asBytes(&reuse));
+
+        // 绑定地址
+        var addr = std.posix.sockaddr.in{
+            .family = std.posix.AF.INET,
+            .port = std.mem.nativeToBig(u16, address.port),
+            .addr = 0, // 简化实现，实际需要解析IP
+        };
+
+        try std.posix.bind(fd, @ptrCast(&addr), @sizeOf(@TypeOf(addr)));
+        try std.posix.listen(fd, 128);
+
+        return TcpListener{
+            .fd = fd,
+            .io_driver = io_driver,
+            .local_addr = address,
+        };
+    }
+
+    /// 异步接受连接
+    pub fn accept(self: *TcpListener) !IoHandle {
+        _ = self;
+        // 这里需要调用IoDriver的accept操作
+        // 简化实现
+        return IoHandle.generate();
+    }
+
+    pub fn close(self: *TcpListener) void {
+        std.posix.close(self.fd);
+    }
+};
+
 // 测试
 test "I/O配置验证" {
     const testing = std.testing;

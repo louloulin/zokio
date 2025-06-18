@@ -99,6 +99,10 @@ pub fn build(b: *std.Build) void {
         "file_processor",
         "async_await_demo",
         "async_block_demo",
+        "async_fs_demo",
+        "timer_demo",
+        "tracing_demo",
+        "advanced_sync_demo",
     };
 
     for (examples) |example_name| {
