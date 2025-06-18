@@ -182,8 +182,9 @@ pub fn ObjectPool(comptime T: type, comptime pool_size: usize) type {
         const Self = @This();
 
         // 编译时计算的池参数
-        const OBJECT_ALIGN = @alignOf(T);
-        const OBJECT_SIZE = std.mem.alignForward(usize, @sizeOf(T), OBJECT_ALIGN);
+        const OBJECT_ALIGN = @max(@alignOf(T), @alignOf(?*anyopaque));
+        const MIN_SIZE = @max(@sizeOf(T), @sizeOf(?*anyopaque));
+        const OBJECT_SIZE = std.mem.alignForward(usize, MIN_SIZE, OBJECT_ALIGN);
         const POOL_BYTES = OBJECT_SIZE * pool_size;
 
         // 编译时对齐的内存池
@@ -191,7 +192,7 @@ pub fn ObjectPool(comptime T: type, comptime pool_size: usize) type {
         free_list: utils.Atomic.Value(?*FreeNode),
         allocated_count: utils.Atomic.Value(usize),
 
-        const FreeNode = struct {
+        const FreeNode = extern struct {
             next: ?*FreeNode,
         };
 
