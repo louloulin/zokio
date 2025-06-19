@@ -160,6 +160,8 @@ pub fn build(b: *std.Build) void {
         "network_demo",
         "fs_demo",
         "benchmark_demo",
+        "tokio_stress_test",
+        "tokio_test_simple",
     };
 
     for (examples) |example_name| {

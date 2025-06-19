@@ -215,7 +215,7 @@ fn benchmarkAwaitFn(operations: u64) !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    var runtime = zokio.SimpleRuntime.init(allocator, .{});
+    var runtime = try zokio.SimpleRuntime.init(allocator);
     defer runtime.deinit();
     try runtime.start();
 
@@ -251,7 +251,7 @@ fn benchmarkNestedAwaitFn(operations: u64) !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    var runtime = zokio.SimpleRuntime.init(allocator, .{});
+    var runtime = try zokio.SimpleRuntime.init(allocator);
     defer runtime.deinit();
     try runtime.start();
 
@@ -287,7 +287,7 @@ fn benchmarkAsyncFnWithParams(operations: u64) !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    var runtime = zokio.SimpleRuntime.init(allocator, .{});
+    var runtime = try zokio.SimpleRuntime.init(allocator);
     defer runtime.deinit();
     try runtime.start();
 

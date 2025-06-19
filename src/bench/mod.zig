@@ -10,6 +10,7 @@ pub const benchmark = @import("benchmark.zig");
 pub const metrics = @import("metrics.zig");
 pub const profiler = @import("profiler.zig");
 pub const comparison = @import("comparison.zig");
+pub const tokio_runner = @import("tokio_runner.zig");
 
 // 导出核心类型
 pub const Benchmark = benchmark.Benchmark;
