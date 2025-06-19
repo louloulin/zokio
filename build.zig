@@ -386,6 +386,21 @@ pub fn build(b: *std.Build) void {
     const fast_smart_allocator_test_step = b.step("fast-memory", "运行高性能智能分配器测试");
     fast_smart_allocator_test_step.dependOn(&fast_smart_allocator_test_cmd.step);
 
+    // 统一内存管理接口测试 (P1阶段)
+    const unified_memory_test = b.addExecutable(.{
+        .name = "unified_memory_test",
+        .root_source_file = b.path("benchmarks/unified_memory_test.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    unified_memory_test.root_module.addImport("zokio", lib.root_module);
+    unified_memory_test.root_module.addOptions("config", options);
+    unified_memory_test.root_module.addImport("libxev", libxev.module("xev"));
+
+    const unified_memory_test_cmd = b.addRunArtifact(unified_memory_test);
+    const unified_memory_test_step = b.step("unified-memory", "运行统一内存管理接口测试");
+    unified_memory_test_step.dependOn(&unified_memory_test_cmd.step);
+
     // 综合压力测试
     const stress_all_step = b.step("stress-all", "运行所有压力测试");
     stress_all_step.dependOn(&run_benchmarks.step);

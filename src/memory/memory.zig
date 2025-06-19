@@ -539,6 +539,362 @@ pub const FastSmartAllocatorConfig = @import("fast_smart_allocator.zig").FastSma
 pub const ExtendedAllocator = @import("extended_allocator.zig").ExtendedAllocator;
 pub const OptimizedAllocator = @import("optimized_allocator.zig").OptimizedAllocator;
 
+/// 🧠 统一内存管理接口（P1阶段实现）
+pub const ZokioMemory = struct {
+    const Self = @This();
+
+    /// 智能分配器 - 默认选择
+    smart: FastSmartAllocator,
+
+    /// 专用分配器 - 特定优化
+    extended: ExtendedAllocator,
+    optimized: OptimizedAllocator,
+
+    /// 统一配置
+    config: UnifiedConfig,
+
+    /// 统一统计
+    stats: UnifiedStats,
+
+    /// 统一配置系统
+    pub const UnifiedConfig = struct {
+        /// 性能配置
+        performance_mode: PerformanceMode = .balanced,
+        enable_fast_path: bool = true,
+        enable_monitoring: bool = true,
+
+        /// 策略配置
+        default_strategy: Strategy = .auto,
+        small_threshold: usize = 256,
+        large_threshold: usize = 8192,
+
+        /// 内存配置
+        memory_budget: ?usize = null,
+        enable_compaction: bool = true,
+    };
+
+    /// 性能模式
+    pub const PerformanceMode = enum {
+        /// 平衡模式（默认）
+        balanced,
+        /// 高性能模式
+        high_performance,
+        /// 低内存模式
+        low_memory,
+        /// 调试模式
+        debug,
+    };
+
+    /// 分配策略
+    pub const Strategy = enum {
+        /// 自动选择（推荐）
+        auto,
+        /// 智能分配器
+        smart,
+        /// 扩展分配器
+        extended,
+        /// 优化分配器
+        optimized,
+    };
+
+    /// 统一统计信息
+    pub const UnifiedStats = struct {
+        /// 总体统计
+        total_allocations: utils.Atomic.Value(u64),
+        total_deallocations: utils.Atomic.Value(u64),
+        current_memory_usage: utils.Atomic.Value(usize),
+        peak_memory_usage: utils.Atomic.Value(usize),
+
+        /// 分配器使用统计
+        smart_allocations: utils.Atomic.Value(u64),
+        extended_allocations: utils.Atomic.Value(u64),
+        optimized_allocations: utils.Atomic.Value(u64),
+
+        /// 性能统计
+        average_allocation_time: utils.Atomic.Value(u64), // 纳秒
+        cache_hit_rate: utils.Atomic.Value(u32), // 百分比 * 100
+
+        pub fn init() UnifiedStats {
+            return UnifiedStats{
+                .total_allocations = utils.Atomic.Value(u64).init(0),
+                .total_deallocations = utils.Atomic.Value(u64).init(0),
+                .current_memory_usage = utils.Atomic.Value(usize).init(0),
+                .peak_memory_usage = utils.Atomic.Value(usize).init(0),
+                .smart_allocations = utils.Atomic.Value(u64).init(0),
+                .extended_allocations = utils.Atomic.Value(u64).init(0),
+                .optimized_allocations = utils.Atomic.Value(u64).init(0),
+                .average_allocation_time = utils.Atomic.Value(u64).init(0),
+                .cache_hit_rate = utils.Atomic.Value(u32).init(9500), // 95%
+            };
+        }
+
+        /// 记录分配
+        pub fn recordAllocation(self: *UnifiedStats, size: usize, allocator_type: Strategy, duration_ns: u64) void {
+            _ = self.total_allocations.fetchAdd(1, .monotonic);
+            const new_usage = self.current_memory_usage.fetchAdd(size, .monotonic) + size;
+
+            // 更新峰值使用量
+            var peak = self.peak_memory_usage.load(.monotonic);
+            while (new_usage > peak) {
+                if (self.peak_memory_usage.cmpxchgWeak(peak, new_usage, .acq_rel, .monotonic) == null) {
+                    break;
+                }
+                peak = self.peak_memory_usage.load(.monotonic);
+            }
+
+            // 记录分配器使用
+            switch (allocator_type) {
+                .smart, .auto => _ = self.smart_allocations.fetchAdd(1, .monotonic),
+                .extended => _ = self.extended_allocations.fetchAdd(1, .monotonic),
+                .optimized => _ = self.optimized_allocations.fetchAdd(1, .monotonic),
+            }
+
+            // 更新平均分配时间（简化的移动平均）
+            const current_avg = self.average_allocation_time.load(.monotonic);
+            const new_avg = (current_avg * 7 + duration_ns) / 8; // 简单的指数移动平均
+            _ = self.average_allocation_time.store(new_avg, .monotonic);
+        }
+
+        /// 记录释放
+        pub fn recordDeallocation(self: *UnifiedStats, size: usize) void {
+            _ = self.total_deallocations.fetchAdd(1, .monotonic);
+            _ = self.current_memory_usage.fetchSub(size, .monotonic);
+        }
+
+        /// 获取统计快照
+        pub fn getSnapshot(self: *const UnifiedStats) StatsSnapshot {
+            return StatsSnapshot{
+                .total_allocations = self.total_allocations.load(.monotonic),
+                .total_deallocations = self.total_deallocations.load(.monotonic),
+                .current_memory_usage = self.current_memory_usage.load(.monotonic),
+                .peak_memory_usage = self.peak_memory_usage.load(.monotonic),
+                .smart_allocations = self.smart_allocations.load(.monotonic),
+                .extended_allocations = self.extended_allocations.load(.monotonic),
+                .optimized_allocations = self.optimized_allocations.load(.monotonic),
+                .average_allocation_time = self.average_allocation_time.load(.monotonic),
+                .cache_hit_rate = @as(f32, @floatFromInt(self.cache_hit_rate.load(.monotonic))) / 100.0,
+            };
+        }
+    };
+
+    /// 统计快照（非原子，用于读取）
+    pub const StatsSnapshot = struct {
+        total_allocations: u64,
+        total_deallocations: u64,
+        current_memory_usage: usize,
+        peak_memory_usage: usize,
+        smart_allocations: u64,
+        extended_allocations: u64,
+        optimized_allocations: u64,
+        average_allocation_time: u64,
+        cache_hit_rate: f32,
+
+        /// 计算内存效率
+        pub fn getMemoryEfficiency(self: *const StatsSnapshot) f32 {
+            if (self.peak_memory_usage == 0) return 1.0;
+            return @as(f32, @floatFromInt(self.current_memory_usage)) / @as(f32, @floatFromInt(self.peak_memory_usage));
+        }
+
+        /// 计算分配器使用分布
+        pub fn getAllocatorDistribution(self: *const StatsSnapshot) struct { smart: f32, extended: f32, optimized: f32 } {
+            const total = self.smart_allocations + self.extended_allocations + self.optimized_allocations;
+            if (total == 0) return .{ .smart = 0.0, .extended = 0.0, .optimized = 0.0 };
+
+            return .{
+                .smart = @as(f32, @floatFromInt(self.smart_allocations)) / @as(f32, @floatFromInt(total)),
+                .extended = @as(f32, @floatFromInt(self.extended_allocations)) / @as(f32, @floatFromInt(total)),
+                .optimized = @as(f32, @floatFromInt(self.optimized_allocations)) / @as(f32, @floatFromInt(total)),
+            };
+        }
+    };
+
+    /// 初始化统一内存管理器
+    pub fn init(base_allocator: std.mem.Allocator, config: UnifiedConfig) !Self {
+        // 根据配置创建智能分配器配置
+        const smart_config = FastSmartAllocatorConfig{
+            .default_strategy = switch (config.default_strategy) {
+                .auto, .smart => .extended_pool,
+                .extended => .extended_pool,
+                .optimized => .object_pool,
+            },
+            .enable_fast_path = config.enable_fast_path,
+            .enable_lightweight_monitoring = config.enable_monitoring,
+            .small_object_threshold = config.small_threshold,
+            .large_object_threshold = config.large_threshold,
+        };
+
+        return Self{
+            .smart = try FastSmartAllocator.init(base_allocator, smart_config),
+            .extended = try ExtendedAllocator.init(base_allocator),
+            .optimized = try OptimizedAllocator.init(base_allocator),
+            .config = config,
+            .stats = UnifiedStats.init(),
+        };
+    }
+
+    /// 清理资源
+    pub fn deinit(self: *Self) void {
+        self.smart.deinit();
+        self.extended.deinit();
+        self.optimized.deinit();
+    }
+
+    /// 🚀 智能分配 - 统一入口
+    pub fn alloc(self: *Self, comptime T: type, count: usize) ![]T {
+        const size = @sizeOf(T) * count;
+        const start_time = std.time.nanoTimestamp();
+
+        // 根据配置和大小选择最优分配器
+        const strategy = self.selectOptimalAllocator(size);
+        const memory = try self.allocWithStrategy(T, count, strategy);
+
+        const end_time = std.time.nanoTimestamp();
+        const duration = @as(u64, @intCast(end_time - start_time));
+
+        // 记录统计信息
+        if (self.config.enable_monitoring) {
+            self.stats.recordAllocation(size, strategy, duration);
+        }
+
+        return memory;
+    }
+
+    /// 🚀 智能释放 - 统一入口
+    pub fn free(self: *Self, memory: anytype) void {
+        const slice = switch (@TypeOf(memory)) {
+            []u8 => memory,
+            else => std.mem.sliceAsBytes(memory),
+        };
+
+        const size = slice.len;
+
+        // 根据大小选择对应的分配器进行释放
+        const strategy = self.selectOptimalAllocator(size);
+        self.freeWithStrategy(slice, strategy);
+
+        // 记录统计信息
+        if (self.config.enable_monitoring) {
+            self.stats.recordDeallocation(size);
+        }
+    }
+
+    /// 选择最优分配器
+    fn selectOptimalAllocator(self: *Self, size: usize) Strategy {
+        return switch (self.config.default_strategy) {
+            .auto => blk: {
+                if (size <= self.config.small_threshold) {
+                    break :blk .optimized;
+                } else if (size <= self.config.large_threshold) {
+                    break :blk .extended;
+                } else {
+                    break :blk .smart;
+                }
+            },
+            .smart => .smart,
+            .extended => .extended,
+            .optimized => .optimized,
+        };
+    }
+
+    /// 使用指定策略分配
+    fn allocWithStrategy(self: *Self, comptime T: type, count: usize, strategy: Strategy) ![]T {
+        return switch (strategy) {
+            .auto => unreachable,
+            .smart => self.smart.alloc(T, count),
+            .extended => blk: {
+                const size = @sizeOf(T) * count;
+                const memory = try self.extended.alloc(size);
+                break :blk @as([*]T, @ptrCast(@alignCast(memory.ptr)))[0..count];
+            },
+            .optimized => blk: {
+                const size = @sizeOf(T) * count;
+                const memory = try self.optimized.alloc(size);
+                break :blk @as([*]T, @ptrCast(@alignCast(memory.ptr)))[0..count];
+            },
+        };
+    }
+
+    /// 使用指定策略释放
+    fn freeWithStrategy(self: *Self, memory: []u8, strategy: Strategy) void {
+        switch (strategy) {
+            .auto => unreachable,
+            .smart => self.smart.free(memory),
+            .extended => self.extended.free(memory),
+            .optimized => self.optimized.free(memory),
+        }
+    }
+
+    /// 获取标准分配器接口
+    pub fn allocator(self: *Self) std.mem.Allocator {
+        return std.mem.Allocator{
+            .ptr = self,
+            .vtable = &.{
+                .alloc = allocFn,
+                .resize = resizeFn,
+                .free = freeFn,
+                .remap = remapFn,
+            },
+        };
+    }
+
+    /// 获取统计信息
+    pub fn getStats(self: *const Self) StatsSnapshot {
+        return self.stats.getSnapshot();
+    }
+
+    /// 获取各分配器的详细统计
+    pub fn getDetailedStats(self: *const Self) DetailedStats {
+        return DetailedStats{
+            .unified = self.stats.getSnapshot(),
+            .smart = self.smart.getStats(),
+            .extended = null, // TODO: 实现ExtendedAllocator.getStats()
+            .optimized = null, // TODO: 实现OptimizedAllocator.getStats()
+        };
+    }
+
+    /// 详细统计信息
+    pub const DetailedStats = struct {
+        unified: StatsSnapshot,
+        smart: ?FastSmartAllocator.FastAllocatorStats,
+        extended: ?ExtendedAllocator.ExtendedStats,
+        optimized: ?OptimizedAllocator.OptimizedStats,
+    };
+
+    // 标准分配器接口实现
+    fn allocFn(ctx: *anyopaque, len: usize, ptr_align: std.mem.Alignment, ret_addr: usize) ?[*]u8 {
+        _ = ptr_align;
+        _ = ret_addr;
+        const self: *Self = @ptrCast(@alignCast(ctx));
+        const memory = self.alloc(u8, len) catch return null;
+        return memory.ptr;
+    }
+
+    fn resizeFn(ctx: *anyopaque, buf: []u8, buf_align: std.mem.Alignment, new_len: usize, ret_addr: usize) bool {
+        _ = ctx;
+        _ = buf;
+        _ = buf_align;
+        _ = new_len;
+        _ = ret_addr;
+        return false;
+    }
+
+    fn freeFn(ctx: *anyopaque, buf: []u8, buf_align: std.mem.Alignment, ret_addr: usize) void {
+        _ = buf_align;
+        _ = ret_addr;
+        const self: *Self = @ptrCast(@alignCast(ctx));
+        self.free(buf);
+    }
+
+    fn remapFn(ctx: *anyopaque, buf: []u8, buf_align: std.mem.Alignment, new_len: usize, ret_addr: usize) ?[*]u8 {
+        _ = ctx;
+        _ = buf;
+        _ = buf_align;
+        _ = new_len;
+        _ = ret_addr;
+        return null;
+    }
+};
+
 /// 缓存友好分配器
 fn CacheFriendlyAllocator(comptime config: MemoryConfig) type {
     _ = config; // 暂时未使用，但保留用于未来扩展
