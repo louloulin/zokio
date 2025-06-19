@@ -4,10 +4,10 @@
 
 const std = @import("std");
 const zokio = @import("zokio");
-const ZokioRunner = @import("../src/bench/zokio_runner.zig").ZokioRunner;
-const TokioRunner = @import("../src/bench/tokio_runner.zig").TokioRunner;
-const BenchType = @import("../src/bench/mod.zig").BenchType;
-const PerformanceMetrics = @import("../src/bench/mod.zig").PerformanceMetrics;
+const ZokioRunner = zokio.bench.ZokioRunner;
+const TokioRunner = zokio.bench.TokioRunner;
+const BenchType = zokio.bench.BenchType;
+const PerformanceMetrics = zokio.bench.PerformanceMetrics;
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -73,18 +73,18 @@ pub fn main() !void {
 }
 
 /// 性能对比分析
-fn performanceComparison(test_name: []const u8, zokio: PerformanceMetrics, tokio: PerformanceMetrics) !void {
+fn performanceComparison(test_name: []const u8, zokio_metrics: PerformanceMetrics, tokio_metrics: PerformanceMetrics) !void {
     std.debug.print("\n📊 {s} 性能对比结果:\n", .{test_name});
     std.debug.print("-" ** 50 ++ "\n", .{});
 
     // 吞吐量对比
-    const throughput_ratio = if (tokio.throughput_ops_per_sec > 0) 
-        zokio.throughput_ops_per_sec / tokio.throughput_ops_per_sec 
+    const throughput_ratio = if (tokio_metrics.throughput_ops_per_sec > 0)
+        zokio_metrics.throughput_ops_per_sec / tokio_metrics.throughput_ops_per_sec
     else 0.0;
-    
+
     std.debug.print("🔥 吞吐量对比:\n", .{});
-    std.debug.print("  Zokio:  {d:.0} ops/sec\n", .{zokio.throughput_ops_per_sec});
-    std.debug.print("  Tokio:  {d:.0} ops/sec\n", .{tokio.throughput_ops_per_sec});
+    std.debug.print("  Zokio:  {d:.0} ops/sec\n", .{zokio_metrics.throughput_ops_per_sec});
+    std.debug.print("  Tokio:  {d:.0} ops/sec\n", .{tokio_metrics.throughput_ops_per_sec});
     std.debug.print("  比率:   {d:.2}x ", .{throughput_ratio});
     if (throughput_ratio >= 1.0) {
         std.debug.print("✅ (Zokio更快)\n", .{});
@@ -93,13 +93,13 @@ fn performanceComparison(test_name: []const u8, zokio: PerformanceMetrics, tokio
     }
 
     // 延迟对比
-    const latency_ratio = if (zokio.avg_latency_ns > 0) 
-        @as(f64, @floatFromInt(tokio.avg_latency_ns)) / @as(f64, @floatFromInt(zokio.avg_latency_ns))
+    const latency_ratio = if (zokio_metrics.avg_latency_ns > 0)
+        @as(f64, @floatFromInt(tokio_metrics.avg_latency_ns)) / @as(f64, @floatFromInt(zokio_metrics.avg_latency_ns))
     else 0.0;
-    
+
     std.debug.print("\n⏱️  延迟对比:\n", .{});
-    std.debug.print("  Zokio:  {d:.2} μs\n", .{@as(f64, @floatFromInt(zokio.avg_latency_ns)) / 1000.0});
-    std.debug.print("  Tokio:  {d:.2} μs\n", .{@as(f64, @floatFromInt(tokio.avg_latency_ns)) / 1000.0});
+    std.debug.print("  Zokio:  {d:.2} μs\n", .{@as(f64, @floatFromInt(zokio_metrics.avg_latency_ns)) / 1000.0});
+    std.debug.print("  Tokio:  {d:.2} μs\n", .{@as(f64, @floatFromInt(tokio_metrics.avg_latency_ns)) / 1000.0});
     std.debug.print("  比率:   {d:.2}x ", .{latency_ratio});
     if (latency_ratio >= 1.0) {
         std.debug.print("✅ (Zokio延迟更低)\n", .{});
@@ -138,8 +138,8 @@ fn performanceComparison(test_name: []const u8, zokio: PerformanceMetrics, tokio
     }
 
     // 操作数对比
-    if (zokio.operations > 0 and tokio.operations > 0) {
-        std.debug.print("  • 完成操作数: Zokio={}, Tokio={}\n", .{ zokio.operations, tokio.operations });
+    if (zokio_metrics.operations > 0 and tokio_metrics.operations > 0) {
+        std.debug.print("  • 完成操作数: Zokio={}, Tokio={}\n", .{ zokio_metrics.operations, tokio_metrics.operations });
     }
 }
 

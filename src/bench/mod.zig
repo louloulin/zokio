@@ -11,12 +11,15 @@ pub const metrics = @import("metrics.zig");
 pub const profiler = @import("profiler.zig");
 pub const comparison = @import("comparison.zig");
 pub const tokio_runner = @import("tokio_runner.zig");
+pub const zokio_runner = @import("zokio_runner.zig");
 
 // 导出核心类型
 pub const Benchmark = benchmark.Benchmark;
 pub const BenchmarkResult = benchmark.BenchmarkResult;
 pub const Metrics = metrics.Metrics;
 pub const Profiler = profiler.Profiler;
+pub const TokioRunner = tokio_runner.TokioRunner;
+pub const ZokioRunner = zokio_runner.ZokioRunner;
 
 /// 基准测试配置
 pub const BenchConfig = struct {
