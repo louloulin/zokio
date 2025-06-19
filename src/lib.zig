@@ -59,6 +59,7 @@ pub const await_future = future.await_future;
 // 🚀 高性能运行时导出
 pub const RuntimeBuilder = runtime.RuntimeBuilder;
 pub const RuntimePresets = runtime.RuntimePresets;
+pub const JoinHandle = runtime.JoinHandle;
 
 // 🔥 高性能运行时类型
 pub const HighPerformanceRuntime = runtime.HighPerformanceRuntime;

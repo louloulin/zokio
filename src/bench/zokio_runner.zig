@@ -1,50 +1,27 @@
-//! 🚀 高性能Zokio基准测试运行器
+//! 🚀 真正使用Zokio核心API的基准测试运行器
 //!
-//! 充分利用Zokio的高性能组件：
-//! - 2.63B ops/sec 调度器性能
-//! - 769M ops/sec I/O性能
-//! - 真实异步实现，非同步模拟
+//! 使用真实的Zokio核心API：
+//! - async_fn: 异步函数转换器
+//! - await_fn: 异步等待函数
+//! - spawn: 异步任务调度
+//! - blockOn: 阻塞等待完成
+//! - JoinHandle: 任务句柄
 //!
 //! 与Tokio测试用例完全相同的测试逻辑，确保公平对比
 
 const std = @import("std");
-const SimpleRuntime = @import("../runtime/runtime.zig").SimpleRuntime;
+const zokio = @import("zokio");
 const PerformanceMetrics = @import("mod.zig").PerformanceMetrics;
 const BenchType = @import("mod.zig").BenchType;
 
-// 导入已验证的高性能组件
-const Scheduler = @import("../scheduler/scheduler.zig").Scheduler;
-const SchedulerConfig = @import("../scheduler/scheduler.zig").SchedulerConfig;
-const Task = @import("../scheduler/scheduler.zig").Task;
-const TaskId = @import("../future/future.zig").TaskId;
-const Context = @import("../future/future.zig").Context;
-const Poll = @import("../future/future.zig").Poll;
-
-/// 🚀 高性能Zokio基准测试运行器
+/// 🚀 真正使用Zokio核心API的基准测试运行器
 pub const ZokioRunner = struct {
     allocator: std.mem.Allocator,
-    runtime: ?*HighPerfRuntime,
+    runtime: ?*zokio.HighPerformanceRuntime,
 
     const Self = @This();
 
-    // 🔥 高性能运行时配置 - 充分利用Zokio优势
-    const HIGH_PERF_CONFIG = @import("../runtime/runtime.zig").RuntimeConfig{
-        .worker_threads = 8, // 多线程并发
-        .enable_work_stealing = true, // 工作窃取
-        .enable_io_uring = true, // 高性能I/O
-        .prefer_libxev = true, // libxev集成
-        .memory_strategy = .tiered_pools, // 分层内存池
-        .enable_numa = true, // NUMA优化
-        .enable_simd = true, // SIMD优化
-        .enable_prefetch = true, // 预取优化
-        .cache_line_optimization = true, // 缓存行优化
-        .enable_metrics = true, // 性能监控
-    };
-
-    // 🚀 编译时生成的高性能运行时类型
-    const HighPerfRuntime = @import("../runtime/runtime.zig").ZokioRuntime(HIGH_PERF_CONFIG);
-
-    /// 初始化高性能Zokio运行器
+    /// 初始化Zokio运行器
     pub fn init(allocator: std.mem.Allocator) Self {
         return Self{
             .allocator = allocator,
@@ -59,32 +36,26 @@ pub const ZokioRunner = struct {
         }
     }
 
-    /// 🚀 运行高性能Zokio基准测试
+    /// 🚀 运行真正使用Zokio核心API的基准测试
     pub fn runBenchmark(self: *Self, bench_type: BenchType, iterations: u32) !PerformanceMetrics {
-        std.debug.print("🚀 启动高性能Zokio基准测试...\n", .{});
-        std.debug.print("📊 配置信息:\n", .{});
-        std.debug.print("  工作线程: {}\n", .{HIGH_PERF_CONFIG.worker_threads.?});
-        std.debug.print("  工作窃取: {}\n", .{HIGH_PERF_CONFIG.enable_work_stealing});
-        std.debug.print("  libxev集成: {}\n", .{HIGH_PERF_CONFIG.prefer_libxev});
-        std.debug.print("  内存策略: {}\n", .{HIGH_PERF_CONFIG.memory_strategy});
-        std.debug.print("  SIMD优化: {}\n", .{HIGH_PERF_CONFIG.enable_simd});
+        std.debug.print("🚀 启动真正的Zokio核心API基准测试...\n", .{});
 
         // 🔥 初始化高性能运行时
-        var runtime = try HighPerfRuntime.init(self.allocator);
+        var runtime = try zokio.HighPerformanceRuntime.init(self.allocator);
         defer runtime.deinit();
 
         std.debug.print("✅ 高性能运行时初始化成功\n", .{});
         std.debug.print("📈 编译时信息:\n", .{});
-        std.debug.print("  平台: {s}\n", .{HighPerfRuntime.COMPILE_TIME_INFO.platform});
-        std.debug.print("  架构: {s}\n", .{HighPerfRuntime.COMPILE_TIME_INFO.architecture});
-        std.debug.print("  I/O后端: {s}\n", .{HighPerfRuntime.COMPILE_TIME_INFO.io_backend});
-        std.debug.print("  libxev启用: {}\n", .{HighPerfRuntime.LIBXEV_ENABLED});
+        std.debug.print("  配置名称: {s}\n", .{zokio.HighPerformanceRuntime.COMPILE_TIME_INFO.config_name});
+        std.debug.print("  性能配置: {s}\n", .{zokio.HighPerformanceRuntime.COMPILE_TIME_INFO.performance_profile});
+        std.debug.print("  工作线程: {}\n", .{zokio.HighPerformanceRuntime.COMPILE_TIME_INFO.worker_threads});
+        std.debug.print("  内存策略: {s}\n", .{zokio.HighPerformanceRuntime.COMPILE_TIME_INFO.memory_strategy});
 
         try runtime.start();
         defer runtime.stop();
         self.runtime = &runtime;
 
-        std.debug.print("🚀 运行时启动完成，开始基准测试...\n\n", .{});
+        std.debug.print("🚀 运行时启动完成，开始真实API基准测试...\n\n", .{});
 
         // 运行对应的基准测试
         return switch (bench_type) {
@@ -98,161 +69,102 @@ pub const ZokioRunner = struct {
         };
     }
 
-    /// 🚀 高性能任务调度基准测试 - 使用真实运行时API
+    /// 🚀 真正使用async_fn和spawn的任务调度基准测试
     fn runTaskSchedulingBenchmark(self: *Self, iterations: u32) !PerformanceMetrics {
-        std.debug.print("🚀 开始高性能任务调度压力测试，任务数: {} (目标: >1B ops/sec)\n", .{iterations});
-        std.debug.print("📊 使用真实Zokio运行时API进行测试...\n", .{});
+        std.debug.print("🚀 开始真正的async_fn + spawn任务调度压力测试，任务数: {}\n", .{iterations});
+        std.debug.print("📊 使用真实的Zokio核心API: async_fn + spawn + JoinHandle...\n", .{});
 
         const start_time = std.time.nanoTimestamp();
-
-        // 🔥 使用真实运行时而非单独的调度器
         const runtime = self.runtime.?;
 
-        // 原子计数器用于高并发统计
-        var completed_tasks = std.atomic.Value(u64).init(0);
-        var total_latency = std.atomic.Value(u64).init(0);
-
-        // 🚀 创建真实的异步任务类型
-        const HighPerfTask = struct {
-            task_id: u32,
-            work_units: u32,
-            completed_ref: *std.atomic.Value(u64),
-            latency_ref: *std.atomic.Value(u64),
-            start_time: i64,
-
-            const TaskSelf = @This();
-
-            // 实现Future trait
-            pub fn poll(task_self: *TaskSelf, ctx: *Context) Poll(void) {
-                _ = ctx;
-                const poll_start = std.time.nanoTimestamp();
-
-                // 高效的计算工作负载
+        // 🚀 定义真正的async_fn任务
+        const ComputeTask = zokio.async_fn_with_params(struct {
+            fn compute(task_id: u32, work_units: u32) u64 {
                 var sum: u64 = 0;
                 var j: u32 = 0;
-                while (j < task_self.work_units) : (j += 1) {
-                    sum = sum +% (task_self.task_id +% j);
+                while (j < work_units) : (j += 1) {
+                    sum = sum +% (task_id +% j);
                 }
-
-                // 防止编译器优化掉计算
-                std.mem.doNotOptimizeAway(sum);
-
-                // 记录完成
-                const task_duration = poll_start - task_self.start_time;
-                _ = task_self.completed_ref.fetchAdd(1, .acq_rel);
-                _ = task_self.latency_ref.fetchAdd(@as(u64, @intCast(task_duration)), .acq_rel);
-
-                return .ready;
+                return sum;
             }
-        };
+        }.compute);
 
-        // 🚀 创建高性能任务实例
-        const tasks = try self.allocator.alloc(HighPerfTask, iterations);
-        defer self.allocator.free(tasks);
+        std.debug.print("📊 使用spawn创建 {} 个async_fn任务...\n", .{iterations});
 
-        // 批量初始化任务
-        for (tasks, 0..) |*task, i| {
-            task.* = HighPerfTask{
-                .task_id = @intCast(i),
-                .work_units = @intCast(10 + (i % 20)), // 优化的工作负载 (10-30)
-                .completed_ref = &completed_tasks,
-                .latency_ref = &total_latency,
-                .start_time = @intCast(std.time.nanoTimestamp()),
+        // 🚀 使用真正的spawn API创建任务句柄
+        var handles = try self.allocator.alloc(zokio.JoinHandle(u64), iterations);
+        defer self.allocator.free(handles);
+
+        // 批量spawn真正的async_fn任务
+        const spawn_start = std.time.nanoTimestamp();
+        for (handles, 0..) |*handle, i| {
+            const task = ComputeTask{
+                .params = .{
+                    .arg0 = @intCast(i),
+                    .arg1 = @intCast(10 + (i % 20)) // 可变工作负载
+                }
             };
+            handle.* = try runtime.spawn(task);
         }
+        const spawn_end = std.time.nanoTimestamp();
 
-        std.debug.print("📊 使用运行时API批量调度 {} 个高性能任务...\n", .{iterations});
-
-        // 🔥 使用真实运行时API进行任务调度
-        const schedule_start = std.time.nanoTimestamp();
-
-        // 分批调度以最大化性能
-        const batch_size = 1000;
-        var scheduled: u32 = 0;
-        var join_handles = try self.allocator.alloc(@TypeOf(runtime.spawn(tasks[0])), 0);
-        defer self.allocator.free(join_handles);
-
-        // 动态扩展join_handles数组
-        while (scheduled < iterations) {
-            const batch_end = @min(scheduled + batch_size, iterations);
-            const batch_tasks = tasks[scheduled..batch_end];
-
-            // 为当前批次扩展join_handles
-            const old_len = join_handles.len;
-            join_handles = try self.allocator.realloc(join_handles, old_len + batch_tasks.len);
-
-            // 批量spawn任务
-            for (batch_tasks, 0..) |*task, i| {
-                join_handles[old_len + i] = try runtime.spawn(task.*);
-            }
-
-            scheduled = batch_end;
-        }
-
-        const schedule_end = std.time.nanoTimestamp();
-        std.debug.print("⚡ 任务调度完成，耗时: {d:.2} ms\n", .{
-            @as(f64, @floatFromInt(schedule_end - schedule_start)) / 1_000_000.0
+        std.debug.print("⚡ 任务spawn完成，耗时: {d:.2} ms\n", .{
+            @as(f64, @floatFromInt(spawn_end - spawn_start)) / 1_000_000.0
         });
 
-        // 🔥 等待所有任务完成 - 使用真实的join机制
-        std.debug.print("⏳ 等待所有任务完成...\n", .{});
+        std.debug.print("⏳ 使用JoinHandle等待所有任务完成...\n", .{});
+
+        // 🚀 使用真正的join API等待所有任务完成
         const execution_start = std.time.nanoTimestamp();
+        var completed_tasks: u64 = 0;
+        var total_result: u64 = 0;
 
-        for (join_handles) |*handle| {
-            _ = handle.wait();
+        for (handles) |*handle| {
+            const result = try handle.join();
+            total_result = total_result +% result;
+            completed_tasks += 1;
         }
-
         const execution_end = std.time.nanoTimestamp();
+
+
 
         const end_time = std.time.nanoTimestamp();
         const duration_ns = end_time - start_time;
         const wall_time_secs = @as(f64, @floatFromInt(duration_ns)) / 1_000_000_000.0;
-        const schedule_time_secs = @as(f64, @floatFromInt(schedule_end - schedule_start)) / 1_000_000_000.0;
+        const spawn_time_secs = @as(f64, @floatFromInt(spawn_end - spawn_start)) / 1_000_000_000.0;
         const execution_time_secs = @as(f64, @floatFromInt(execution_end - execution_start)) / 1_000_000_000.0;
 
-        // 获取真实异步执行统计
-        const final_completed = completed_tasks.load(.acquire);
-        const final_latency = total_latency.load(.acquire);
-
         // 计算真实性能指标
-        const actual_ops_per_sec = @as(f64, @floatFromInt(final_completed)) / wall_time_secs;
-        const avg_latency_ns = if (final_completed > 0)
-            final_latency / final_completed
-        else
-            @as(u64, @intCast(duration_ns)) / iterations;
-
-        // 获取运行时性能报告
-        const perf_report = runtime.getPerformanceReport();
+        const actual_ops_per_sec = @as(f64, @floatFromInt(completed_tasks)) / wall_time_secs;
+        const avg_latency_ns = @as(u64, @intCast(duration_ns)) / completed_tasks;
 
         // 计算调度器效率
-        const schedule_efficiency = if (iterations > 0)
-            (@as(f64, @floatFromInt(final_completed)) / @as(f64, @floatFromInt(iterations))) * 100.0
-        else 0.0;
+        const schedule_efficiency = (@as(f64, @floatFromInt(completed_tasks)) / @as(f64, @floatFromInt(iterations))) * 100.0;
 
-        // 输出详细的基准测试结果 - 高性能版本
-        std.debug.print("=== 🚀 高性能Zokio任务调度结果 ===\n", .{});
+        // 输出详细的基准测试结果 - 真实API版本
+        std.debug.print("=== 🚀 真实Zokio核心API任务调度结果 ===\n", .{});
         std.debug.print("📊 性能指标:\n", .{});
         std.debug.print("  总耗时: {d:.3} 秒\n", .{wall_time_secs});
-        std.debug.print("  调度耗时: {d:.3} 秒\n", .{schedule_time_secs});
+        std.debug.print("  spawn耗时: {d:.3} 秒\n", .{spawn_time_secs});
         std.debug.print("  执行耗时: {d:.3} 秒\n", .{execution_time_secs});
         std.debug.print("  计划任务数: {}\n", .{iterations});
-        std.debug.print("  实际完成数: {}\n", .{final_completed});
+        std.debug.print("  实际完成数: {}\n", .{completed_tasks});
         std.debug.print("  完成率: {d:.2}%\n", .{schedule_efficiency});
-        std.debug.print("  高性能吞吐量: {d:.0} ops/sec\n", .{actual_ops_per_sec});
+        std.debug.print("  真实API吞吐量: {d:.0} ops/sec\n", .{actual_ops_per_sec});
         std.debug.print("  平均任务延迟: {d:.2} μs\n", .{@as(f64, @floatFromInt(avg_latency_ns)) / 1000.0});
+        std.debug.print("  总计算结果: {}\n", .{total_result});
 
-        std.debug.print("\n📈 运行时统计:\n", .{});
-        std.debug.print("  编译时优化: {any}\n", .{perf_report.compile_time_optimizations});
-        std.debug.print("  运行时统计: {any}\n", .{perf_report.runtime_statistics});
-        std.debug.print("  内存使用: {any}\n", .{perf_report.memory_usage});
-        std.debug.print("  I/O统计: {any}\n", .{perf_report.io_statistics});
+        std.debug.print("\n🚀 API使用统计:\n", .{});
+        std.debug.print("  async_fn任务: {}\n", .{iterations});
+        std.debug.print("  spawn调用: {}\n", .{iterations});
+        std.debug.print("  JoinHandle.join调用: {}\n", .{completed_tasks});
 
         // 输出解析用的标准格式 - 与Tokio兼容
         std.debug.print("\n📋 标准格式输出:\n", .{});
         std.debug.print("BENCHMARK_RESULT:ops_per_sec:{d:.2}\n", .{actual_ops_per_sec});
         std.debug.print("BENCHMARK_RESULT:avg_latency_ns:{}\n", .{avg_latency_ns});
         std.debug.print("BENCHMARK_RESULT:total_time_ns:{}\n", .{duration_ns});
-        std.debug.print("BENCHMARK_RESULT:completed_tasks:{}\n", .{final_completed});
+        std.debug.print("BENCHMARK_RESULT:completed_tasks:{}\n", .{completed_tasks});
         std.debug.print("BENCHMARK_RESULT:completion_rate:{d:.2}\n", .{schedule_efficiency});
 
         return PerformanceMetrics{
@@ -263,7 +175,7 @@ pub const ZokioRunner = struct {
             .p99_latency_ns = avg_latency_ns * 8,
             .min_latency_ns = avg_latency_ns / 4,
             .max_latency_ns = avg_latency_ns * 15,
-            .operations = final_completed,
+            .operations = completed_tasks,
         };
     }
 

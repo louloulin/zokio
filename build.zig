@@ -368,6 +368,21 @@ pub fn build(b: *std.Build) void {
     const basic_runtime_verification_step = b.step("verify-runtime", "运行基础运行时验证测试");
     basic_runtime_verification_step.dependOn(&basic_runtime_verification_cmd.step);
 
+    // 真正使用Zokio核心API的压测
+    const real_zokio_api_benchmark = b.addExecutable(.{
+        .name = "real_zokio_api_benchmark",
+        .root_source_file = b.path("benchmarks/real_zokio_api_benchmark.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    real_zokio_api_benchmark.root_module.addImport("zokio", lib.root_module);
+    real_zokio_api_benchmark.root_module.addOptions("config", options);
+    real_zokio_api_benchmark.root_module.addImport("libxev", libxev.module("xev"));
+
+    const real_zokio_api_benchmark_cmd = b.addRunArtifact(real_zokio_api_benchmark);
+    const real_zokio_api_benchmark_step = b.step("real-api-bench", "运行真正使用Zokio核心API的压测");
+    real_zokio_api_benchmark_step.dependOn(&real_zokio_api_benchmark_cmd.step);
+
     // 简化的性能对比测试
     const simple_comparison = b.addExecutable(.{
         .name = "simple_comparison",
