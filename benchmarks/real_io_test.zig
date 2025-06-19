@@ -63,17 +63,17 @@ fn testRealFileIo(allocator: std.mem.Allocator) !void {
     const read_handle = try driver.submitRead(@intCast(file.handle), &read_buffer, 0);
     std.debug.print("  读操作句柄: {}\n", .{read_handle.id});
 
-    // 轮询完成
+    // 轮询完成 (简化版本)
     var completed_count: u32 = 0;
     var poll_rounds: u32 = 0;
-    const max_polls = 100;
+    const max_polls = 10; // 减少轮询次数
 
     while (completed_count == 0 and poll_rounds < max_polls) {
-        completed_count = try driver.poll(10);
+        completed_count = try driver.poll(100); // 增加超时时间
         poll_rounds += 1;
-        
+
         if (completed_count == 0) {
-            std.time.sleep(1000000); // 1毫秒
+            std.time.sleep(10000000); // 10毫秒，给libxev更多时间
         }
     }
 

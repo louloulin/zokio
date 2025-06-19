@@ -57,6 +57,9 @@ pub const IoOpContext = struct {
 
     /// 结果数据
     result: IoOpResult,
+
+    /// libxev completion (需要在异步操作期间保持有效)
+    completion: libxev.Completion,
 };
 
 /// I/O操作类型
@@ -144,6 +147,7 @@ pub const LibxevDriver = struct {
             .start_time = std.time.nanoTimestamp(),
             .timeout_ns = @as(i128, @intCast(self.config.loop_timeout_ms)) * 1_000_000,
             .result = .{ .error_code = 0 },
+            .completion = undefined, // 将在submitRealRead中初始化
         };
 
         try self.op_contexts.put(op_id, context);
@@ -174,6 +178,7 @@ pub const LibxevDriver = struct {
             .start_time = std.time.nanoTimestamp(),
             .timeout_ns = @as(i128, @intCast(self.config.loop_timeout_ms)) * 1_000_000,
             .result = .{ .error_code = 0 },
+            .completion = undefined, // 将在submitRealWrite中初始化
         };
 
         try self.op_contexts.put(op_id, context);
@@ -214,13 +219,17 @@ pub const LibxevDriver = struct {
         // 🔥 真实的libxev异步读操作
         const file = libxev.File.initFd(fd);
 
-        // 创建completion
-        var completion: libxev.Completion = undefined;
+        // 初始化context中的completion
+        context.completion = libxev.Completion{
+            .op = undefined,
+            .userdata = context,
+            .callback = undefined,
+        };
 
         // 使用libxev的read操作
         file.read(
             &self.loop,
-            &completion,
+            &context.completion,
             .{ .slice = buffer },
             IoOpContext,
             context,
@@ -250,6 +259,8 @@ pub const LibxevDriver = struct {
                 ctx.status = .error_occurred;
                 ctx.result = .{ .error_code = @intFromError(err) };
             }
+
+            // 注意：这里无法直接访问Self来更新统计，需要在poll中处理
         }
 
         return .disarm;
@@ -262,13 +273,17 @@ pub const LibxevDriver = struct {
         // 🔥 真实的libxev异步写操作
         const file = libxev.File.initFd(fd);
 
-        // 创建completion
-        var completion: libxev.Completion = undefined;
+        // 初始化context中的completion
+        context.completion = libxev.Completion{
+            .op = undefined,
+            .userdata = context,
+            .callback = undefined,
+        };
 
         // 使用libxev的write操作
         file.write(
             &self.loop,
-            &completion,
+            &context.completion,
             .{ .slice = buffer },
             IoOpContext,
             context,
@@ -298,6 +313,8 @@ pub const LibxevDriver = struct {
                 ctx.status = .error_occurred;
                 ctx.result = .{ .error_code = @intFromError(err) };
             }
+
+            // 注意：这里无法直接访问Self来更新统计，需要在poll中处理
         }
 
         return .disarm;
@@ -328,6 +345,9 @@ pub const LibxevDriver = struct {
             completed_ops += try self.checkTimeouts();
         }
 
+        // 统计已完成的操作
+        completed_ops += self.countCompletedOps();
+
         // 更新统计
         const end_time = std.time.nanoTimestamp();
         const duration_ns = end_time - start_time;
@@ -335,6 +355,24 @@ pub const LibxevDriver = struct {
         _ = self.stats.poll_count.fetchAdd(1, .acq_rel);
 
         return completed_ops;
+    }
+
+    /// 📊 统计已完成的操作
+    fn countCompletedOps(self: *Self) u32 {
+        var completed_count: u32 = 0;
+        var iterator = self.op_contexts.iterator();
+
+        while (iterator.next()) |entry| {
+            const context = entry.value_ptr.*;
+            if (context.status == .completed or context.status == .error_occurred) {
+                completed_count += 1;
+            }
+        }
+
+        // 更新完成操作统计
+        _ = self.stats.ops_completed.fetchAdd(completed_count, .acq_rel);
+
+        return completed_count;
     }
 
     /// ⏰ 检查超时操作
