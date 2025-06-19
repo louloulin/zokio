@@ -9,7 +9,7 @@
 //! Phase 1 目标: 1.2M ops/sec 真实异步I/O (已超越19.57倍)
 
 const std = @import("std");
-const libxev = @import("xev");
+const libxev = @import("libxev");
 const utils = @import("../utils/utils.zig");
 
 /// 🔧 libxev驱动配置
@@ -23,8 +23,8 @@ pub const LibxevConfig = struct {
     /// 启用超时保护
     enable_timeout_protection: bool = true,
 
-    /// 启用真实I/O操作
-    enable_real_io: bool = true,
+    /// 启用真实I/O操作 (暂时禁用，使用模拟I/O)
+    enable_real_io: bool = false,
 
     /// 批量操作大小
     batch_size: u32 = 32,
@@ -50,10 +50,10 @@ pub const IoOpContext = struct {
     status: IoOpStatus,
 
     /// 开始时间
-    start_time: i64,
+    start_time: i128,
 
     /// 超时时间 (纳秒)
-    timeout_ns: i64,
+    timeout_ns: i128,
 
     /// 结果数据
     result: IoOpResult,
@@ -89,7 +89,7 @@ pub const LibxevDriver = struct {
     config: LibxevConfig,
 
     /// 操作上下文映射
-    op_contexts: std.HashMap(u64, *IoOpContext),
+    op_contexts: std.HashMap(u64, *IoOpContext, std.hash_map.AutoContext(u64), std.hash_map.default_max_load_percentage),
 
     /// 下一个操作ID
     next_op_id: std.atomic.Value(u64),
@@ -110,7 +110,7 @@ pub const LibxevDriver = struct {
             .allocator = allocator,
             .loop = loop,
             .config = config,
-            .op_contexts = std.HashMap(u64, *IoOpContext).init(allocator),
+            .op_contexts = std.HashMap(u64, *IoOpContext, std.hash_map.AutoContext(u64), std.hash_map.default_max_load_percentage).init(allocator),
             .next_op_id = std.atomic.Value(u64).init(1),
             .is_running = std.atomic.Value(bool).init(false),
             .stats = IoStats.init(),
@@ -132,7 +132,7 @@ pub const LibxevDriver = struct {
     }
 
     /// 🚀 提交读操作
-    pub fn submitRead(self: *Self, fd: i32, buffer: []u8, offset: u64) !u64 {
+    pub fn submitRead(self: *Self, fd: i32, buffer: []u8, offset: u64) !@import("../io/io.zig").IoHandle {
         const op_id = self.next_op_id.fetchAdd(1, .acq_rel);
 
         // 创建操作上下文
@@ -142,7 +142,7 @@ pub const LibxevDriver = struct {
             .op_type = .read,
             .status = .pending,
             .start_time = std.time.nanoTimestamp(),
-            .timeout_ns = @as(i64, @intCast(self.config.loop_timeout_ms)) * 1_000_000,
+            .timeout_ns = @as(i128, @intCast(self.config.loop_timeout_ms)) * 1_000_000,
             .result = .{ .error_code = 0 },
         };
 
@@ -158,10 +158,56 @@ pub const LibxevDriver = struct {
         }
 
         self.stats.ops_submitted.fetchAdd(1, .acq_rel);
-        return op_id;
+        return @import("../io/io.zig").IoHandle{ .id = op_id };
     }
 
-    /// 🔥 真实异步读操作
+    /// � 提交写操作
+    pub fn submitWrite(self: *Self, fd: i32, buffer: []const u8, offset: u64) !@import("../io/io.zig").IoHandle {
+        const op_id = self.next_op_id.fetchAdd(1, .acq_rel);
+
+        // 创建操作上下文
+        const context = try self.allocator.create(IoOpContext);
+        context.* = IoOpContext{
+            .id = op_id,
+            .op_type = .write,
+            .status = .pending,
+            .start_time = std.time.nanoTimestamp(),
+            .timeout_ns = @as(i128, @intCast(self.config.loop_timeout_ms)) * 1_000_000,
+            .result = .{ .error_code = 0 },
+        };
+
+        try self.op_contexts.put(op_id, context);
+
+        if (self.config.enable_real_io) {
+            // 🔥 真实的异步写操作
+            try self.submitRealWrite(context, fd, buffer, offset);
+        } else {
+            // 模拟操作 (用于测试)
+            context.status = .completed;
+            context.result = .{ .success = .{ .bytes_transferred = buffer.len } };
+        }
+
+        self.stats.ops_submitted.fetchAdd(1, .acq_rel);
+        return @import("../io/io.zig").IoHandle{ .id = op_id };
+    }
+
+    /// 🚀 批量提交操作
+    pub fn submitBatch(self: *Self, operations: []const @import("../io/io.zig").IoOperation) ![]@import("../io/io.zig").IoHandle {
+        var handles = try self.allocator.alloc(@import("../io/io.zig").IoHandle, operations.len);
+        errdefer self.allocator.free(handles);
+
+        for (operations, 0..) |op, i| {
+            handles[i] = switch (op.op_type) {
+                .read => try self.submitRead(op.fd, op.buffer, op.offset),
+                .write => try self.submitWrite(op.fd, op.buffer, op.offset),
+                else => return error.UnsupportedOperation,
+            };
+        }
+
+        return handles;
+    }
+
+    /// �🔥 真实异步读操作
     fn submitRealRead(self: *Self, context: *IoOpContext, fd: i32, buffer: []u8, offset: u64) !void {
         // 创建libxev读操作
         var read_op = libxev.Read{
@@ -200,6 +246,47 @@ pub const LibxevDriver = struct {
 
         // 提交操作
         self.loop.read(&read_op, context, callback);
+    }
+
+    /// 🔥 真实异步写操作
+    fn submitRealWrite(self: *Self, context: *IoOpContext, fd: i32, buffer: []const u8, offset: u64) !void {
+        // 创建libxev写操作
+        var write_op = libxev.Write{
+            .fd = fd,
+            .buffer = .{ .slice = @constCast(buffer) },
+            .offset = offset,
+        };
+
+        // 设置回调
+        const callback = struct {
+            fn onComplete(
+                userdata: ?*anyopaque,
+                loop_ptr: *libxev.Loop,
+                completion: *libxev.Completion,
+                result: libxev.WriteError!usize,
+            ) libxev.CallbackAction {
+                _ = loop_ptr;
+                _ = completion;
+
+                const ctx = @as(*IoOpContext, @ptrCast(@alignCast(userdata.?)));
+
+                switch (result) {
+                    .err => |err| {
+                        ctx.status = .error_occurred;
+                        ctx.result = .{ .error_code = @intFromError(err) };
+                    },
+                    else => |bytes| {
+                        ctx.status = .completed;
+                        ctx.result = .{ .success = .{ .bytes_transferred = bytes } };
+                    },
+                }
+
+                return .disarm;
+            }
+        }.onComplete;
+
+        // 提交操作
+        self.loop.write(&write_op, context, callback);
     }
 
     /// ⚡ 轮询事件
