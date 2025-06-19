@@ -205,12 +205,30 @@ pub fn build(b: *std.Build) void {
     const async_await_stress_step = b.step("stress-async-await", "运行async/await专门压力测试");
     async_await_stress_step.dependOn(&async_await_stress_cmd.step);
 
+    // 真实异步压力测试
+    const real_async_stress = b.addExecutable(.{
+        .name = "real_async_benchmark",
+        .root_source_file = b.path("benchmarks/real_async_benchmark.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    real_async_stress.root_module.addImport("zokio", lib.root_module);
+    real_async_stress.root_module.addOptions("config", options);
+    if (libxev) |dep| {
+        real_async_stress.root_module.addImport("libxev", dep.module("xev"));
+    }
+
+    const real_async_stress_cmd = b.addRunArtifact(real_async_stress);
+    const real_async_stress_step = b.step("stress-real-async", "运行真实异步压力测试");
+    real_async_stress_step.dependOn(&real_async_stress_cmd.step);
+
     // 综合压力测试
     const stress_all_step = b.step("stress-all", "运行所有压力测试");
     stress_all_step.dependOn(&run_benchmarks.step);
     stress_all_step.dependOn(&high_perf_stress_cmd.step);
     stress_all_step.dependOn(&network_stress_cmd.step);
     stress_all_step.dependOn(&async_await_stress_cmd.step);
+    stress_all_step.dependOn(&real_async_stress_cmd.step);
 
     // 全面测试
     const test_all_step = b.step("test-all", "运行所有测试");
