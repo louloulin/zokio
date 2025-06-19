@@ -546,9 +546,6 @@ pub const PerformancePredictor = IntelligentEngine.PerformancePredictor;
 pub const AutoTuner = IntelligentEngine.AutoTuner;
 pub const AllocationPattern = IntelligentEngine.AllocationPattern;
 
-/// 🚀 P0 优化：V2 零开销抽象模块
-pub const unified_v2 = @import("unified_v2.zig");
-
 /// 🧠 统一内存管理接口（P1阶段实现）
 pub const ZokioMemory = struct {
     const Self = @This();
@@ -805,10 +802,10 @@ pub const ZokioMemory = struct {
 
     /// 🚀 快速路径 - 零监控开销
     inline fn allocFastPath(self: *Self, comptime T: type, count: usize, size: usize) ![]T {
-        // 运行时策略选择，但内联优化减少开销
-        return if (size <= 256)
+        // 🔧 修复：使用配置的阈值确保分配和释放一致
+        return if (size <= self.config.small_threshold)
             self.allocOptimizedDirect(T, count, size)
-        else if (size <= 8192)
+        else if (size <= self.config.large_threshold)
             self.allocExtendedDirect(T, count, size)
         else
             self.allocSmartDirect(T, count, size);
@@ -883,10 +880,10 @@ pub const ZokioMemory = struct {
 
     /// 🚀 快速释放路径
     inline fn freeFastPath(self: *Self, memory: []u8, size: usize) void {
-        // 编译时策略选择
-        if (size <= 256) {
+        // 🔧 修复：使用配置的阈值确保分配和释放一致
+        if (size <= self.config.small_threshold) {
             self.optimized.free(memory);
-        } else if (size <= 8192) {
+        } else if (size <= self.config.large_threshold) {
             self.extended.free(memory);
         } else {
             self.smart.free(memory);
