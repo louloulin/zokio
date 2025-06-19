@@ -540,6 +540,11 @@ pub const OptimizedAllocator = @import("optimized_allocator.zig").OptimizedAlloc
 /// 扩展内存分配器（v3 - 修复大对象问题）
 pub const ExtendedAllocator = @import("extended_allocator.zig").ExtendedAllocator;
 
+/// 🧠 智能统一内存分配器（v4 - 统一智能入口）
+pub const SmartAllocator = @import("smart_allocator.zig").SmartAllocator;
+pub const AllocationStrategy = @import("smart_allocator.zig").AllocationStrategy;
+pub const SmartAllocatorConfig = @import("smart_allocator.zig").SmartAllocatorConfig;
+
 /// 缓存友好分配器
 fn CacheFriendlyAllocator(comptime config: MemoryConfig) type {
     _ = config; // 暂时未使用，但保留用于未来扩展
