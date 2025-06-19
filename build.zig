@@ -159,6 +159,7 @@ pub fn build(b: *std.Build) void {
         "enhanced_async_demo",
         "network_demo",
         "fs_demo",
+        "benchmark_demo",
     };
 
     for (examples) |example_name| {

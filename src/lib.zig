@@ -31,6 +31,7 @@ pub const utils = @import("utils/utils.zig");
 // 新增的高级功能模块
 pub const fs = @import("fs/mod.zig");
 pub const tracing = @import("tracing/tracer.zig");
+pub const bench = @import("bench/mod.zig");
 
 // 平台能力检测
 pub const platform = @import("utils/platform.zig");
