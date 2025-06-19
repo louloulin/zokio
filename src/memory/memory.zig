@@ -16,9 +16,9 @@ const CACHE_LINE_SIZE = 64;
 
 /// 内存分配大小类别
 pub const SizeClass = enum {
-    small,  // < 1KB
+    small, // < 1KB
     medium, // 1KB - 64KB
-    large,  // > 64KB
+    large, // > 64KB
 
     pub fn fromSize(size: usize) SizeClass {
         if (size < 1024) return .small;
@@ -45,19 +45,19 @@ pub const MemoryConfig = struct {
     enable_metrics: bool = true,
 
     /// 分层内存池配置
-    small_pool_size: usize = 1024,      // 小对象池大小
-    medium_pool_size: usize = 256,      // 中等对象池大小
+    small_pool_size: usize = 1024, // 小对象池大小
+    medium_pool_size: usize = 256, // 中等对象池大小
     large_pool_threshold: usize = 64 * 1024, // 大对象阈值
 
     /// 缓存友好配置
-    enable_cache_alignment: bool = true,  // 启用缓存行对齐
-    enable_prefetch: bool = true,         // 启用内存预取
+    enable_cache_alignment: bool = true, // 启用缓存行对齐
+    enable_prefetch: bool = true, // 启用内存预取
     enable_false_sharing_prevention: bool = true, // 防止false sharing
 
     /// 垃圾回收配置
-    enable_delayed_free: bool = true,     // 启用延迟释放
-    batch_free_threshold: usize = 64,     // 批量释放阈值
-    gc_trigger_threshold: f32 = 0.8,      // GC触发阈值（内存使用率）
+    enable_delayed_free: bool = true, // 启用延迟释放
+    batch_free_threshold: usize = 64, // 批量释放阈值
+    gc_trigger_threshold: f32 = 0.8, // GC触发阈值（内存使用率）
 
     /// 编译时验证配置
     pub fn validate(comptime self: @This()) void {
@@ -390,7 +390,8 @@ fn TieredPoolAllocator(comptime config: MemoryConfig) type {
                 .small_pools = SmallObjectPools.init(),
                 .medium_pools = MediumObjectPools.init(),
                 .delayed_free_queue = if (config.enable_delayed_free)
-                    DelayedFreeQueue.init(base_allocator) else {},
+                    DelayedFreeQueue.init(base_allocator)
+                else {},
                 .gc_state = GCState.init(),
             };
         }
@@ -529,6 +530,12 @@ fn TieredPoolAllocator(comptime config: MemoryConfig) type {
         }
     };
 }
+
+/// 高性能分层分配器（新增）
+pub const ZokioAllocator = @import("high_performance_allocator.zig").ZokioAllocator;
+
+/// 优化内存分配器（v2）
+pub const OptimizedAllocator = @import("optimized_allocator.zig").OptimizedAllocator;
 
 /// 缓存友好分配器
 fn CacheFriendlyAllocator(comptime config: MemoryConfig) type {

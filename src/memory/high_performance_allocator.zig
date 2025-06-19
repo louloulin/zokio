@@ -22,22 +22,22 @@ pub const ZokioAllocator = struct {
 
     // 小对象池 (8B-256B) - 32个不同大小的池
     small_pools: [32]SmallObjectPool,
-    
+
     // 中等对象池 (256B-64KB) - 16个不同大小的池
     medium_pools: [16]MediumObjectPool,
-    
+
     // 大对象直接分配器 (>64KB)
     large_allocator: LargeObjectAllocator,
-    
+
     // 线程本地缓存
     thread_local_cache: ThreadLocalCache,
-    
+
     // 内存预取管理器
     prefetch_manager: PrefetchManager,
-    
+
     // 基础分配器
     base_allocator: std.mem.Allocator,
-    
+
     // 统计信息
     stats: AllocationStats,
 
@@ -54,14 +54,15 @@ pub const ZokioAllocator = struct {
         };
 
         // 初始化小对象池
+        const small_sizes = [_]usize{ 8, 16, 32, 64, 128, 256 };
         for (&self.small_pools, 0..) |*pool, i| {
-            const size = 8 << @intCast(i % 5); // 8, 16, 32, 64, 128, 256字节
+            const size = small_sizes[i % small_sizes.len];
             pool.* = try SmallObjectPool.init(base_allocator, size, 1024);
         }
 
         // 初始化中等对象池
         for (&self.medium_pools, 0..) |*pool, i| {
-            const size = 256 << @intCast(i); // 256B, 512B, 1KB, 2KB, ..., 64KB
+            const size = 256 * (i + 1); // 256B, 512B, 768B, 1KB, ...
             pool.* = try MediumObjectPool.init(base_allocator, size, 256);
         }
 
@@ -184,7 +185,6 @@ pub const ZokioAllocator = struct {
 
     /// 选择小对象池索引
     fn selectSmallPoolIndex(self: *Self, size: usize) usize {
-        _ = self;
         // 使用位操作快速计算池索引
         const size_class = @clz(@as(u32, @intCast(size - 1)));
         return @min(size_class, self.small_pools.len - 1);
@@ -192,7 +192,6 @@ pub const ZokioAllocator = struct {
 
     /// 选择中等对象池索引
     fn selectMediumPoolIndex(self: *Self, size: usize) usize {
-        _ = self;
         // 使用位操作快速计算池索引
         const size_class = @clz(@as(u32, @intCast((size - 1) >> 8)));
         return @min(size_class, self.medium_pools.len - 1);
@@ -246,14 +245,14 @@ const SmallObjectPool = struct {
     const Self = @This();
 
     object_size: usize,
-    free_list: utils.Atomic.Stack(*anyopaque),
+    free_list: utils.Atomic.Value(?*anyopaque),
     chunk_allocator: ChunkAllocator,
     base_allocator: std.mem.Allocator,
 
     fn init(base_allocator: std.mem.Allocator, object_size: usize, initial_count: usize) !Self {
         var self = Self{
             .object_size = object_size,
-            .free_list = utils.Atomic.Stack(*anyopaque).init(),
+            .free_list = utils.Atomic.Value(?*anyopaque).init(null),
             .chunk_allocator = try ChunkAllocator.init(base_allocator, object_size, initial_count),
             .base_allocator = base_allocator,
         };
@@ -270,9 +269,11 @@ const SmallObjectPool = struct {
     fn alloc(self: *Self, alignment: usize) ![]u8 {
         _ = alignment; // 小对象池中的对象已经对齐
 
-        // 尝试从空闲列表获取
-        if (self.free_list.pop()) |ptr| {
-            return @as([*]u8, @ptrCast(ptr))[0..self.object_size];
+        // 尝试从空闲列表获取（简化实现）
+        if (self.free_list.load(.acquire)) |ptr| {
+            if (self.free_list.compareAndSwap(ptr, null, .acq_rel, .acquire)) |_| {
+                return @as([*]u8, @ptrCast(ptr))[0..self.object_size];
+            }
         }
 
         // 从分块分配器分配新对象
@@ -280,9 +281,9 @@ const SmallObjectPool = struct {
     }
 
     fn free(self: *Self, memory: []u8) void {
-        // 将对象放回空闲列表
+        // 将对象放回空闲列表（简化实现）
         const ptr = @as(*anyopaque, @ptrCast(memory.ptr));
-        self.free_list.push(ptr);
+        _ = self.free_list.compareAndSwap(null, ptr, .acq_rel, .acquire);
     }
 
     fn preallocateObjects(self: *Self, count: usize) !void {
@@ -322,40 +323,29 @@ const MediumObjectPool = struct {
     }
 };
 
-/// 大对象分配器（直接使用mmap）
+/// 大对象分配器（直接使用基础分配器）
 const LargeObjectAllocator = struct {
     const Self = @This();
 
     base_allocator: std.mem.Allocator,
-    large_allocations: std.HashMap(usize, usize, std.hash_map.DefaultContext(usize), std.hash_map.default_max_load_percentage),
 
     fn init(base_allocator: std.mem.Allocator) !Self {
         return Self{
             .base_allocator = base_allocator,
-            .large_allocations = std.HashMap(usize, usize, std.hash_map.DefaultContext(usize), std.hash_map.default_max_load_percentage).init(base_allocator),
         };
     }
 
     fn deinit(self: *Self) void {
-        self.large_allocations.deinit();
+        _ = self;
     }
 
     fn alloc(self: *Self, size: usize, alignment: usize) ![]u8 {
         const aligned_size = std.mem.alignForward(usize, size, alignment);
-        const memory = try self.base_allocator.alloc(u8, aligned_size);
-        
-        // 记录大对象分配
-        try self.large_allocations.put(@intFromPtr(memory.ptr), aligned_size);
-        
-        return memory;
+        return self.base_allocator.alloc(u8, aligned_size);
     }
 
     fn free(self: *Self, memory: []u8) void {
-        const addr = @intFromPtr(memory.ptr);
-        if (self.large_allocations.get(addr)) |size| {
-            self.base_allocator.free(memory.ptr[0..size]);
-            _ = self.large_allocations.remove(addr);
-        }
+        self.base_allocator.free(memory);
     }
 };
 
@@ -363,7 +353,7 @@ const LargeObjectAllocator = struct {
 const ChunkAllocator = struct {
     base_allocator: std.mem.Allocator,
     object_size: usize,
-    
+
     fn init(base_allocator: std.mem.Allocator, object_size: usize, initial_count: usize) !@This() {
         _ = initial_count;
         return @This(){
@@ -371,11 +361,11 @@ const ChunkAllocator = struct {
             .object_size = object_size,
         };
     }
-    
+
     fn deinit(self: *@This()) void {
         _ = self;
     }
-    
+
     fn allocObject(self: *@This()) ![]u8 {
         return self.base_allocator.alloc(u8, self.object_size);
     }
@@ -383,7 +373,7 @@ const ChunkAllocator = struct {
 
 const BuddyAllocator = struct {
     base_allocator: std.mem.Allocator,
-    
+
     fn init(base_allocator: std.mem.Allocator, max_size: usize, chunk_count: usize) !@This() {
         _ = max_size;
         _ = chunk_count;
@@ -391,16 +381,16 @@ const BuddyAllocator = struct {
             .base_allocator = base_allocator,
         };
     }
-    
+
     fn deinit(self: *@This()) void {
         _ = self;
     }
-    
+
     fn alloc(self: *@This(), size: usize, alignment: usize) ![]u8 {
         _ = alignment;
         return self.base_allocator.alloc(u8, size);
     }
-    
+
     fn free(self: *@This(), memory: []u8) void {
         self.base_allocator.free(memory);
     }
@@ -410,24 +400,24 @@ const ThreadLocalCache = struct {
     fn init() @This() {
         return @This(){};
     }
-    
+
     fn deinit(self: *@This()) void {
         _ = self;
     }
-    
+
     fn tryAlloc(self: *@This(), size: usize, alignment: usize) ?[]u8 {
         _ = self;
         _ = size;
         _ = alignment;
         return null;
     }
-    
+
     fn tryFree(self: *@This(), memory: []u8) bool {
         _ = self;
         _ = memory;
         return false;
     }
-    
+
     fn cacheFromPool(self: *@This(), pool: *SmallObjectPool) void {
         _ = self;
         _ = pool;
@@ -438,7 +428,7 @@ const PrefetchManager = struct {
     fn init() @This() {
         return @This(){};
     }
-    
+
     fn prefetchNext(self: *@This(), ptr: *anyopaque, size: usize) void {
         _ = self;
         _ = ptr;
@@ -452,7 +442,7 @@ const AllocationStats = struct {
     total_deallocations: utils.Atomic.Value(u64),
     total_allocated_bytes: utils.Atomic.Value(u64),
     total_allocation_time: utils.Atomic.Value(u64),
-    
+
     fn init() @This() {
         return @This(){
             .total_allocations = utils.Atomic.Value(u64).init(0),
@@ -461,19 +451,19 @@ const AllocationStats = struct {
             .total_allocation_time = utils.Atomic.Value(u64).init(0),
         };
     }
-    
+
     fn recordAllocation(self: *@This(), size: usize, duration: i64) void {
         _ = self.total_allocations.fetchAdd(1, .monotonic);
         _ = self.total_allocated_bytes.fetchAdd(size, .monotonic);
         _ = self.total_allocation_time.fetchAdd(@as(u64, @intCast(duration)), .monotonic);
     }
-    
+
     fn recordDeallocation(self: *@This(), size: usize, duration: i64) void {
         _ = self.total_deallocations.fetchAdd(1, .monotonic);
         _ = duration;
         _ = size;
     }
-    
+
     pub fn getAllocationsPerSecond(self: *const @This(), duration_seconds: f64) f64 {
         const total = self.total_allocations.load(.monotonic);
         return @as(f64, @floatFromInt(total)) / duration_seconds;

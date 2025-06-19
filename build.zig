@@ -296,6 +296,51 @@ pub fn build(b: *std.Build) void {
     const simple_comparison_step = b.step("simple-comparison", "运行简化的性能对比测试");
     simple_comparison_step.dependOn(&simple_comparison_cmd.step);
 
+    // 内存分配性能专项测试
+    const memory_perf_test = b.addExecutable(.{
+        .name = "memory_performance_test",
+        .root_source_file = b.path("benchmarks/memory_performance_test.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    memory_perf_test.root_module.addImport("zokio", lib.root_module);
+    memory_perf_test.root_module.addOptions("config", options);
+    memory_perf_test.root_module.addImport("libxev", libxev.module("xev"));
+
+    const memory_perf_test_cmd = b.addRunArtifact(memory_perf_test);
+    const memory_perf_test_step = b.step("memory-perf", "运行内存分配性能专项测试");
+    memory_perf_test_step.dependOn(&memory_perf_test_cmd.step);
+
+    // 简化的内存分配测试
+    const simple_memory_test = b.addExecutable(.{
+        .name = "simple_memory_test",
+        .root_source_file = b.path("benchmarks/simple_memory_test.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    simple_memory_test.root_module.addImport("zokio", lib.root_module);
+    simple_memory_test.root_module.addOptions("config", options);
+    simple_memory_test.root_module.addImport("libxev", libxev.module("xev"));
+
+    const simple_memory_test_cmd = b.addRunArtifact(simple_memory_test);
+    const simple_memory_test_step = b.step("simple-memory", "运行简化的内存分配性能测试");
+    simple_memory_test_step.dependOn(&simple_memory_test_cmd.step);
+
+    // 优化内存分配器测试
+    const optimized_memory_test = b.addExecutable(.{
+        .name = "optimized_memory_test",
+        .root_source_file = b.path("benchmarks/optimized_memory_test.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    optimized_memory_test.root_module.addImport("zokio", lib.root_module);
+    optimized_memory_test.root_module.addOptions("config", options);
+    optimized_memory_test.root_module.addImport("libxev", libxev.module("xev"));
+
+    const optimized_memory_test_cmd = b.addRunArtifact(optimized_memory_test);
+    const optimized_memory_test_step = b.step("optimized-memory", "运行优化内存分配器性能测试");
+    optimized_memory_test_step.dependOn(&optimized_memory_test_cmd.step);
+
     // 综合压力测试
     const stress_all_step = b.step("stress-all", "运行所有压力测试");
     stress_all_step.dependOn(&run_benchmarks.step);
