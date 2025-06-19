@@ -152,18 +152,18 @@ pub const Profiler = struct {
         std.debug.print("\n" ++ "=" ** 60 ++ "\n", .{});
         std.debug.print("Zokio 性能分析报告\n", .{});
         std.debug.print("=" ** 60 ++ "\n", .{});
-        
+
         const total_time = std.time.nanoTimestamp() - self.start_time;
         std.debug.print("分析时间: {d:.2} ms\n", .{@as(f64, @floatFromInt(total_time)) / 1_000_000.0});
         std.debug.print("函数数量: {}\n", .{self.call_info.count()});
-        
+
         if (self.call_info.count() == 0) {
             std.debug.print("暂无性能数据\n", .{});
             return;
         }
 
         // 收集所有调用信息并按总耗时排序
-        var call_list = std.ArrayList(CallInfo).init(std.heap.page_allocator);
+        var call_list = std.ArrayList(CallInfo).init(self.allocator);
         defer call_list.deinit();
         
         var iterator = self.call_info.iterator();
@@ -231,24 +231,27 @@ pub const Profiler = struct {
 
     /// 导出性能数据为JSON格式
     pub fn exportJson(self: *const Self, allocator: std.mem.Allocator) ![]u8 {
-        var json_obj = std.json.ObjectMap.init(allocator);
-        defer json_obj.deinit();
+        var arena = std.heap.ArenaAllocator.init(allocator);
+        defer arena.deinit();
+        const arena_allocator = arena.allocator();
+
+        var json_obj = std.json.ObjectMap.init(arena_allocator);
 
         // 添加基本信息
         try json_obj.put("total_time_ns", std.json.Value{ .integer = @as(i64, @intCast(@divTrunc(std.time.nanoTimestamp() - self.start_time, 1))) });
         try json_obj.put("function_count", std.json.Value{ .integer = @as(i64, @intCast(self.call_info.count())) });
 
         // 添加函数调用信息
-        var functions = std.json.ObjectMap.init(allocator);
+        var functions = std.json.ObjectMap.init(arena_allocator);
         var iterator = self.call_info.iterator();
         while (iterator.next()) |entry| {
-            var func_obj = std.json.ObjectMap.init(allocator);
+            var func_obj = std.json.ObjectMap.init(arena_allocator);
             try func_obj.put("call_count", std.json.Value{ .integer = @as(i64, @intCast(entry.value_ptr.call_count)) });
             try func_obj.put("total_time_ns", std.json.Value{ .integer = @as(i64, @intCast(entry.value_ptr.total_time_ns)) });
             try func_obj.put("avg_time_ns", std.json.Value{ .integer = @as(i64, @intCast(entry.value_ptr.avg_time_ns)) });
             try func_obj.put("min_time_ns", std.json.Value{ .integer = @as(i64, @intCast(entry.value_ptr.min_time_ns)) });
             try func_obj.put("max_time_ns", std.json.Value{ .integer = @as(i64, @intCast(entry.value_ptr.max_time_ns)) });
-            
+
             try functions.put(entry.key_ptr.*, std.json.Value{ .object = func_obj });
         }
         try json_obj.put("functions", std.json.Value{ .object = functions });
@@ -256,7 +259,7 @@ pub const Profiler = struct {
         // 序列化为JSON字符串
         var json_string = std.ArrayList(u8).init(allocator);
         try std.json.stringify(std.json.Value{ .object = json_obj }, .{}, json_string.writer());
-        
+
         return json_string.toOwnedSlice();
     }
 };

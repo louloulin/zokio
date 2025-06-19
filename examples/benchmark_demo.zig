@@ -178,7 +178,17 @@ fn demonstrateProfiler(allocator: std.mem.Allocator) !void {
 fn demonstrateTokioComparison(allocator: std.mem.Allocator) !void {
     std.debug.print("\n4. 与Tokio性能对比演示\n", .{});
 
-    var comparison_manager = zokio.bench.comparison.ComparisonManager.init(allocator);
+    // 检查是否要运行真实的Tokio基准测试
+    const use_real_benchmarks = false; // 设置为true以运行真实的Tokio基准测试
+
+    if (use_real_benchmarks) {
+        std.debug.print("🚀 将运行真实的Tokio基准测试进行对比\n", .{});
+        std.debug.print("⚠️  这需要安装Rust和Cargo环境\n", .{});
+    } else {
+        std.debug.print("📚 使用基于文献的Tokio基准数据进行对比\n", .{});
+    }
+
+    var comparison_manager = zokio.bench.comparison.ComparisonManager.init(allocator, use_real_benchmarks);
     defer comparison_manager.deinit();
 
     // 模拟Zokio的性能数据
@@ -191,12 +201,16 @@ fn demonstrateTokioComparison(allocator: std.mem.Allocator) !void {
     task_metrics.throughput_ops_per_sec = 1_200_000.0; // 比Tokio的1M更高
 
     const task_result = zokio.bench.comparison.ComparisonResult.create(
-        task_metrics, 
-        zokio.bench.comparison.TokioBaselines.task_scheduling
+        task_metrics,
+        zokio.bench.comparison.TokioBaselines.getStaticBaseline(.task_scheduling)
     );
     task_result.print("任务调度");
 
-    try comparison_manager.addComparison(task_metrics, .task_scheduling);
+    if (use_real_benchmarks) {
+        try comparison_manager.addComparison(task_metrics, .task_scheduling, 1000);
+    } else {
+        try comparison_manager.addComparisonStatic(task_metrics, .task_scheduling);
+    }
 
     // I/O操作性能（模拟接近Tokio）
     var io_metrics = zokio.bench.PerformanceMetrics{};
@@ -205,12 +219,16 @@ fn demonstrateTokioComparison(allocator: std.mem.Allocator) !void {
     io_metrics.throughput_ops_per_sec = 480_000.0; // 略低于Tokio的500K
 
     const io_result = zokio.bench.comparison.ComparisonResult.create(
-        io_metrics, 
-        zokio.bench.comparison.TokioBaselines.io_operations
+        io_metrics,
+        zokio.bench.comparison.TokioBaselines.getStaticBaseline(.io_operations)
     );
     io_result.print("I/O操作");
 
-    try comparison_manager.addComparison(io_metrics, .io_operations);
+    if (use_real_benchmarks) {
+        try comparison_manager.addComparison(io_metrics, .io_operations, 1000);
+    } else {
+        try comparison_manager.addComparisonStatic(io_metrics, .io_operations);
+    }
 
     // 网络操作性能（模拟优于Tokio）
     var network_metrics = zokio.bench.PerformanceMetrics{};
@@ -219,12 +237,16 @@ fn demonstrateTokioComparison(allocator: std.mem.Allocator) !void {
     network_metrics.throughput_ops_per_sec = 120_000.0; // 高于Tokio的100K
 
     const network_result = zokio.bench.comparison.ComparisonResult.create(
-        network_metrics, 
-        zokio.bench.comparison.TokioBaselines.network_operations
+        network_metrics,
+        zokio.bench.comparison.TokioBaselines.getStaticBaseline(.network_operations)
     );
     network_result.print("网络操作");
 
-    try comparison_manager.addComparison(network_metrics, .network_operations);
+    if (use_real_benchmarks) {
+        try comparison_manager.addComparison(network_metrics, .network_operations, 1000);
+    } else {
+        try comparison_manager.addComparisonStatic(network_metrics, .network_operations);
+    }
 
     // 内存分配性能（模拟需要优化）
     var memory_metrics = zokio.bench.PerformanceMetrics{};
@@ -233,12 +255,16 @@ fn demonstrateTokioComparison(allocator: std.mem.Allocator) !void {
     memory_metrics.throughput_ops_per_sec = 8_000_000.0; // 低于Tokio的10M
 
     const memory_result = zokio.bench.comparison.ComparisonResult.create(
-        memory_metrics, 
-        zokio.bench.comparison.TokioBaselines.memory_allocation
+        memory_metrics,
+        zokio.bench.comparison.TokioBaselines.getStaticBaseline(.memory_allocation)
     );
     memory_result.print("内存分配");
 
-    try comparison_manager.addComparison(memory_metrics, .memory_allocation);
+    if (use_real_benchmarks) {
+        try comparison_manager.addComparison(memory_metrics, .memory_allocation, 1000);
+    } else {
+        try comparison_manager.addComparisonStatic(memory_metrics, .memory_allocation);
+    }
 
     // Future组合性能（模拟显著优于Tokio）
     var future_metrics = zokio.bench.PerformanceMetrics{};
@@ -247,12 +273,16 @@ fn demonstrateTokioComparison(allocator: std.mem.Allocator) !void {
     future_metrics.throughput_ops_per_sec = 2_500_000.0; // 高于Tokio的2M
 
     const future_result = zokio.bench.comparison.ComparisonResult.create(
-        future_metrics, 
-        zokio.bench.comparison.TokioBaselines.future_composition
+        future_metrics,
+        zokio.bench.comparison.TokioBaselines.getStaticBaseline(.future_composition)
     );
     future_result.print("Future组合");
 
-    try comparison_manager.addComparison(future_metrics, .future_composition);
+    if (use_real_benchmarks) {
+        try comparison_manager.addComparison(future_metrics, .future_composition, 1000);
+    } else {
+        try comparison_manager.addComparisonStatic(future_metrics, .future_composition);
+    }
 
     // 生成综合对比报告
     comparison_manager.generateReport();
