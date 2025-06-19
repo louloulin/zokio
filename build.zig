@@ -461,6 +461,34 @@ pub fn build(b: *std.Build) void {
     const unified_v2_test_step = b.step("unified-fix-v2", "运行P0优化：统一接口V2零开销重构验证测试");
     unified_v2_test_step.dependOn(&unified_v2_test_cmd.step);
 
+    // I/O性能测试
+    const io_performance_test = b.addExecutable(.{
+        .name = "io_performance_test",
+        .root_source_file = b.path("benchmarks/io_performance_test.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    io_performance_test.root_module.addImport("zokio", lib.root_module);
+    io_performance_test.root_module.addOptions("config", options);
+    io_performance_test.root_module.addImport("libxev", libxev.module("xev"));
+
+    const io_performance_test_cmd = b.addRunArtifact(io_performance_test);
+    const io_performance_test_step = b.step("io-perf", "运行I/O系统性能测试");
+    io_performance_test_step.dependOn(&io_performance_test_cmd.step);
+
+    // 修复版libxev驱动测试
+    const fixed_libxev_test = b.addExecutable(.{
+        .name = "fixed_libxev_test",
+        .root_source_file = b.path("benchmarks/fixed_libxev_test.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    fixed_libxev_test.root_module.addImport("libxev", libxev.module("xev"));
+
+    const fixed_libxev_test_cmd = b.addRunArtifact(fixed_libxev_test);
+    const fixed_libxev_test_step = b.step("fixed-libxev", "运行修复版libxev驱动测试");
+    fixed_libxev_test_step.dependOn(&fixed_libxev_test_cmd.step);
+
     // 综合压力测试
     const stress_all_step = b.step("stress-all", "运行所有压力测试");
     stress_all_step.dependOn(&run_benchmarks.step);
