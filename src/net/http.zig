@@ -165,6 +165,8 @@ pub const Version = enum {
 pub const Headers = struct {
     headers: std.StringHashMap([]const u8),
     allocator: std.mem.Allocator,
+    // 存储分配的字符串，用于清理
+    allocated_values: std.ArrayList([]u8),
 
     const Self = @This();
 
@@ -173,11 +175,17 @@ pub const Headers = struct {
         return Self{
             .headers = std.StringHashMap([]const u8).init(allocator),
             .allocator = allocator,
+            .allocated_values = std.ArrayList([]u8).init(allocator),
         };
     }
 
     /// 清理头部
     pub fn deinit(self: *Self) void {
+        // 释放所有分配的值
+        for (self.allocated_values.items) |value| {
+            self.allocator.free(value);
+        }
+        self.allocated_values.deinit();
         self.headers.deinit();
     }
 
@@ -211,8 +219,10 @@ pub const Headers = struct {
 
     /// 设置Content-Length
     pub fn setContentLength(self: *Self, length: usize) !void {
-        var buf: [32]u8 = undefined;
-        const value = try std.fmt.bufPrint(&buf, "{}", .{length});
+        // 分配持久的内存来存储值
+        const value = try std.fmt.allocPrint(self.allocator, "{}", .{length});
+        // 记录分配的值以便后续清理
+        try self.allocated_values.append(value);
         try self.set("Content-Length", value);
     }
 

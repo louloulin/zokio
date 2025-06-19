@@ -102,8 +102,12 @@ fn demonstrateHttpProtocol(allocator: std.mem.Allocator) !void {
     std.debug.print("   响应状态: {} {s}\n", .{ @intFromEnum(response.status_code), response.status_code.reasonPhrase() });
     std.debug.print("   响应体长度: {}\n", .{if (response.body) |body| body.len else 0});
 
-    // 序列化演示（暂时跳过，因为需要更复杂的实现）
-    std.debug.print("   HTTP请求序列化: 已跳过（需要完整实现）\n", .{});
+    // 序列化演示
+    std.debug.print("   HTTP请求序列化:\n", .{});
+    var request_buf = std.ArrayList(u8).init(allocator);
+    defer request_buf.deinit();
+    try request.serialize(request_buf.writer());
+    std.debug.print("   {s}\n", .{request_buf.items});
 }
 
 /// 演示TLS配置

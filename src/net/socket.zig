@@ -270,7 +270,7 @@ pub const SocketAddrV4 = struct {
     pub fn toString(self: Self, buf: []u8) ![]u8 {
         var ip_buf: [16]u8 = undefined;
         const ip_str = try self.ip.toString(&ip_buf);
-        return std.fmt.bufPrint(buf, "{}:{}", .{ ip_str, self.port });
+        return std.fmt.bufPrint(buf, "{s}:{}", .{ ip_str, self.port });
     }
 };
 
@@ -292,7 +292,7 @@ pub const SocketAddrV6 = struct {
     pub fn toString(self: Self, buf: []u8) ![]u8 {
         var ip_buf: [40]u8 = undefined;
         const ip_str = try self.ip.toString(&ip_buf);
-        return std.fmt.bufPrint(buf, "[{}]:{}", .{ ip_str, self.port });
+        return std.fmt.bufPrint(buf, "[{s}]:{}", .{ ip_str, self.port });
     }
 };
 
