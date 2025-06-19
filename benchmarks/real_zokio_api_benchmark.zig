@@ -39,7 +39,7 @@ fn benchmarkAsyncFnWithSpawn(allocator: std.mem.Allocator) !void {
     defer runtime.stop();
 
     // 🚀 定义真正的async_fn
-    const ComputeTask = zokio.future.async_fn_with_params(struct {
+    const ComputeTask = zokio.async_fn_with_params(struct {
         fn compute(task_id: u32) u64 {
             var sum: u64 = 0;
             var i: u32 = 0;
@@ -56,7 +56,7 @@ fn benchmarkAsyncFnWithSpawn(allocator: std.mem.Allocator) !void {
     std.debug.print("  📊 使用spawn创建 {} 个async_fn任务...\n", .{iterations});
 
     // 🚀 使用真正的spawn API
-    var handles = try allocator.alloc(zokio.JoinHandle(u64), iterations);
+    const handles = try allocator.alloc(zokio.JoinHandle(u64), iterations);
     defer allocator.free(handles);
 
     // 批量spawn任务
@@ -144,7 +144,7 @@ fn benchmarkNestedAwaitFn(allocator: std.mem.Allocator) !void {
     while (i < iterations) : (i += 1) {
         const workflow = NestedWorkflow.init(struct {
             fn execute() u32 {
-                const step1_result = zokio.await_fn(Step1{ .params = .{ .arg0 = 42 + i } });
+                const step1_result = zokio.await_fn(Step1{ .params = .{ .arg0 = 42 } });
                 const step2_result = zokio.await_fn(Step2{ .params = .{ .arg0 = step1_result } });
                 const step3_result = zokio.await_fn(Step3{ .params = .{ .arg0 = step2_result } });
                 return step3_result;
@@ -194,7 +194,7 @@ fn benchmarkMassiveSpawn(allocator: std.mem.Allocator) !void {
     std.debug.print("  📊 大量spawn {} 个轻量级任务...\n", .{iterations});
 
     // 🚀 大量spawn
-    var handles = try allocator.alloc(zokio.JoinHandle(u32), iterations);
+    const handles = try allocator.alloc(zokio.JoinHandle(u32), iterations);
     defer allocator.free(handles);
 
     // 批量spawn
@@ -246,7 +246,7 @@ fn benchmarkMixedAPI(allocator: std.mem.Allocator) !void {
                     return value + 10;
                 }
             }.subWork);
-            
+
             const sub_result = zokio.await_fn(SubTask{ .params = .{ .arg0 = base } });
             return sub_result * 2;
         }
@@ -258,7 +258,7 @@ fn benchmarkMixedAPI(allocator: std.mem.Allocator) !void {
     std.debug.print("  📊 混合API测试 {} 次...\n", .{iterations});
 
     // 混合使用spawn和blockOn
-    var spawn_handles = try allocator.alloc(zokio.JoinHandle(u32), iterations / 2);
+    const spawn_handles = try allocator.alloc(zokio.JoinHandle(u32), iterations / 2);
     defer allocator.free(spawn_handles);
 
     // 一半使用spawn

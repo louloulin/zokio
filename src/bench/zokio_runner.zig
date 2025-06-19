@@ -92,7 +92,7 @@ pub const ZokioRunner = struct {
         std.debug.print("📊 使用spawn创建 {} 个async_fn任务...\n", .{iterations});
 
         // 🚀 使用真正的spawn API创建任务句柄
-        var handles = try self.allocator.alloc(zokio.JoinHandle(u64), iterations);
+        const handles = try self.allocator.alloc(zokio.JoinHandle(u64), iterations);
         defer self.allocator.free(handles);
 
         // 批量spawn真正的async_fn任务

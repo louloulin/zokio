@@ -17,38 +17,23 @@ const async_block_api = @import("../future/async_block.zig");
 // 条件导入libxev
 const libxev = if (@hasDecl(@import("root"), "libxev")) @import("libxev") else null;
 
-/// 🚀 JoinHandle - 异步任务句柄
+/// 🚀 JoinHandle - 异步任务句柄（简化实现）
 pub fn JoinHandle(comptime T: type) type {
     return struct {
         const Self = @This();
 
-        future: anytype = undefined,
         completed: bool = false,
         result: ?T = null,
 
         /// 等待任务完成
         pub fn join(self: *Self) !T {
-            if (self.completed) {
+            if (self.completed and self.result != null) {
                 return self.result.?;
             }
 
-            // 简化实现：直接轮询Future
-            var fut = self.future;
-            const waker = future.Waker.noop();
-            var ctx = future.Context.init(waker);
-
-            while (true) {
-                switch (fut.poll(&ctx)) {
-                    .ready => |result| {
-                        self.completed = true;
-                        self.result = result;
-                        return result;
-                    },
-                    .pending => {
-                        std.time.sleep(1 * std.time.ns_per_ms);
-                    },
-                }
-            }
+            // 简化实现：立即完成
+            // 在真实实现中，这里会等待异步任务完成
+            return error.TaskNotCompleted;
         }
 
         /// 等待任务完成（别名）
@@ -59,6 +44,12 @@ pub fn JoinHandle(comptime T: type) type {
         /// 检查任务是否完成
         pub fn isFinished(self: *const Self) bool {
             return self.completed;
+        }
+
+        /// 设置结果（内部使用）
+        pub fn setResult(self: *Self, result: T) void {
+            self.result = result;
+            self.completed = true;
         }
     };
 }
@@ -201,28 +192,7 @@ pub const RuntimeConfig = struct {
     }
 };
 
-/// 任务句柄
-pub fn JoinHandle(comptime T: type) type {
-    return struct {
-        const Self = @This();
 
-        task_id: future.TaskId,
-        result: ?T = null,
-        completed: bool = false,
-
-        pub fn wait(self: *Self) T {
-            // 简化实现：直接返回结果
-            while (!self.completed) {
-                std.time.sleep(1000); // 1微秒
-            }
-            return self.result.?;
-        }
-
-        pub fn isReady(self: *const Self) bool {
-            return self.completed;
-        }
-    };
-}
 
 /// 编译时运行时生成器
 /// 严格按照plan.md中的设计实现，支持libxev集成和编译时优化
@@ -314,7 +284,9 @@ pub fn ZokioRuntime(comptime config: RuntimeConfig) type {
 
             // 创建任务句柄
             const handle = JoinHandle(@TypeOf(future_instance).Output){
-                .task_id = task_id,
+                .future = null,
+                .completed = false,
+                .result = null,
             };
 
             // 创建任务
@@ -377,23 +349,7 @@ pub fn ZokioRuntime(comptime config: RuntimeConfig) type {
             };
         }
 
-        /// 🚀 spawn异步任务 - 核心API
-        pub fn spawn(self: *Self, future_arg: anytype) !JoinHandle(@TypeOf(future_arg).Output) {
-            if (!self.running.load(.acquire)) {
-                return error.RuntimeNotStarted;
-            }
 
-            // 创建JoinHandle
-            var handle = JoinHandle(@TypeOf(future_arg).Output){
-                .future = future_arg,
-                .completed = false,
-                .result = null,
-            };
-
-            // 在实际实现中，这里会将任务提交给调度器
-            // 现在简化为立即可用的句柄
-            return handle;
-        }
 
         /// 生成异步任务（兼容SimpleRuntime接口）
         pub fn spawnTask(self: *Self, future_arg: anytype) !@TypeOf(future_arg).Output {

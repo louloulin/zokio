@@ -46,6 +46,7 @@ pub const Waker = future.Waker;
 // 便捷函数导出
 pub const ZokioRuntime = runtime.ZokioRuntime;
 pub const async_fn = future.async_fn;
+pub const async_fn_with_params = future.async_fn_with_params;
 pub const runtime_spawn = runtime.spawn;
 pub const block_on = runtime.block_on;
 
@@ -78,10 +79,16 @@ pub const shutdownGlobalRuntime = runtime.shutdownGlobalRuntime;
 // ⚠️ 已弃用：SimpleRuntime (使用DefaultRuntime替代)
 pub const SimpleRuntime = runtime.DefaultRuntime;
 
-// 核心async/await API导出
+// 🚀 核心async/await API导出 - 统一到zokio命名空间
 pub const async_block_api = @import("future/async_block.zig");
 pub const async_block = async_block_api.async_block;
-pub const await_fn = async_block_api.await_macro;
+pub const await_fn = async_block_api.await_fn;
+
+// 🔥 从future模块导出的async/await API
+pub const async_fn_future = future.async_fn;
+pub const async_fn_with_params_future = future.async_fn_with_params;
+pub const async_block_future = future.async_block;
+pub const await_fn_future = future.await_fn;
 
 // 配置类型导出
 pub const RuntimeConfig = runtime.RuntimeConfig;
