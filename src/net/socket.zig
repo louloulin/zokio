@@ -18,7 +18,7 @@ pub const Ipv4Addr = struct {
 
     /// 从字符串解析IPv4地址
     pub fn parse(str: []const u8) !Self {
-        var parts = std.mem.split(u8, str, ".");
+        var parts = std.mem.splitScalar(u8, str, '.');
         var octets: [4]u8 = undefined;
         var i: usize = 0;
 
@@ -88,7 +88,7 @@ pub const Ipv6Addr = struct {
         // 简化的IPv6解析实现
         // 在实际实现中需要处理::缩写等复杂情况
         var segments: [8]u16 = std.mem.zeroes([8]u16);
-        var parts = std.mem.split(u8, str, ":");
+        var parts = std.mem.splitScalar(u8, str, ':');
         var i: usize = 0;
 
         while (parts.next()) |part| {
