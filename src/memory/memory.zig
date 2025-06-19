@@ -537,6 +537,9 @@ pub const ZokioAllocator = @import("high_performance_allocator.zig").ZokioAlloca
 /// 优化内存分配器（v2）
 pub const OptimizedAllocator = @import("optimized_allocator.zig").OptimizedAllocator;
 
+/// 扩展内存分配器（v3 - 修复大对象问题）
+pub const ExtendedAllocator = @import("extended_allocator.zig").ExtendedAllocator;
+
 /// 缓存友好分配器
 fn CacheFriendlyAllocator(comptime config: MemoryConfig) type {
     _ = config; // 暂时未使用，但保留用于未来扩展

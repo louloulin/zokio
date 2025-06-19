@@ -341,6 +341,21 @@ pub fn build(b: *std.Build) void {
     const optimized_memory_test_step = b.step("optimized-memory", "运行优化内存分配器性能测试");
     optimized_memory_test_step.dependOn(&optimized_memory_test_cmd.step);
 
+    // 扩展内存分配器测试 (修复大对象问题)
+    const extended_memory_test = b.addExecutable(.{
+        .name = "extended_memory_test",
+        .root_source_file = b.path("benchmarks/extended_memory_test.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    extended_memory_test.root_module.addImport("zokio", lib.root_module);
+    extended_memory_test.root_module.addOptions("config", options);
+    extended_memory_test.root_module.addImport("libxev", libxev.module("xev"));
+
+    const extended_memory_test_cmd = b.addRunArtifact(extended_memory_test);
+    const extended_memory_test_step = b.step("extended-memory", "运行扩展内存分配器性能测试");
+    extended_memory_test_step.dependOn(&extended_memory_test_cmd.step);
+
     // 综合压力测试
     const stress_all_step = b.step("stress-all", "运行所有压力测试");
     stress_all_step.dependOn(&run_benchmarks.step);
