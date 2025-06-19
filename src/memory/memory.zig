@@ -545,6 +545,11 @@ pub const SmartAllocator = @import("smart_allocator.zig").SmartAllocator;
 pub const AllocationStrategy = @import("smart_allocator.zig").AllocationStrategy;
 pub const SmartAllocatorConfig = @import("smart_allocator.zig").SmartAllocatorConfig;
 
+/// ⚡ 高性能智能分配器（v5 - 性能优化版）
+pub const FastSmartAllocator = @import("fast_smart_allocator.zig").FastSmartAllocator;
+pub const FastAllocationStrategy = @import("fast_smart_allocator.zig").FastAllocationStrategy;
+pub const FastSmartAllocatorConfig = @import("fast_smart_allocator.zig").FastSmartAllocatorConfig;
+
 /// 缓存友好分配器
 fn CacheFriendlyAllocator(comptime config: MemoryConfig) type {
     _ = config; // 暂时未使用，但保留用于未来扩展

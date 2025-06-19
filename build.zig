@@ -371,6 +371,21 @@ pub fn build(b: *std.Build) void {
     const smart_allocator_test_step = b.step("smart-memory", "运行智能统一内存分配器测试");
     smart_allocator_test_step.dependOn(&smart_allocator_test_cmd.step);
 
+    // 高性能智能分配器测试 (性能修复版)
+    const fast_smart_allocator_test = b.addExecutable(.{
+        .name = "fast_smart_allocator_test",
+        .root_source_file = b.path("benchmarks/fast_smart_allocator_test.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    fast_smart_allocator_test.root_module.addImport("zokio", lib.root_module);
+    fast_smart_allocator_test.root_module.addOptions("config", options);
+    fast_smart_allocator_test.root_module.addImport("libxev", libxev.module("xev"));
+
+    const fast_smart_allocator_test_cmd = b.addRunArtifact(fast_smart_allocator_test);
+    const fast_smart_allocator_test_step = b.step("fast-memory", "运行高性能智能分配器测试");
+    fast_smart_allocator_test_step.dependOn(&fast_smart_allocator_test_cmd.step);
+
     // 综合压力测试
     const stress_all_step = b.step("stress-all", "运行所有压力测试");
     stress_all_step.dependOn(&run_benchmarks.step);
