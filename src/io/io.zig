@@ -756,15 +756,24 @@ test "I/O驱动基础功能" {
     var driver = try IoDriver(config).init(testing.allocator);
     defer driver.deinit();
 
-    // 测试基本操作
-    var buffer = [_]u8{0} ** 1024;
-    const handle = try driver.submitRead(1, &buffer, 0);
+    // 测试驱动类型（在macOS上会是kqueue，在Linux上是epoll）
+    const DriverType = @TypeOf(driver);
+    const expected_backend = if (builtin.os.tag == .macos) IoBackendType.kqueue else IoBackendType.epoll;
+    try testing.expect(DriverType.BACKEND_TYPE == expected_backend);
+    try testing.expect(!DriverType.SUPPORTS_BATCH);
 
+    // 测试句柄生成
+    var buffer = [_]u8{0} ** 1024;
+
+    // EpollBackend是简化实现，不会进行实际I/O，只返回句柄
+    const handle = try driver.submitRead(0, &buffer, 0);
+
+    // 验证句柄ID
     try testing.expect(handle.id > 0);
 
-    // 测试轮询
+    // 测试轮询（EpollBackend总是返回0）
     const completed = try driver.poll(0);
-    _ = completed;
+    try testing.expect(completed == 0);
 }
 
 test "I/O句柄生成" {

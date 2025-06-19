@@ -108,6 +108,20 @@ pub fn build(b: *std.Build) void {
     const simple_libxev_test_step = b.step("test-simple-libxev", "运行简单libxev测试");
     simple_libxev_test_step.dependOn(&run_simple_libxev_tests.step);
 
+    // 高性能调度器测试
+    const high_perf_scheduler_tests = b.addTest(.{
+        .root_source_file = b.path("tests/high_performance_scheduler_test.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    high_perf_scheduler_tests.root_module.addOptions("config", options);
+    high_perf_scheduler_tests.root_module.addImport("libxev", libxev.module("xev"));
+    high_perf_scheduler_tests.root_module.addImport("zokio", lib.root_module);
+
+    const run_high_perf_scheduler_tests = b.addRunArtifact(high_perf_scheduler_tests);
+    const high_perf_scheduler_test_step = b.step("test-high-perf-scheduler", "运行高性能调度器测试");
+    high_perf_scheduler_test_step.dependOn(&run_high_perf_scheduler_tests.step);
+
     // 基准测试
     const benchmarks = b.addExecutable(.{
         .name = "benchmarks",
@@ -139,6 +153,7 @@ pub fn build(b: *std.Build) void {
         "complex_async_await_demo",
         "real_async_await_demo",
         "libxev_demo",
+        "high_performance_scheduler_demo",
     };
 
     for (examples) |example_name| {
