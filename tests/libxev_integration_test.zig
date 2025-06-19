@@ -8,14 +8,7 @@ const zokio = @import("zokio");
 test "libxev I/O驱动基础功能" {
     const allocator = testing.allocator;
 
-    // 检查libxev是否可用
-    const has_libxev = @hasDecl(@import("root"), "libxev");
-
-    if (!has_libxev) {
-        // 如果libxev不可用，跳过测试
-        std.debug.print("Skipping libxev test - libxev not available\n", .{});
-        return;
-    }
+    // libxev现在总是可用的，不需要检查
 
     // 配置使用libxev后端
     const config = zokio.io.IoConfig{

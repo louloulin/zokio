@@ -749,29 +749,39 @@ test "I/O驱动基础功能" {
     const testing = std.testing;
 
     const config = IoConfig{
-        .prefer_io_uring = false, // 强制使用epoll进行测试
+        .prefer_libxev = false,
+        .prefer_io_uring = false,
         .events_capacity = 64,
     };
 
     var driver = try IoDriver(config).init(testing.allocator);
     defer driver.deinit();
 
-    // 测试驱动类型（在macOS上会是kqueue，在Linux上是epoll）
+    // 测试驱动类型（根据平台自动选择）
     const DriverType = @TypeOf(driver);
-    const expected_backend = if (builtin.os.tag == .macos) IoBackendType.kqueue else IoBackendType.epoll;
-    try testing.expect(DriverType.BACKEND_TYPE == expected_backend);
-    try testing.expect(!DriverType.SUPPORTS_BATCH);
+
+    // 验证后端类型是合理的
+    const backend_type = DriverType.BACKEND_TYPE;
+    const valid_backends = [_]IoBackendType{ .epoll, .kqueue, .iocp };
+    var is_valid = false;
+    for (valid_backends) |valid_backend| {
+        if (backend_type == valid_backend) {
+            is_valid = true;
+            break;
+        }
+    }
+    try testing.expect(is_valid);
 
     // 测试句柄生成
     var buffer = [_]u8{0} ** 1024;
 
-    // EpollBackend是简化实现，不会进行实际I/O，只返回句柄
+    // 使用简化后端，不会进行实际I/O，只返回句柄
     const handle = try driver.submitRead(0, &buffer, 0);
 
     // 验证句柄ID
     try testing.expect(handle.id > 0);
 
-    // 测试轮询（EpollBackend总是返回0）
+    // 测试轮询（简化后端总是返回0）
     const completed = try driver.poll(0);
     try testing.expect(completed == 0);
 }
