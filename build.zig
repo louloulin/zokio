@@ -491,6 +491,21 @@ pub fn build(b: *std.Build) void {
     const real_io_test_step = b.step("real-io", "运行真实libxev I/O测试");
     real_io_test_step.dependOn(&real_io_test_cmd.step);
 
+    // 调度器性能测试
+    const scheduler_perf_test = b.addExecutable(.{
+        .name = "scheduler_performance_test",
+        .root_source_file = b.path("benchmarks/scheduler_performance_test.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    scheduler_perf_test.root_module.addImport("zokio", lib.root_module);
+    scheduler_perf_test.root_module.addOptions("config", options);
+    scheduler_perf_test.root_module.addImport("libxev", libxev.module("xev"));
+
+    const scheduler_perf_test_cmd = b.addRunArtifact(scheduler_perf_test);
+    const scheduler_perf_test_step = b.step("scheduler-perf", "运行调度器性能基准测试");
+    scheduler_perf_test_step.dependOn(&scheduler_perf_test_cmd.step);
+
     // 修复版libxev驱动测试
     const fixed_libxev_test = b.addExecutable(.{
         .name = "fixed_libxev_test",

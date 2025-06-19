@@ -121,7 +121,7 @@ pub const Task = struct {
     /// 队列链接节点
     queue_node: utils.IntrusiveNode(@This()) = .{},
 
-    const TaskVTable = struct {
+    pub const TaskVTable = struct {
         poll: *const fn (*anyopaque, *future.Context) future.Poll(void),
         drop: *const fn (*anyopaque) void,
     };
