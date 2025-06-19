@@ -156,6 +156,7 @@ pub fn build(b: *std.Build) void {
         "high_performance_scheduler_demo",
         "memory_demo",
         "simple_memory_demo",
+        "enhanced_async_demo",
     };
 
     for (examples) |example_name| {
