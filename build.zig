@@ -401,6 +401,21 @@ pub fn build(b: *std.Build) void {
     const unified_memory_test_step = b.step("unified-memory", "运行统一内存管理接口测试");
     unified_memory_test_step.dependOn(&unified_memory_test_cmd.step);
 
+    // P2阶段性能优化验证测试
+    const p2_optimization_test = b.addExecutable(.{
+        .name = "p2_optimization_test",
+        .root_source_file = b.path("benchmarks/p2_optimization_test.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    p2_optimization_test.root_module.addImport("zokio", lib.root_module);
+    p2_optimization_test.root_module.addOptions("config", options);
+    p2_optimization_test.root_module.addImport("libxev", libxev.module("xev"));
+
+    const p2_optimization_test_cmd = b.addRunArtifact(p2_optimization_test);
+    const p2_optimization_test_step = b.step("p2-memory", "运行P2阶段性能优化验证测试");
+    p2_optimization_test_step.dependOn(&p2_optimization_test_cmd.step);
+
     // 综合压力测试
     const stress_all_step = b.step("stress-all", "运行所有压力测试");
     stress_all_step.dependOn(&run_benchmarks.step);

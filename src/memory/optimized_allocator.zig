@@ -53,68 +53,109 @@ pub const LockFreeObjectPool = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        // 释放所有内存块
-        for (self.memory_chunks.items) |chunk| {
-            self.base_allocator.free(chunk);
-        }
-        self.memory_chunks.deinit();
-        self.free_objects.deinit();
+        // 释放内存池
+        self.base_allocator.free(self.memory_pool);
     }
 
+    /// 🚀 无锁快速分配
     pub fn alloc(self: *Self) ![]u8 {
-        // 尝试从空闲列表获取
-        if (self.free_objects.items.len > 0) {
-            const ptr = self.free_objects.pop();
-            self.total_reused += 1;
-            return @as([*]u8, @ptrCast(ptr))[0..self.object_size];
-        }
+        // 无锁CAS操作从空闲链表获取对象
+        while (true) {
+            const head = self.free_head.load(.acquire) orelse {
+                // 空闲链表为空，回退到基础分配器
+                _ = self.total_allocated.fetchAdd(1, .monotonic);
+                return self.base_allocator.alloc(u8, self.object_size);
+            };
 
-        // 分配新对象
-        const memory = try self.base_allocator.alloc(u8, self.object_size);
-        self.total_allocated += 1;
-        return memory;
+            const next = head.next;
+            if (self.free_head.cmpxchgWeak(head, next, .acq_rel, .acquire) == null) {
+                // 成功获取对象
+                _ = self.total_reused.fetchAdd(1, .monotonic);
+                return @as([*]u8, @ptrCast(head))[0..self.object_size];
+            }
+            // CAS失败，重试
+        }
     }
 
+    /// 🚀 无锁快速释放
     pub fn free(self: *Self, memory: []u8) void {
-        if (memory.len != self.object_size) return;
-
-        // 将对象放回空闲列表
-        const ptr = @as(*anyopaque, @ptrCast(memory.ptr));
-        self.free_objects.append(ptr) catch {
-            // 如果无法放回列表，直接释放
+        if (memory.len != self.object_size) {
+            // 大小不匹配，直接释放
             self.base_allocator.free(memory);
-        };
-    }
+            return;
+        }
 
-    fn preallocateObjects(self: *Self, count: usize) !void {
-        // 批量分配内存块
-        const chunk_size = self.object_size * count;
-        const chunk = try self.base_allocator.alloc(u8, chunk_size);
-        try self.memory_chunks.append(chunk);
+        // 检查是否来自内存池 - 更安全的检查
+        const pool_start = @intFromPtr(self.memory_pool.ptr);
+        const pool_end = pool_start + self.memory_pool.len;
+        const mem_addr = @intFromPtr(memory.ptr);
 
-        // 将内存块分割为对象并加入空闲列表
-        var i: usize = 0;
-        while (i < count) {
-            const offset = i * self.object_size;
-            const ptr = @as(*anyopaque, @ptrCast(chunk.ptr + offset));
-            try self.free_objects.append(ptr);
-            i += 1;
+        // 检查地址是否在池范围内且对齐正确
+        if (mem_addr >= pool_start and mem_addr < pool_end and
+            (mem_addr - pool_start) % self.object_size == 0)
+        {
+            // 来自内存池，放回空闲链表
+            const node = @as(*FreeNode, @ptrCast(@alignCast(memory.ptr)));
+
+            while (true) {
+                const head = self.free_head.load(.acquire);
+                node.next = head;
+
+                if (self.free_head.cmpxchgWeak(head, node, .acq_rel, .acquire) == null) {
+                    break;
+                }
+                // CAS失败，重试
+            }
+        } else {
+            // 不来自内存池，直接释放
+            self.base_allocator.free(memory);
         }
     }
 
+    /// 初始化无锁空闲链表
+    fn initializeFreeList(self: *Self, count: usize) void {
+        // 将内存池分割为对象并构建空闲链表
+        var current: ?*FreeNode = null;
+        var i: usize = count;
+
+        while (i > 0) {
+            i -= 1;
+            const offset = i * self.object_size;
+            const node = @as(*FreeNode, @ptrCast(@alignCast(self.memory_pool.ptr + offset)));
+            node.next = current;
+            current = node;
+        }
+
+        // 设置链表头
+        self.free_head.store(current, .release);
+    }
+
+    /// 获取复用率
     pub fn getReuseRate(self: *const Self) f64 {
-        const total = self.total_allocated + self.total_reused;
+        const allocated = self.total_allocated.load(.monotonic);
+        const reused = self.total_reused.load(.monotonic);
+        const total = allocated + reused;
         if (total == 0) return 0.0;
-        return @as(f64, @floatFromInt(self.total_reused)) / @as(f64, @floatFromInt(total));
+        return @as(f64, @floatFromInt(reused)) / @as(f64, @floatFromInt(total));
+    }
+
+    /// 获取统计信息
+    pub fn getStats(self: *const Self) PoolStats {
+        return PoolStats{
+            .total_allocated = self.total_allocated.load(.monotonic),
+            .total_reused = self.total_reused.load(.monotonic),
+            .reuse_rate = self.getReuseRate(),
+            .object_size = self.object_size,
+        };
     }
 };
 
-/// 优化的内存分配器
+/// 🚀 优化的内存分配器 v3 (P2阶段高性能版)
 pub const OptimizedAllocator = struct {
     const Self = @This();
 
-    // 小对象池 (8B-256B)
-    small_pools: [6]HighPerformanceObjectPool,
+    // 小对象池 (8B-256B) - 使用无锁设计
+    small_pools: [6]LockFreeObjectPool,
     // 基础分配器
     base_allocator: std.mem.Allocator,
 
@@ -124,12 +165,12 @@ pub const OptimizedAllocator = struct {
             .base_allocator = base_allocator,
         };
 
-        // 初始化小对象池
+        // 初始化小对象池 - P2阶段优化：增加预分配数量
         const small_sizes = [_]usize{ 8, 16, 32, 64, 128, 256 };
         for (&self.small_pools, 0..) |*pool, i| {
             const size = small_sizes[i];
-            const initial_count = 10000; // 预分配1万个对象
-            pool.* = try HighPerformanceObjectPool.init(base_allocator, size, initial_count);
+            const initial_count = 50000; // P2优化：预分配5万个对象，提升性能
+            pool.* = try LockFreeObjectPool.init(base_allocator, size, initial_count);
         }
 
         return self;
@@ -189,19 +230,25 @@ pub const OptimizedAllocator = struct {
         };
     }
 
-    pub fn getStats(self: *const Self) AllocationStats {
-        var stats = AllocationStats{
+    /// 获取优化分配器统计信息
+    pub fn getStats(self: *const Self) OptimizedStats {
+        var stats = OptimizedStats{
             .total_pools = self.small_pools.len,
             .total_allocated = 0,
             .total_reused = 0,
             .reuse_rate = 0.0,
+            .pool_stats = undefined,
         };
 
-        for (self.small_pools) |pool| {
-            stats.total_allocated += pool.total_allocated;
-            stats.total_reused += pool.total_reused;
+        // 收集各个池的统计信息
+        for (self.small_pools, 0..) |pool, i| {
+            const pool_stat = pool.getStats();
+            stats.pool_stats[i] = pool_stat;
+            stats.total_allocated += pool_stat.total_allocated;
+            stats.total_reused += pool_stat.total_reused;
         }
 
+        // 计算总体复用率
         const total = stats.total_allocated + stats.total_reused;
         if (total > 0) {
             stats.reuse_rate = @as(f64, @floatFromInt(stats.total_reused)) / @as(f64, @floatFromInt(total));
@@ -236,9 +283,19 @@ pub const OptimizedAllocator = struct {
     }
 };
 
-pub const AllocationStats = struct {
+/// 对象池统计信息
+pub const PoolStats = struct {
+    total_allocated: usize,
+    total_reused: usize,
+    reuse_rate: f64,
+    object_size: usize,
+};
+
+/// 优化分配器统计信息
+pub const OptimizedStats = struct {
     total_pools: usize,
     total_allocated: usize,
     total_reused: usize,
     reuse_rate: f64,
+    pool_stats: [6]PoolStats,
 };
