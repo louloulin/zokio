@@ -28,13 +28,13 @@ fn basicRuntimeDemo(allocator: std.mem.Allocator) !void {
     std.debug.print("1. 基础运行时创建演示\n", .{});
 
     // 按照plan.md中的API设计创建运行时
-    // 注意：这里使用SimpleRuntime作为ZokioRuntime的简化版本
-    var runtime = zokio.SimpleRuntime.init(allocator, .{
-        .threads = 4,
-        .work_stealing = true,
-        .queue_size = 1024,
-        .metrics = true,
-    });
+    // 使用统一的运行时构建器
+    var runtime = try zokio.builder()
+        .threads(4)
+        .workStealing(true)
+        .queueSize(1024)
+        .metrics(true)
+        .build(allocator);
     defer runtime.deinit();
 
     try runtime.start();

@@ -48,11 +48,13 @@ pub const delay = future.delay;
 pub const timeout = future.timeout;
 pub const await_future = future.await_future;
 
-// 核心运行时导出
-pub const simple_runtime = @import("runtime/simple_runtime.zig");
-pub const SimpleRuntime = simple_runtime.SimpleRuntime;
-pub const RuntimeBuilder = simple_runtime.RuntimeBuilder;
-pub const builder = simple_runtime.builder;
+// 核心运行时导出（统一到runtime模块）
+pub const SimpleRuntime = runtime.SimpleRuntime;
+pub const RuntimeBuilder = runtime.RuntimeBuilder;
+pub const builder = runtime.builder;
+pub const asyncMain = runtime.asyncMain;
+pub const initGlobalRuntime = runtime.initGlobalRuntime;
+pub const shutdownGlobalRuntime = runtime.shutdownGlobalRuntime;
 
 // 核心async/await API导出
 pub const async_block_api = @import("future/async_block.zig");
