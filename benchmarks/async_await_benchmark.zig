@@ -13,12 +13,7 @@ pub fn main() !void {
     std.debug.print("=== await_fn和async_fn压力测试 ===\n\n", .{});
 
     // 初始化高性能运行时
-    var runtime = zokio.SimpleRuntime.init(allocator, .{
-        .threads = 8,
-        .work_stealing = true,
-        .queue_size = 10000,
-        .metrics = true,
-    });
+    var runtime = try zokio.SimpleRuntime.init(allocator);
     defer runtime.deinit();
     try runtime.start();
 

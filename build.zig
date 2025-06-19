@@ -266,6 +266,36 @@ pub fn build(b: *std.Build) void {
     const real_async_stress_step = b.step("stress-real-async", "运行真实异步压力测试");
     real_async_stress_step.dependOn(&real_async_stress_cmd.step);
 
+    // Tokio vs Zokio直接对比测试
+    const tokio_vs_zokio = b.addExecutable(.{
+        .name = "tokio_vs_zokio_comparison",
+        .root_source_file = b.path("benchmarks/tokio_vs_zokio_direct_comparison.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    tokio_vs_zokio.root_module.addImport("zokio", lib.root_module);
+    tokio_vs_zokio.root_module.addOptions("config", options);
+    tokio_vs_zokio.root_module.addImport("libxev", libxev.module("xev"));
+
+    const tokio_vs_zokio_cmd = b.addRunArtifact(tokio_vs_zokio);
+    const tokio_vs_zokio_step = b.step("tokio-vs-zokio", "运行Tokio vs Zokio直接性能对比");
+    tokio_vs_zokio_step.dependOn(&tokio_vs_zokio_cmd.step);
+
+    // 简化的性能对比测试
+    const simple_comparison = b.addExecutable(.{
+        .name = "simple_comparison",
+        .root_source_file = b.path("benchmarks/simple_comparison.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    simple_comparison.root_module.addImport("zokio", lib.root_module);
+    simple_comparison.root_module.addOptions("config", options);
+    simple_comparison.root_module.addImport("libxev", libxev.module("xev"));
+
+    const simple_comparison_cmd = b.addRunArtifact(simple_comparison);
+    const simple_comparison_step = b.step("simple-comparison", "运行简化的性能对比测试");
+    simple_comparison_step.dependOn(&simple_comparison_cmd.step);
+
     // 综合压力测试
     const stress_all_step = b.step("stress-all", "运行所有压力测试");
     stress_all_step.dependOn(&run_benchmarks.step);
@@ -273,6 +303,7 @@ pub fn build(b: *std.Build) void {
     stress_all_step.dependOn(&network_stress_cmd.step);
     stress_all_step.dependOn(&async_await_stress_cmd.step);
     stress_all_step.dependOn(&real_async_stress_cmd.step);
+    stress_all_step.dependOn(&tokio_vs_zokio_cmd.step);
 
     // 全面测试
     const test_all_step = b.step("test-all", "运行所有测试");
