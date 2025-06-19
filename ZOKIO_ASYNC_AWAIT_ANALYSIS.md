@@ -15,8 +15,7 @@ src/
 │   ├── future.zig            # 核心Future抽象
 │   └── async_block.zig       # async/await实现
 ├── runtime/
-│   ├── runtime.zig           # 基础运行时
-│   └── simple_runtime.zig    # 简化运行时
+│   └── runtime.zig           # 统一运行时（包含简化接口）
 ├── io/                       # I/O抽象层
 ├── memory/                   # 内存管理
 ├── metrics/                  # 性能指标
@@ -204,7 +203,7 @@ fn getCurrentAsyncContext() *Context {
 
 ```zig
 // 创建运行时
-var runtime = zokio.simple_runtime.builder()
+var runtime = try zokio.builder()
     .threads(2)
     .build(allocator);
 

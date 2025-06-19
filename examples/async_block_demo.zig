@@ -94,7 +94,7 @@ pub fn main() !void {
     std.debug.print("=== Zokio async_block演示 ===\n\n", .{});
 
     // 创建运行时
-    var runtime = zokio.SimpleRuntime.init(allocator, .{});
+    var runtime = try zokio.builder().build(allocator);
     defer runtime.deinit();
 
     // 启动运行时

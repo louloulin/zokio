@@ -30,7 +30,7 @@ const task = zokio.async_block(struct {
 }.run);
 
 // 创建运行时并执行
-var runtime = zokio.simple_runtime.builder()
+var runtime = try zokio.builder()
     .threads(2)
     .build(allocator);
 defer runtime.deinit();
@@ -79,7 +79,7 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     
     // 创建运行时
-    var runtime = zokio.simple_runtime.builder()
+    var runtime = try zokio.builder()
         .threads(2)
         .workStealing(true)
         .build(gpa.allocator());
@@ -167,12 +167,12 @@ const complex_workflow = zokio.async_block(struct {
 
 - `zokio.async_block(func)` - 创建异步块
 - `zokio.await_fn(future)` - 等待 Future 完成
-- `zokio.simple_runtime.builder()` - 创建运行时构建器
+- `zokio.builder()` - 创建运行时构建器
 
 ### 运行时配置
 
 ```zig
-var runtime = zokio.simple_runtime.builder()
+var runtime = try zokio.builder()
     .threads(4)           // 设置线程数
     .workStealing(true)   // 启用工作窃取
     .queueSize(1024)      // 设置队列大小

@@ -14,12 +14,12 @@ pub fn main() !void {
     std.debug.print("=== 真实异步压力测试 ===\n\n", .{});
 
     // 初始化运行时
-    var runtime = zokio.SimpleRuntime.init(allocator, .{
-        .threads = 8,
-        .work_stealing = true,
-        .queue_size = 10000,
-        .metrics = true,
-    });
+    var runtime = try zokio.builder()
+        .threads(8)
+        .workStealing(true)
+        .queueSize(10000)
+        .metrics(true)
+        .build(allocator);
     defer runtime.deinit();
     try runtime.start();
 
@@ -39,7 +39,7 @@ pub fn main() !void {
 }
 
 /// 真实压力测试1: 文件I/O操作
-fn benchmarkRealFileIO(runtime: *zokio.SimpleRuntime, allocator: std.mem.Allocator) !void {
+fn benchmarkRealFileIO(runtime: anytype, allocator: std.mem.Allocator) !void {
     std.debug.print("1. 真实文件I/O压力测试\n", .{});
 
     // 创建测试目录
@@ -136,7 +136,7 @@ fn benchmarkRealFileIO(runtime: *zokio.SimpleRuntime, allocator: std.mem.Allocat
 }
 
 /// 真实压力测试2: 网络I/O操作
-fn benchmarkRealNetworkIO(runtime: *zokio.SimpleRuntime, allocator: std.mem.Allocator) !void {
+fn benchmarkRealNetworkIO(runtime: anytype, allocator: std.mem.Allocator) !void {
     _ = allocator; // 暂时未使用
     std.debug.print("\n2. 真实网络I/O压力测试\n", .{});
 
@@ -211,7 +211,7 @@ fn benchmarkRealNetworkIO(runtime: *zokio.SimpleRuntime, allocator: std.mem.Allo
 }
 
 /// 真实压力测试3: 并发任务调度
-fn benchmarkRealConcurrentTasks(runtime: *zokio.SimpleRuntime, allocator: std.mem.Allocator) !void {
+fn benchmarkRealConcurrentTasks(runtime: anytype, allocator: std.mem.Allocator) !void {
     std.debug.print("\n3. 真实并发任务调度压力测试\n", .{});
 
     const AsyncCpuIntensiveTask = zokio.future.async_fn_with_params(struct {
@@ -263,7 +263,7 @@ fn benchmarkRealConcurrentTasks(runtime: *zokio.SimpleRuntime, allocator: std.me
 }
 
 /// 真实压力测试4: 混合I/O负载
-fn benchmarkRealMixedIO(runtime: *zokio.SimpleRuntime, allocator: std.mem.Allocator) !void {
+fn benchmarkRealMixedIO(runtime: anytype, allocator: std.mem.Allocator) !void {
     _ = allocator; // 暂时未使用
     std.debug.print("\n4. 真实混合I/O负载压力测试\n", .{});
 

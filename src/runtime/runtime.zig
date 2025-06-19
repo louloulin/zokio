@@ -500,69 +500,31 @@ pub const RuntimeStats = struct {
     memory_usage: usize = 0,
 };
 
-/// 全局运行时实例
-var global_runtime: ?*anyopaque = null;
-var global_runtime_mutex: std.Thread.Mutex = .{};
-var global_runtime_vtable: ?*const GlobalRuntimeVTable = null;
-
-/// 全局运行时虚函数表
-const GlobalRuntimeVTable = struct {
-    spawn_fn: *const fn (runtime: *anyopaque, future_ptr: *anyopaque, future_type: type) anyerror!void,
-    block_on_fn: *const fn (runtime: *anyopaque, future_ptr: *anyopaque, future_type: type) anyerror!void,
-    spawn_blocking_fn: *const fn (runtime: *anyopaque, func_ptr: *anyopaque, func_type: type) anyerror!void,
-    get_stats_fn: *const fn (runtime: *anyopaque) RuntimeStats,
-    deinit_fn: *const fn (runtime: *anyopaque) void,
-};
-
-/// 获取全局运行时
-pub fn getGlobalRuntime() !struct { runtime: *anyopaque, vtable: *const GlobalRuntimeVTable } {
-    global_runtime_mutex.lock();
-    defer global_runtime_mutex.unlock();
-
-    if (global_runtime == null or global_runtime_vtable == null) {
-        return error.RuntimeNotInitialized;
-    }
-
-    return .{ .runtime = global_runtime.?, .vtable = global_runtime_vtable.? };
-}
-
-/// 便捷的全局spawn函数
+/// 便捷的全局spawn函数（简化实现）
 pub fn spawn(future_arg: anytype) !@TypeOf(future_arg).Output {
     // 简化实现：需要全局运行时实例
-    _ = future_arg;
+    // 在实际使用中，应该通过运行时实例调用 spawnTask
     return error.GlobalRuntimeNotImplemented;
 }
 
-/// 便捷的全局block_on函数
+/// 便捷的全局block_on函数（简化实现）
 pub fn block_on(future_arg: anytype) !@TypeOf(future_arg).Output {
     // 简化实现：需要全局运行时实例
-    _ = future_arg;
+    // 在实际使用中，应该通过运行时实例调用 blockOn
     return error.GlobalRuntimeNotImplemented;
 }
 
-/// 便捷的全局spawnBlocking函数
+/// 便捷的全局spawnBlocking函数（简化实现）
 pub fn spawnBlocking(func: anytype) !@TypeOf(@call(.auto, func, .{})) {
     // 简化实现：需要全局运行时实例
-    _ = func;
+    // 在实际使用中，应该通过运行时实例调用 spawnBlocking
     return error.GlobalRuntimeNotImplemented;
 }
 
-/// 获取全局运行时统计信息
-pub fn getGlobalStats() !RuntimeStats {
-    const global = try getGlobalRuntime();
-    return global.vtable.get_stats_fn(global.runtime);
-}
-
-/// 关闭全局运行时
+/// 关闭全局运行时（简化实现）
 pub fn shutdownGlobalRuntime() void {
-    global_runtime_mutex.lock();
-    defer global_runtime_mutex.unlock();
-
-    if (global_runtime != null and global_runtime_vtable != null) {
-        global_runtime_vtable.?.deinit_fn(global_runtime.?);
-        global_runtime = null;
-        global_runtime_vtable = null;
-    }
+    // 简化实现：暂不支持全局运行时
+    // 在实际使用中，应该手动管理运行时实例
 }
 
 /// 运行时构建器 - 提供流畅的配置接口（兼容SimpleRuntime）
