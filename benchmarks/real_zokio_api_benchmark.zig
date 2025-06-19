@@ -123,15 +123,18 @@ fn benchmarkNestedAwaitFn(allocator: std.mem.Allocator) !void {
         }
     }.step3);
 
-    // 🚀 使用真正的await_fn嵌套
-    const NestedWorkflow = zokio.async_block(struct {
+    // 🚀 定义嵌套工作流函数
+    const executeWorkflow = struct {
         fn execute() u32 {
             const step1_result = zokio.await_fn(Step1{ .params = .{ .arg0 = 42 } });
             const step2_result = zokio.await_fn(Step2{ .params = .{ .arg0 = step1_result } });
             const step3_result = zokio.await_fn(Step3{ .params = .{ .arg0 = step2_result } });
             return step3_result;
         }
-    }.execute);
+    }.execute;
+
+    // 🚀 使用真正的async_block
+    const NestedWorkflow = zokio.async_block(executeWorkflow);
 
     const iterations = 5000;
     const start_time = std.time.nanoTimestamp();
@@ -142,14 +145,8 @@ fn benchmarkNestedAwaitFn(allocator: std.mem.Allocator) !void {
     var total_result: u64 = 0;
     var i: u32 = 0;
     while (i < iterations) : (i += 1) {
-        const workflow = NestedWorkflow.init(struct {
-            fn execute() u32 {
-                const step1_result = zokio.await_fn(Step1{ .params = .{ .arg0 = 42 } });
-                const step2_result = zokio.await_fn(Step2{ .params = .{ .arg0 = step1_result } });
-                const step3_result = zokio.await_fn(Step3{ .params = .{ .arg0 = step2_result } });
-                return step3_result;
-            }
-        }.execute);
+        // 🚀 使用async_block实例
+        const workflow = NestedWorkflow;
 
         const result = try runtime.blockOn(workflow);
         total_result += result;

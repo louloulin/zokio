@@ -383,6 +383,36 @@ pub fn build(b: *std.Build) void {
     const real_zokio_api_benchmark_step = b.step("real-api-bench", "运行真正使用Zokio核心API的压测");
     real_zokio_api_benchmark_step.dependOn(&real_zokio_api_benchmark_cmd.step);
 
+    // 简化的真实API测试
+    const simple_real_api_test = b.addExecutable(.{
+        .name = "simple_real_api_test",
+        .root_source_file = b.path("benchmarks/simple_real_api_test.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    simple_real_api_test.root_module.addImport("zokio", lib.root_module);
+    simple_real_api_test.root_module.addOptions("config", options);
+    simple_real_api_test.root_module.addImport("libxev", libxev.module("xev"));
+
+    const simple_real_api_test_cmd = b.addRunArtifact(simple_real_api_test);
+    const simple_real_api_test_step = b.step("simple-real-api", "运行简化的真实API测试");
+    simple_real_api_test_step.dependOn(&simple_real_api_test_cmd.step);
+
+    // 最简化的spawn测试
+    const minimal_spawn_test = b.addExecutable(.{
+        .name = "minimal_spawn_test",
+        .root_source_file = b.path("benchmarks/minimal_spawn_test.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    minimal_spawn_test.root_module.addImport("zokio", lib.root_module);
+    minimal_spawn_test.root_module.addOptions("config", options);
+    minimal_spawn_test.root_module.addImport("libxev", libxev.module("xev"));
+
+    const minimal_spawn_test_cmd = b.addRunArtifact(minimal_spawn_test);
+    const minimal_spawn_test_step = b.step("minimal-spawn", "运行最简化的spawn测试");
+    minimal_spawn_test_step.dependOn(&minimal_spawn_test_cmd.step);
+
     // 简化的性能对比测试
     const simple_comparison = b.addExecutable(.{
         .name = "simple_comparison",
