@@ -446,6 +446,21 @@ pub fn build(b: *std.Build) void {
     const unified_performance_fix_test_step = b.step("unified-fix", "运行统一接口性能修复验证测试");
     unified_performance_fix_test_step.dependOn(&unified_performance_fix_test_cmd.step);
 
+    // P0 优化：统一接口 V2 零开销重构验证测试
+    const unified_v2_test = b.addExecutable(.{
+        .name = "unified_v2_test",
+        .root_source_file = b.path("benchmarks/unified_v2_test.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    unified_v2_test.root_module.addImport("zokio", lib.root_module);
+    unified_v2_test.root_module.addOptions("config", options);
+    unified_v2_test.root_module.addImport("libxev", libxev.module("xev"));
+
+    const unified_v2_test_cmd = b.addRunArtifact(unified_v2_test);
+    const unified_v2_test_step = b.step("unified-fix-v2", "运行P0优化：统一接口V2零开销重构验证测试");
+    unified_v2_test_step.dependOn(&unified_v2_test_cmd.step);
+
     // 综合压力测试
     const stress_all_step = b.step("stress-all", "运行所有压力测试");
     stress_all_step.dependOn(&run_benchmarks.step);

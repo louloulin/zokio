@@ -546,6 +546,9 @@ pub const PerformancePredictor = IntelligentEngine.PerformancePredictor;
 pub const AutoTuner = IntelligentEngine.AutoTuner;
 pub const AllocationPattern = IntelligentEngine.AllocationPattern;
 
+/// 🚀 P0 优化：V2 零开销抽象模块
+pub const unified_v2 = @import("unified_v2.zig");
+
 /// 🧠 统一内存管理接口（P1阶段实现）
 pub const ZokioMemory = struct {
     const Self = @This();
