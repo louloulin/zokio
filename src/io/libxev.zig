@@ -104,7 +104,7 @@ pub const LibxevDriver = struct {
 
     /// 🔧 初始化驱动
     pub fn init(allocator: std.mem.Allocator, config: LibxevConfig) !Self {
-        var loop = try libxev.Loop.init(.{});
+        const loop = try libxev.Loop.init(.{});
 
         return Self{
             .allocator = allocator,
