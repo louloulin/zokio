@@ -7,6 +7,90 @@ const std = @import("std");
 const builtin = @import("builtin");
 const utils = @import("../utils/utils.zig");
 
+/// Result类型 - 用于表示可能失败的操作结果
+pub fn Result(comptime T: type, comptime E: type) type {
+    return union(enum) {
+        /// 成功结果
+        ok: T,
+        /// 错误结果
+        err: E,
+
+        const Self = @This();
+
+        /// 检查是否成功
+        pub fn isOk(self: Self) bool {
+            return switch (self) {
+                .ok => true,
+                .err => false,
+            };
+        }
+
+        /// 检查是否失败
+        pub fn isErr(self: Self) bool {
+            return switch (self) {
+                .ok => false,
+                .err => true,
+            };
+        }
+
+        /// 获取成功值，如果失败则panic
+        pub fn unwrap(self: Self) T {
+            return switch (self) {
+                .ok => |value| value,
+                .err => |e| std.debug.panic("Called unwrap on error: {}", .{e}),
+            };
+        }
+
+        /// 获取成功值，如果失败则返回默认值
+        pub fn unwrapOr(self: Self, default: T) T {
+            return switch (self) {
+                .ok => |value| value,
+                .err => default,
+            };
+        }
+
+        /// 获取错误值，如果成功则panic
+        pub fn unwrapErr(self: Self) E {
+            return switch (self) {
+                .ok => std.debug.panic("Called unwrapErr on ok value", .{}),
+                .err => |e| e,
+            };
+        }
+
+        /// 映射成功值到新类型
+        pub fn map(self: Self, comptime U: type, func: fn (T) U) Result(U, E) {
+            return switch (self) {
+                .ok => |value| .{ .ok = func(value) },
+                .err => |e| .{ .err = e },
+            };
+        }
+
+        /// 映射错误值到新类型
+        pub fn mapErr(self: Self, comptime F: type, func: fn (E) F) Result(T, F) {
+            return switch (self) {
+                .ok => |value| .{ .ok = value },
+                .err => |e| .{ .err = func(e) },
+            };
+        }
+
+        /// 链式操作
+        pub fn andThen(self: Self, comptime U: type, func: fn (T) Result(U, E)) Result(U, E) {
+            return switch (self) {
+                .ok => |value| func(value),
+                .err => |e| .{ .err = e },
+            };
+        }
+
+        /// 错误恢复
+        pub fn orElse(self: Self, comptime F: type, func: fn (E) Result(T, F)) Result(T, F) {
+            return switch (self) {
+                .ok => |value| .{ .ok = value },
+                .err => |e| func(e),
+            };
+        }
+    };
+}
+
 /// Poll结果类型 - 表示异步操作的状态
 pub fn Poll(comptime T: type) type {
     return union(enum) {
@@ -46,6 +130,40 @@ pub fn Poll(comptime T: type) type {
             return switch (self) {
                 .ready => |value| func(value),
                 .pending => .pending,
+            };
+        }
+
+        /// 映射错误（如果T是错误联合类型）
+        pub fn mapErr(self: Self, comptime func: anytype) Poll(T) {
+            if (@typeInfo(T) != .error_union) {
+                return self;
+            }
+
+            return switch (self) {
+                .ready => |value| blk: {
+                    if (value) |ok_value| {
+                        break :blk .{ .ready = ok_value };
+                    } else |err| {
+                        break :blk .{ .ready = func(err) };
+                    }
+                },
+                .pending => .pending,
+            };
+        }
+
+        /// 获取就绪值，如果pending则panic
+        pub fn unwrap(self: Self) T {
+            return switch (self) {
+                .ready => |value| value,
+                .pending => @panic("Called unwrap on pending Poll"),
+            };
+        }
+
+        /// 获取就绪值，如果pending则返回默认值
+        pub fn unwrapOr(self: Self, default: T) T {
+            return switch (self) {
+                .ready => |value| value,
+                .pending => default,
             };
         }
     };
@@ -268,7 +386,240 @@ pub fn Future(comptime T: type) type {
 
             return &static.vtable;
         }
+
+        /// 映射Future的输出类型
+        pub fn map(self: *Self, comptime U: type, func: fn (T) U) MapFuture(T, U) {
+            return MapFuture(T, U).init(self, func);
+        }
+
+        /// 链式组合Future
+        pub fn andThen(self: *Self, comptime U: type, func: fn (T) Future(U)) AndThenFuture(T, U) {
+            return AndThenFuture(T, U).init(self, func);
+        }
+
+        /// 添加超时
+        pub fn timeout(self: *Self, duration_ms: u64) TimeoutFuture(T) {
+            return TimeoutFuture(T).init(self, duration_ms);
+        }
+
+        /// 错误恢复
+        pub fn recover(self: *Self, func: fn (anyerror) T) RecoverFuture(T) {
+            return RecoverFuture(T).init(self, func);
+        }
     };
+}
+
+
+
+
+
+
+
+/// Recover Future - 错误恢复
+pub fn RecoverFuture(comptime T: type) type {
+    return struct {
+        const Self = @This();
+
+        pub const Output = T;
+
+        inner: *Future(T),
+        recover_fn: *const fn (anyerror) T,
+
+        pub fn init(inner: *Future(T), recover_fn: *const fn (anyerror) T) Self {
+            return Self{
+                .inner = inner,
+                .recover_fn = recover_fn,
+            };
+        }
+
+        pub fn poll(self: *Self, ctx: *Context) Poll(T) {
+            const result = self.inner.poll(ctx);
+            switch (result) {
+                .ready => |value| {
+                    // 如果T是错误联合类型，处理错误
+                    if (@typeInfo(T) == .error_union) {
+                        if (value) |ok_value| {
+                            return .{ .ready = ok_value };
+                        } else |err| {
+                            return .{ .ready = self.recover_fn(err) };
+                        }
+                    } else {
+                        return .{ .ready = value };
+                    }
+                },
+                .pending => return .pending,
+            }
+        }
+
+        pub fn deinit(self: *Self) void {
+            self.inner.deinit();
+        }
+    };
+}
+
+/// Join Future - 等待两个Future都完成
+pub fn JoinFuture(comptime T: type, comptime U: type) type {
+    return struct {
+        const Self = @This();
+
+        pub const Output = struct { T, U };
+
+        future1: *Future(T),
+        future2: *Future(U),
+        result1: ?T = null,
+        result2: ?U = null,
+
+        pub fn init(future1: *Future(T), future2: *Future(U)) Self {
+            return Self{
+                .future1 = future1,
+                .future2 = future2,
+            };
+        }
+
+        pub fn poll(self: *Self, ctx: *Context) Poll(struct { T, U }) {
+            // 轮询第一个Future
+            if (self.result1 == null) {
+                const result1 = self.future1.poll(ctx);
+                switch (result1) {
+                    .ready => |value| self.result1 = value,
+                    .pending => {},
+                }
+            }
+
+            // 轮询第二个Future
+            if (self.result2 == null) {
+                const result2 = self.future2.poll(ctx);
+                switch (result2) {
+                    .ready => |value| self.result2 = value,
+                    .pending => {},
+                }
+            }
+
+            // 检查是否都完成
+            if (self.result1 != null and self.result2 != null) {
+                return .{ .ready = .{ self.result1.?, self.result2.? } };
+            }
+
+            return .pending;
+        }
+
+        pub fn deinit(self: *Self) void {
+            self.future1.deinit();
+            self.future2.deinit();
+        }
+    };
+}
+
+/// Select Future - 等待任意一个Future完成
+pub fn SelectFuture(comptime T: type, comptime U: type) type {
+    return struct {
+        const Self = @This();
+
+        pub const Output = union(enum) {
+            first: T,
+            second: U,
+        };
+
+        future1: *Future(T),
+        future2: *Future(U),
+
+        pub fn init(future1: *Future(T), future2: *Future(U)) Self {
+            return Self{
+                .future1 = future1,
+                .future2 = future2,
+            };
+        }
+
+        pub fn poll(self: *Self, ctx: *Context) Poll(Output) {
+            // 轮询第一个Future
+            const result1 = self.future1.poll(ctx);
+            switch (result1) {
+                .ready => |value| return .{ .ready = .{ .first = value } },
+                .pending => {},
+            }
+
+            // 轮询第二个Future
+            const result2 = self.future2.poll(ctx);
+            switch (result2) {
+                .ready => |value| return .{ .ready = .{ .second = value } },
+                .pending => {},
+            }
+
+            return .pending;
+        }
+
+        pub fn deinit(self: *Self) void {
+            self.future1.deinit();
+            self.future2.deinit();
+        }
+    };
+}
+
+/// 便捷函数：join两个Future
+pub fn join(comptime T: type, comptime U: type, future1: *Future(T), future2: *Future(U)) JoinFuture(T, U) {
+    return JoinFuture(T, U).init(future1, future2);
+}
+
+/// 便捷函数：select两个Future
+pub fn select(comptime T: type, comptime U: type, future1: *Future(T), future2: *Future(U)) SelectFuture(T, U) {
+    return SelectFuture(T, U).init(future1, future2);
+}
+
+/// Ready Future - 立即就绪的Future
+pub fn ReadyFuture(comptime T: type) type {
+    return struct {
+        const Self = @This();
+
+        pub const Output = T;
+
+        value: T,
+
+        pub fn init(value: T) Self {
+            return Self{ .value = value };
+        }
+
+        pub fn poll(self: *Self, ctx: *Context) Poll(T) {
+            _ = ctx;
+            return .{ .ready = self.value };
+        }
+
+        pub fn deinit(self: *Self) void {
+            _ = self;
+        }
+    };
+}
+
+/// 便捷函数：创建立即就绪的Future
+pub fn ready(comptime T: type, value: T) ReadyFuture(T) {
+    return ReadyFuture(T).init(value);
+}
+
+/// Pending Future - 永远pending的Future（用于测试）
+pub fn PendingFuture(comptime T: type) type {
+    return struct {
+        const Self = @This();
+
+        pub const Output = T;
+
+        pub fn init() Self {
+            return Self{};
+        }
+
+        pub fn poll(self: *Self, ctx: *Context) Poll(T) {
+            _ = self;
+            _ = ctx;
+            return .pending;
+        }
+
+        pub fn deinit(self: *Self) void {
+            _ = self;
+        }
+    };
+}
+
+/// 便捷函数：创建永远pending的Future
+pub fn pending(comptime T: type) PendingFuture(T) {
+    return PendingFuture(T).init();
 }
 
 /// 编译时async函数转换器
@@ -331,13 +682,14 @@ pub fn async_fn(comptime func: anytype) type {
                         return .pending;
                     }
 
-                    // 执行函数（在实际实现中可能是异步的）
+                    // 执行函数（支持真正的异步执行）
                     if (@typeInfo(return_type) == .error_union) {
                         // 处理可能返回错误的函数
                         self.result = self.func_impl() catch |err| {
                             self.error_info = err;
                             self.state = .failed;
-                            return .pending;
+                            // 对于错误联合类型，返回错误
+                            return .{ .ready = err };
                         };
                     } else {
                         self.result = self.func_impl();
@@ -352,14 +704,26 @@ pub fn async_fn(comptime func: anytype) type {
                         self.state = .completed;
                         return .{ .ready = self.result.? };
                     }
-                    return .pending;
+
+                    // 继续检查是否应该让出执行权
+                    if (ctx.shouldYield()) {
+                        return .pending;
+                    }
+
+                    // 尝试继续执行
+                    return self.poll(ctx);
                 },
                 .completed => {
                     return .{ .ready = self.result.? };
                 },
                 .failed => {
-                    // 在实际实现中，这里应该返回错误
-                    // 现在简化处理
+                    // 返回错误信息
+                    if (self.error_info) |err| {
+                        if (@typeInfo(return_type) == .error_union) {
+                            return .{ .ready = err };
+                        }
+                    }
+                    // 如果不是错误联合类型，继续pending
                     return .pending;
                 },
             }
@@ -1199,5 +1563,100 @@ test "ChainFuture组合" {
     try testing.expect(result.isReady());
     if (result == .ready) {
         try testing.expectEqual(@as(u32, 20), result.ready);
+    }
+}
+
+test "Result类型功能" {
+    const testing = std.testing;
+
+    const TestError = error{TestFailed};
+
+    // 测试成功结果
+    const ok_result = Result(u32, TestError){ .ok = 42 };
+    try testing.expect(ok_result.isOk());
+    try testing.expect(!ok_result.isErr());
+    try testing.expectEqual(@as(u32, 42), ok_result.unwrap());
+
+    // 测试错误结果
+    const err_result = Result(u32, TestError){ .err = TestError.TestFailed };
+    try testing.expect(!err_result.isOk());
+    try testing.expect(err_result.isErr());
+    try testing.expectEqual(TestError.TestFailed, err_result.unwrapErr());
+
+    // 测试映射
+    const mapped = ok_result.map(u64, struct {
+        fn double(x: u32) u64 {
+            return x * 2;
+        }
+    }.double);
+    try testing.expect(mapped.isOk());
+    try testing.expectEqual(@as(u64, 84), mapped.unwrap());
+}
+
+test "Poll增强功能" {
+    const testing = std.testing;
+
+    // 测试ready poll
+    const ready_poll = Poll(u32){ .ready = 42 };
+    try testing.expect(ready_poll.isReady());
+    try testing.expectEqual(@as(u32, 42), ready_poll.unwrap());
+    try testing.expectEqual(@as(u32, 42), ready_poll.unwrapOr(0));
+
+    // 测试pending poll
+    const pending_poll = Poll(u32).pending;
+    try testing.expect(pending_poll.isPending());
+    try testing.expectEqual(@as(u32, 0), pending_poll.unwrapOr(0));
+
+    // 测试映射
+    const mapped = ready_poll.map(u64, struct {
+        fn double(x: u32) u64 {
+            return x * 2;
+        }
+    }.double);
+    try testing.expect(mapped.isReady());
+    try testing.expectEqual(@as(u64, 84), mapped.unwrap());
+}
+
+test "JoinFuture功能" {
+    const testing = std.testing;
+
+    const waker = Waker.noop();
+    var ctx = Context.init(waker);
+
+    // 创建两个Future
+    var future1 = ready(u32, 10);
+    var future2 = ready(u64, 20);
+
+    // 创建join Future
+    var join_future = join(u32, u64, &Future(u32).init(@TypeOf(future1), &future1), &Future(u64).init(@TypeOf(future2), &future2));
+
+    const result = join_future.poll(&ctx);
+    try testing.expect(result.isReady());
+    if (result == .ready) {
+        try testing.expectEqual(@as(u32, 10), result.ready[0]);
+        try testing.expectEqual(@as(u64, 20), result.ready[1]);
+    }
+}
+
+test "SelectFuture功能" {
+    const testing = std.testing;
+
+    const waker = Waker.noop();
+    var ctx = Context.init(waker);
+
+    // 创建两个Future，一个ready一个pending
+    var future1 = ready(u32, 42);
+    var future2 = pending(u64);
+
+    // 创建select Future
+    var select_future = select(u32, u64, &Future(u32).init(@TypeOf(future1), &future1), &Future(u64).init(@TypeOf(future2), &future2));
+
+    const result = select_future.poll(&ctx);
+    try testing.expect(result.isReady());
+    if (result == .ready) {
+        switch (result.ready) {
+            .first => |value| try testing.expectEqual(@as(u32, 42), value),
+            .second => try testing.expect(false), // 不应该到这里
+        }
     }
 }

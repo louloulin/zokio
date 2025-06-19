@@ -26,16 +26,30 @@ pub fn await_fn(future_arg: anytype) @TypeOf(future_arg).Output {
     const ctx = getCurrentAsyncContext();
 
     var f = future_arg;
-    while (true) {
+    var retry_count: u32 = 0;
+    const max_retries = 1000; // 防止无限循环
+
+    while (retry_count < max_retries) {
         switch (f.poll(ctx)) {
             .ready => |result| return result,
             .pending => {
-                // 在实际实现中，这里会让出控制权
-                // 现在简化为短暂等待
-                std.time.sleep(1 * std.time.ns_per_ms);
+                retry_count += 1;
+
+                // 检查是否应该让出执行权
+                if (ctx.shouldYield()) {
+                    // 在实际实现中，这里会让出控制权给调度器
+                    // 现在简化为短暂等待
+                    std.time.sleep(1 * std.time.ns_per_ms);
+                } else {
+                    // 短暂等待后继续
+                    std.time.sleep(100 * std.time.ns_per_us); // 100微秒
+                }
             },
         }
     }
+
+    // 如果达到最大重试次数，panic（在生产环境中应该有更好的处理）
+    std.debug.panic("await_fn: Future did not complete after {} retries", .{max_retries});
 }
 
 /// 线程本地的异步上下文
@@ -68,10 +82,21 @@ pub fn AsyncBlock(comptime ReturnType: type) type {
         async_fn: *const fn () ReturnType,
 
         /// 执行状态
-        executed: bool = false,
+        state: State = .initial,
 
         /// 结果
         result: ?ReturnType = null,
+
+        /// 错误信息（如果ReturnType是错误联合类型）
+        error_info: ?anyerror = null,
+
+        /// 执行状态枚举
+        const State = enum {
+            initial,   // 初始状态
+            running,   // 运行中
+            completed, // 已完成
+            failed,    // 执行失败
+        };
 
         pub fn init(comptime func: anytype) Self {
             const wrapper = struct {
@@ -86,25 +111,86 @@ pub fn AsyncBlock(comptime ReturnType: type) type {
         }
 
         pub fn poll(self: *Self, ctx: *Context) Poll(ReturnType) {
-            if (self.executed) {
-                return .{ .ready = self.result.? };
-            }
+            switch (self.state) {
+                .initial => {
+                    self.state = .running;
 
+                    // 检查是否应该让出执行权
+                    if (ctx.shouldYield()) {
+                        return .pending;
+                    }
+
+                    return self.executeFunction(ctx);
+                },
+                .running => {
+                    // 检查是否应该让出执行权
+                    if (ctx.shouldYield()) {
+                        return .pending;
+                    }
+
+                    // 如果已有结果，返回结果
+                    if (self.result != null) {
+                        self.state = .completed;
+                        return .{ .ready = self.result.? };
+                    }
+
+                    // 继续执行
+                    return self.executeFunction(ctx);
+                },
+                .completed => {
+                    return .{ .ready = self.result.? };
+                },
+                .failed => {
+                    // 如果是错误联合类型，返回错误
+                    if (@typeInfo(ReturnType) == .error_union and self.error_info != null) {
+                        return .{ .ready = self.error_info.? };
+                    }
+                    return .pending;
+                },
+            }
+        }
+
+        fn executeFunction(self: *Self, ctx: *Context) Poll(ReturnType) {
             // 设置当前上下文
             const old_ctx = current_async_context;
             current_async_context = ctx;
             defer current_async_context = old_ctx;
 
             // 执行异步函数
-            self.result = self.async_fn();
-            self.executed = true;
+            if (@typeInfo(ReturnType) == .error_union) {
+                // 处理可能返回错误的函数
+                self.result = self.async_fn() catch |err| {
+                    self.error_info = err;
+                    self.state = .failed;
+                    return .{ .ready = err };
+                };
+            } else {
+                self.result = self.async_fn();
+            }
 
+            self.state = .completed;
             return .{ .ready = self.result.? };
         }
 
         pub fn reset(self: *Self) void {
-            self.executed = false;
+            self.state = .initial;
             self.result = null;
+            self.error_info = null;
+        }
+
+        /// 检查是否已完成
+        pub fn isCompleted(self: *const Self) bool {
+            return self.state == .completed;
+        }
+
+        /// 检查是否失败
+        pub fn isFailed(self: *const Self) bool {
+            return self.state == .failed;
+        }
+
+        /// 获取错误信息（如果有）
+        pub fn getError(self: *const Self) ?anyerror {
+            return self.error_info;
         }
     };
 }
@@ -208,4 +294,82 @@ test "async_block状态管理" {
     if (result1 == .ready and result2 == .ready) {
         try testing.expect(std.mem.eql(u8, result1.ready, result2.ready));
     }
+}
+
+test "async_block错误处理" {
+    const testing = std.testing;
+
+    const TestError = error{TestFailed};
+
+    const task = async_block(struct {
+        fn run() TestError!u32 {
+            return TestError.TestFailed;
+        }
+    }.run);
+
+    const waker = Waker.noop();
+    var ctx = Context.init(waker);
+
+    var async_task = task;
+
+    // 轮询应该返回错误
+    const result = async_task.poll(&ctx);
+    try testing.expect(result.isReady());
+
+    if (result == .ready) {
+        try testing.expectError(TestError.TestFailed, result.ready);
+    }
+}
+
+test "async_block状态检查" {
+    const testing = std.testing;
+
+    const task = async_block(struct {
+        fn run() u32 {
+            return 42;
+        }
+    }.run);
+
+    const waker = Waker.noop();
+    var ctx = Context.init(waker);
+
+    var async_task = task;
+
+    // 初始状态
+    try testing.expect(!async_task.isCompleted());
+    try testing.expect(!async_task.isFailed());
+
+    // 执行后
+    _ = async_task.poll(&ctx);
+    try testing.expect(async_task.isCompleted());
+    try testing.expect(!async_task.isFailed());
+}
+
+test "async_block重置功能" {
+    const testing = std.testing;
+
+    const task = async_block(struct {
+        fn run() u32 {
+            return 42;
+        }
+    }.run);
+
+    const waker = Waker.noop();
+    var ctx = Context.init(waker);
+
+    var async_task = task;
+
+    // 第一次执行
+    const result1 = async_task.poll(&ctx);
+    try testing.expect(result1.isReady());
+    try testing.expect(async_task.isCompleted());
+
+    // 重置
+    async_task.reset();
+    try testing.expect(!async_task.isCompleted());
+
+    // 再次执行
+    const result2 = async_task.poll(&ctx);
+    try testing.expect(result2.isReady());
+    try testing.expect(async_task.isCompleted());
 }
