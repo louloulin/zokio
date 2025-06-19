@@ -44,7 +44,7 @@ callgrind.out.*
 # 包管理器缓存
 .cache/
 node_modules/
-
+notepad*
 # 环境配置文件
 .env
 .env.local

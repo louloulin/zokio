@@ -8,6 +8,12 @@ const std = @import("std");
 const builtin = @import("builtin");
 const config = @import("config");
 
+// 条件导入libxev并重新导出，使子模块能够访问
+pub const libxev = if (@import("builtin").is_test)
+    (if (@hasDecl(@import("root"), "libxev")) @import("libxev") else null)
+else
+    (if (@hasDecl(@import("root"), "libxev")) @import("libxev") else null);
+
 // 核心模块导出
 pub const runtime = @import("runtime/runtime.zig");
 pub const future = @import("future/future.zig");

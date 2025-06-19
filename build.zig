@@ -22,7 +22,7 @@ pub fn build(b: *std.Build) void {
     options.addOption(bool, "debug_mode", debug_mode);
 
     // libxev依赖
-    const libxev = b.lazyDependency("libxev", .{
+    const libxev = b.dependency("libxev", .{
         .target = target,
         .optimize = optimize,
     });
@@ -36,9 +36,7 @@ pub fn build(b: *std.Build) void {
     });
 
     lib.root_module.addOptions("config", options);
-    if (libxev) |dep| {
-        lib.root_module.addImport("libxev", dep.module("xev"));
-    }
+    lib.root_module.addImport("libxev", libxev.module("xev"));
 
     // 安装库
     b.installArtifact(lib);
@@ -50,9 +48,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     unit_tests.root_module.addOptions("config", options);
-    if (libxev) |dep| {
-        unit_tests.root_module.addImport("libxev", dep.module("xev"));
-    }
+    unit_tests.root_module.addImport("libxev", libxev.module("xev"));
 
     const run_unit_tests = b.addRunArtifact(unit_tests);
     const test_step = b.step("test", "运行单元测试");
@@ -65,14 +61,38 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     integration_tests.root_module.addOptions("config", options);
-    if (libxev) |dep| {
-        integration_tests.root_module.addImport("libxev", dep.module("xev"));
-    }
+    integration_tests.root_module.addImport("libxev", libxev.module("xev"));
     integration_tests.root_module.addImport("zokio", lib.root_module);
 
     const run_integration_tests = b.addRunArtifact(integration_tests);
     const integration_test_step = b.step("test-integration", "运行集成测试");
     integration_test_step.dependOn(&run_integration_tests.step);
+
+    // libxev集成测试
+    const libxev_tests = b.addTest(.{
+        .root_source_file = b.path("tests/libxev_integration_test.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    libxev_tests.root_module.addOptions("config", options);
+    libxev_tests.root_module.addImport("libxev", libxev.module("xev"));
+    libxev_tests.root_module.addImport("zokio", lib.root_module);
+
+    const run_libxev_tests = b.addRunArtifact(libxev_tests);
+    const libxev_test_step = b.step("test-libxev", "运行libxev集成测试");
+    libxev_test_step.dependOn(&run_libxev_tests.step);
+
+    // libxev可用性测试
+    const libxev_availability_tests = b.addTest(.{
+        .root_source_file = b.path("tests/libxev_availability_test.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    libxev_availability_tests.root_module.addImport("libxev", libxev.module("xev"));
+
+    const run_libxev_availability_tests = b.addRunArtifact(libxev_availability_tests);
+    const libxev_availability_test_step = b.step("test-libxev-availability", "测试libxev可用性");
+    libxev_availability_test_step.dependOn(&run_libxev_availability_tests.step);
 
     // 基准测试
     const benchmarks = b.addExecutable(.{
@@ -82,9 +102,7 @@ pub fn build(b: *std.Build) void {
         .optimize = .ReleaseFast,
     });
     benchmarks.root_module.addOptions("config", options);
-    if (libxev) |dep| {
-        benchmarks.root_module.addImport("libxev", dep.module("xev"));
-    }
+    benchmarks.root_module.addImport("libxev", libxev.module("xev"));
     benchmarks.root_module.addImport("zokio", lib.root_module);
 
     const run_benchmarks = b.addRunArtifact(benchmarks);
@@ -116,9 +134,7 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         });
         example.root_module.addOptions("config", options);
-        if (libxev) |dep| {
-            example.root_module.addImport("libxev", dep.module("xev"));
-        }
+        example.root_module.addImport("libxev", libxev.module("xev"));
         example.root_module.addImport("zokio", lib.root_module);
 
         const install_example = b.addInstallArtifact(example, .{});
@@ -133,9 +149,7 @@ pub fn build(b: *std.Build) void {
         .optimize = .Debug,
     });
     docs.root_module.addOptions("config", options);
-    if (libxev) |dep| {
-        docs.root_module.addImport("libxev", dep.module("xev"));
-    }
+    docs.root_module.addImport("libxev", libxev.module("xev"));
 
     const docs_step = b.step("docs", "生成API文档");
     const docs_install = b.addInstallDirectory(.{
@@ -163,9 +177,7 @@ pub fn build(b: *std.Build) void {
     });
     high_perf_stress.root_module.addImport("zokio", lib.root_module);
     high_perf_stress.root_module.addOptions("config", options);
-    if (libxev) |dep| {
-        high_perf_stress.root_module.addImport("libxev", dep.module("xev"));
-    }
+    high_perf_stress.root_module.addImport("libxev", libxev.module("xev"));
 
     const high_perf_stress_cmd = b.addRunArtifact(high_perf_stress);
     const high_perf_stress_step = b.step("stress-high-perf", "运行高性能压力测试");
@@ -180,9 +192,7 @@ pub fn build(b: *std.Build) void {
     });
     network_stress.root_module.addImport("zokio", lib.root_module);
     network_stress.root_module.addOptions("config", options);
-    if (libxev) |dep| {
-        network_stress.root_module.addImport("libxev", dep.module("xev"));
-    }
+    network_stress.root_module.addImport("libxev", libxev.module("xev"));
 
     const network_stress_cmd = b.addRunArtifact(network_stress);
     const network_stress_step = b.step("stress-network", "运行网络压力测试");
@@ -197,9 +207,7 @@ pub fn build(b: *std.Build) void {
     });
     async_await_stress.root_module.addImport("zokio", lib.root_module);
     async_await_stress.root_module.addOptions("config", options);
-    if (libxev) |dep| {
-        async_await_stress.root_module.addImport("libxev", dep.module("xev"));
-    }
+    async_await_stress.root_module.addImport("libxev", libxev.module("xev"));
 
     const async_await_stress_cmd = b.addRunArtifact(async_await_stress);
     const async_await_stress_step = b.step("stress-async-await", "运行async/await专门压力测试");
@@ -214,9 +222,7 @@ pub fn build(b: *std.Build) void {
     });
     real_async_stress.root_module.addImport("zokio", lib.root_module);
     real_async_stress.root_module.addOptions("config", options);
-    if (libxev) |dep| {
-        real_async_stress.root_module.addImport("libxev", dep.module("xev"));
-    }
+    real_async_stress.root_module.addImport("libxev", libxev.module("xev"));
 
     const real_async_stress_cmd = b.addRunArtifact(real_async_stress);
     const real_async_stress_step = b.step("stress-real-async", "运行真实异步压力测试");
