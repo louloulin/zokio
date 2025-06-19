@@ -157,7 +157,7 @@ pub const LibxevDriver = struct {
             context.result = .{ .success = .{ .bytes_transferred = buffer.len } };
         }
 
-        self.stats.ops_submitted.fetchAdd(1, .acq_rel);
+        _ = self.stats.ops_submitted.fetchAdd(1, .acq_rel);
         return @import("../io/io.zig").IoHandle{ .id = op_id };
     }
 
@@ -187,7 +187,7 @@ pub const LibxevDriver = struct {
             context.result = .{ .success = .{ .bytes_transferred = buffer.len } };
         }
 
-        self.stats.ops_submitted.fetchAdd(1, .acq_rel);
+        _ = self.stats.ops_submitted.fetchAdd(1, .acq_rel);
         return @import("../io/io.zig").IoHandle{ .id = op_id };
     }
 
@@ -243,15 +243,12 @@ pub const LibxevDriver = struct {
         _ = buf;
 
         if (userdata) |ctx| {
-            switch (result) {
-                .err => |err| {
-                    ctx.status = .error_occurred;
-                    ctx.result = .{ .error_code = @intFromError(err) };
-                },
-                else => |bytes| {
-                    ctx.status = .completed;
-                    ctx.result = .{ .success = .{ .bytes_transferred = bytes } };
-                },
+            if (result) |bytes| {
+                ctx.status = .completed;
+                ctx.result = .{ .success = .{ .bytes_transferred = bytes } };
+            } else |err| {
+                ctx.status = .error_occurred;
+                ctx.result = .{ .error_code = @intFromError(err) };
             }
         }
 
@@ -273,7 +270,7 @@ pub const LibxevDriver = struct {
             &self.loop,
             &completion,
             .{ .slice = buffer },
-            *IoOpContext,
+            IoOpContext,
             context,
             writeCallback,
         );
@@ -294,15 +291,12 @@ pub const LibxevDriver = struct {
         _ = buf;
 
         if (userdata) |ctx| {
-            switch (result) {
-                .err => |err| {
-                    ctx.status = .error_occurred;
-                    ctx.result = .{ .error_code = @intFromError(err) };
-                },
-                else => |bytes| {
-                    ctx.status = .completed;
-                    ctx.result = .{ .success = .{ .bytes_transferred = bytes } };
-                },
+            if (result) |bytes| {
+                ctx.status = .completed;
+                ctx.result = .{ .success = .{ .bytes_transferred = bytes } };
+            } else |err| {
+                ctx.status = .error_occurred;
+                ctx.result = .{ .error_code = @intFromError(err) };
             }
         }
 
@@ -337,8 +331,8 @@ pub const LibxevDriver = struct {
         // 更新统计
         const end_time = std.time.nanoTimestamp();
         const duration_ns = end_time - start_time;
-        self.stats.total_poll_time_ns.fetchAdd(@as(u64, @intCast(duration_ns)), .acq_rel);
-        self.stats.poll_count.fetchAdd(1, .acq_rel);
+        _ = self.stats.total_poll_time_ns.fetchAdd(@as(u64, @intCast(duration_ns)), .acq_rel);
+        _ = self.stats.poll_count.fetchAdd(1, .acq_rel);
 
         return completed_ops;
     }
@@ -362,7 +356,7 @@ pub const LibxevDriver = struct {
             }
         }
 
-        self.stats.timeout_count.fetchAdd(timeout_count, .acq_rel);
+        _ = self.stats.timeout_count.fetchAdd(timeout_count, .acq_rel);
         return timeout_count;
     }
 

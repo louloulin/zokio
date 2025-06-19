@@ -36,7 +36,7 @@ fn testBasicIoPerformance(allocator: std.mem.Allocator) !void {
 
     const config = IoConfig{
         .events_capacity = 1024,
-        .enable_real_io = false,
+        .enable_real_io = true, // 🔥 启用真实I/O
     };
 
     var driver = try IoDriver(config).init(allocator);
@@ -77,7 +77,7 @@ fn testLibxevBackendPerformance(allocator: std.mem.Allocator) !void {
 
     const config = IoConfig{
         .events_capacity = 1024,
-        .enable_real_io = false,
+        .enable_real_io = true, // 🔥 启用真实I/O
     };
 
     var driver = try IoDriver(config).init(allocator);
@@ -120,7 +120,7 @@ fn testBatchIoPerformance(allocator: std.mem.Allocator) !void {
     const config = IoConfig{
         .events_capacity = 1024,
         .batch_size = 32,
-        .enable_real_io = false,
+        .enable_real_io = true, // 🔥 启用真实I/O
     };
 
     var driver = try IoDriver(config).init(allocator);
@@ -184,7 +184,7 @@ fn testPerformanceTargets(allocator: std.mem.Allocator) !void {
     const config = IoConfig{
         .events_capacity = 2048,
         .batch_size = 64,
-        .enable_real_io = false,
+        .enable_real_io = true, // 🔥 启用真实I/O
     };
 
     var driver = try IoDriver(config).init(allocator);
