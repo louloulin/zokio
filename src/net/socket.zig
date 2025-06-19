@@ -190,10 +190,10 @@ pub const SocketAddr = union(enum) {
     const Self = @This();
 
     /// 从IP地址和端口创建Socket地址
-    pub fn init(ip: IpAddr, port: u16) Self {
-        return switch (ip) {
-            .v4 => |ipv4| Self{ .v4 = SocketAddrV4.init(ipv4, port) },
-            .v6 => |ipv6| Self{ .v6 = SocketAddrV6.init(ipv6, port) },
+    pub fn init(ip_addr: IpAddr, port_num: u16) Self {
+        return switch (ip_addr) {
+            .v4 => |ipv4| Self{ .v4 = SocketAddrV4.init(ipv4, port_num) },
+            .v6 => |ipv6| Self{ .v6 = SocketAddrV6.init(ipv6, port_num) },
         };
     }
 
@@ -203,11 +203,11 @@ pub const SocketAddr = union(enum) {
         if (std.mem.lastIndexOf(u8, str, ":")) |colon_pos| {
             const ip_str = str[0..colon_pos];
             const port_str = str[colon_pos + 1 ..];
-            
-            const ip = try IpAddr.parse(ip_str);
-            const port = std.fmt.parseInt(u16, port_str, 10) catch return error.InvalidAddress;
-            
-            return Self.init(ip, port);
+
+            const ip_addr = try IpAddr.parse(ip_str);
+            const port_num = std.fmt.parseInt(u16, port_str, 10) catch return error.InvalidAddress;
+
+            return Self.init(ip_addr, port_num);
         }
         
         return error.InvalidAddress;

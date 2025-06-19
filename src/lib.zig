@@ -23,6 +23,7 @@ pub const sync = @import("sync/sync.zig");
 pub const time = @import("time/time.zig");
 pub const timer = @import("time/timer.zig");
 pub const memory = @import("memory/memory.zig");
+pub const net = @import("net/mod.zig");
 pub const metrics = @import("metrics/metrics.zig");
 pub const testing = @import("testing/testing.zig");
 pub const utils = @import("utils/utils.zig");

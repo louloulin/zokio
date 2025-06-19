@@ -398,6 +398,7 @@ pub const RequestFuture = struct {
     }
 
     pub fn poll(self: *Self, ctx: *Context) Poll(!Response) {
+        _ = ctx;
         switch (self.state) {
             .connecting => {
                 // 连接到服务器
