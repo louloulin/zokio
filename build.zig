@@ -154,6 +154,8 @@ pub fn build(b: *std.Build) void {
         "real_async_await_demo",
         "libxev_demo",
         "high_performance_scheduler_demo",
+        "memory_demo",
+        "simple_memory_demo",
     };
 
     for (examples) |example_name| {
