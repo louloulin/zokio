@@ -416,6 +416,36 @@ pub fn build(b: *std.Build) void {
     const p2_optimization_test_step = b.step("p2-memory", "运行P2阶段性能优化验证测试");
     p2_optimization_test_step.dependOn(&p2_optimization_test_cmd.step);
 
+    // P3阶段智能增强功能测试
+    const p3_intelligent_test = b.addExecutable(.{
+        .name = "p3_intelligent_test",
+        .root_source_file = b.path("benchmarks/p3_intelligent_test.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    p3_intelligent_test.root_module.addImport("zokio", lib.root_module);
+    p3_intelligent_test.root_module.addOptions("config", options);
+    p3_intelligent_test.root_module.addImport("libxev", libxev.module("xev"));
+
+    const p3_intelligent_test_cmd = b.addRunArtifact(p3_intelligent_test);
+    const p3_intelligent_test_step = b.step("p3-memory", "运行P3阶段智能增强功能测试");
+    p3_intelligent_test_step.dependOn(&p3_intelligent_test_cmd.step);
+
+    // 统一接口性能修复验证测试
+    const unified_performance_fix_test = b.addExecutable(.{
+        .name = "unified_performance_fix_test",
+        .root_source_file = b.path("benchmarks/unified_performance_fix_test.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    unified_performance_fix_test.root_module.addImport("zokio", lib.root_module);
+    unified_performance_fix_test.root_module.addOptions("config", options);
+    unified_performance_fix_test.root_module.addImport("libxev", libxev.module("xev"));
+
+    const unified_performance_fix_test_cmd = b.addRunArtifact(unified_performance_fix_test);
+    const unified_performance_fix_test_step = b.step("unified-fix", "运行统一接口性能修复验证测试");
+    unified_performance_fix_test_step.dependOn(&unified_performance_fix_test_cmd.step);
+
     // 综合压力测试
     const stress_all_step = b.step("stress-all", "运行所有压力测试");
     stress_all_step.dependOn(&run_benchmarks.step);

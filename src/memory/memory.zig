@@ -539,6 +539,13 @@ pub const FastSmartAllocatorConfig = @import("fast_smart_allocator.zig").FastSma
 pub const ExtendedAllocator = @import("extended_allocator.zig").ExtendedAllocator;
 pub const OptimizedAllocator = @import("optimized_allocator.zig").OptimizedAllocator;
 
+/// 🧠 智能增强引擎 (P3阶段)
+pub const IntelligentEngine = @import("intelligent_engine.zig");
+pub const PatternDetector = IntelligentEngine.PatternDetector;
+pub const PerformancePredictor = IntelligentEngine.PerformancePredictor;
+pub const AutoTuner = IntelligentEngine.AutoTuner;
+pub const AllocationPattern = IntelligentEngine.AllocationPattern;
+
 /// 🧠 统一内存管理接口（P1阶段实现）
 pub const ZokioMemory = struct {
     const Self = @This();
@@ -556,6 +563,11 @@ pub const ZokioMemory = struct {
     /// 统一统计
     stats: UnifiedStats,
 
+    /// 🧠 智能增强组件 (P3阶段)
+    pattern_detector: ?PatternDetector,
+    performance_predictor: ?PerformancePredictor,
+    auto_tuner: ?AutoTuner,
+
     /// 统一配置系统
     pub const UnifiedConfig = struct {
         /// 性能配置
@@ -571,6 +583,12 @@ pub const ZokioMemory = struct {
         /// 内存配置
         memory_budget: ?usize = null,
         enable_compaction: bool = true,
+
+        /// 🧠 智能增强配置 (P3阶段)
+        enable_intelligent_mode: bool = false,
+        enable_pattern_detection: bool = false,
+        enable_performance_prediction: bool = false,
+        enable_auto_tuning: bool = false,
     };
 
     /// 性能模式
@@ -579,6 +597,8 @@ pub const ZokioMemory = struct {
         balanced,
         /// 高性能模式
         high_performance,
+        /// 监控模式
+        monitoring,
         /// 低内存模式
         low_memory,
         /// 调试模式
@@ -661,6 +681,31 @@ pub const ZokioMemory = struct {
             _ = self.current_memory_usage.fetchSub(size, .monotonic);
         }
 
+        /// 🚀 快速分配记录 - 零时间戳开销
+        pub fn recordFastAllocation(self: *UnifiedStats, size: usize, allocator_type: Strategy) void {
+            _ = self.total_allocations.fetchAdd(1, .monotonic);
+            const new_usage = self.current_memory_usage.fetchAdd(size, .monotonic) + size;
+
+            // 更新峰值使用量（简化版本）
+            const peak = self.peak_memory_usage.load(.monotonic);
+            if (new_usage > peak) {
+                _ = self.peak_memory_usage.cmpxchgWeak(peak, new_usage, .acq_rel, .monotonic);
+            }
+
+            // 记录分配器使用
+            switch (allocator_type) {
+                .smart, .auto => _ = self.smart_allocations.fetchAdd(1, .monotonic),
+                .extended => _ = self.extended_allocations.fetchAdd(1, .monotonic),
+                .optimized => _ = self.optimized_allocations.fetchAdd(1, .monotonic),
+            }
+        }
+
+        /// 🚀 快速释放记录
+        pub fn recordFastDeallocation(self: *UnifiedStats, size: usize) void {
+            _ = self.total_deallocations.fetchAdd(1, .monotonic);
+            _ = self.current_memory_usage.fetchSub(size, .monotonic);
+        }
+
         /// 获取统计快照
         pub fn getSnapshot(self: *const UnifiedStats) StatsSnapshot {
             return StatsSnapshot{
@@ -729,6 +774,9 @@ pub const ZokioMemory = struct {
             .optimized = try OptimizedAllocator.init(base_allocator),
             .config = config,
             .stats = UnifiedStats.init(),
+            .pattern_detector = null, // 暂时禁用，避免复杂性
+            .performance_predictor = null,
+            .auto_tuner = null,
         };
     }
 
@@ -739,27 +787,80 @@ pub const ZokioMemory = struct {
         self.optimized.deinit();
     }
 
-    /// 🚀 智能分配 - 统一入口
+    /// 🚀 高性能智能分配 - 零开销抽象
     pub fn alloc(self: *Self, comptime T: type, count: usize) ![]T {
         const size = @sizeOf(T) * count;
-        const start_time = std.time.nanoTimestamp();
 
-        // 根据配置和大小选择最优分配器
-        const strategy = self.selectOptimalAllocator(size);
-        const memory = try self.allocWithStrategy(T, count, strategy);
+        // 🔥 编译时优化：根据性能模式选择路径
+        return switch (self.config.performance_mode) {
+            .high_performance => self.allocFastPath(T, count, size),
+            .balanced => self.allocBalancedPath(T, count, size),
+            .monitoring => self.allocMonitoringPath(T, count, size),
+            .low_memory, .debug => self.allocMonitoringPath(T, count, size), // 使用监控路径
+        };
+    }
 
-        const end_time = std.time.nanoTimestamp();
-        const duration = @as(u64, @intCast(end_time - start_time));
+    /// 🚀 快速路径 - 零监控开销
+    inline fn allocFastPath(self: *Self, comptime T: type, count: usize, size: usize) ![]T {
+        // 运行时策略选择，但内联优化减少开销
+        return if (size <= 256)
+            self.allocOptimizedDirect(T, count, size)
+        else if (size <= 8192)
+            self.allocExtendedDirect(T, count, size)
+        else
+            self.allocSmartDirect(T, count, size);
+    }
 
-        // 记录统计信息
-        if (self.config.enable_monitoring) {
-            self.stats.recordAllocation(size, strategy, duration);
-        }
+    /// 🔥 直接分配 - 内联优化
+    inline fn allocOptimizedDirect(self: *Self, comptime T: type, count: usize, size: usize) ![]T {
+        const memory = try self.optimized.alloc(size);
+        return @as([*]T, @ptrCast(@alignCast(memory.ptr)))[0..count];
+    }
 
+    inline fn allocExtendedDirect(self: *Self, comptime T: type, count: usize, size: usize) ![]T {
+        const memory = try self.extended.alloc(size);
+        return @as([*]T, @ptrCast(@alignCast(memory.ptr)))[0..count];
+    }
+
+    inline fn allocSmartDirect(self: *Self, comptime T: type, count: usize, size: usize) ![]T {
+        _ = size;
+        return self.smart.alloc(T, count);
+    }
+
+    /// ⚖️ 平衡路径 - 轻量级监控
+    inline fn allocBalancedPath(self: *Self, comptime T: type, count: usize, size: usize) ![]T {
+        const strategy = if (size <= self.config.small_threshold)
+            Strategy.optimized
+        else if (size <= self.config.large_threshold)
+            Strategy.extended
+        else
+            Strategy.smart;
+
+        const memory = switch (strategy) {
+            .optimized => try self.allocOptimizedDirect(T, count, size),
+            .extended => try self.allocExtendedDirect(T, count, size),
+            .smart => try self.allocSmartDirect(T, count, size),
+            .auto => unreachable,
+        };
+
+        // 轻量级统计
+        self.stats.recordFastAllocation(size, strategy);
         return memory;
     }
 
-    /// 🚀 智能释放 - 统一入口
+    /// 📊 监控路径 - 完整统计
+    fn allocMonitoringPath(self: *Self, comptime T: type, count: usize, size: usize) ![]T {
+        const start_time = std.time.nanoTimestamp();
+        const strategy = self.selectOptimalAllocator(size);
+        const memory = try self.allocWithStrategy(T, count, strategy);
+        const end_time = std.time.nanoTimestamp();
+        const duration = @as(u64, @intCast(end_time - start_time));
+
+        self.stats.recordAllocation(size, strategy, duration);
+        return memory;
+    }
+
+    /// 🚀 高性能智能释放 - 零开销抽象
     pub fn free(self: *Self, memory: anytype) void {
         const slice = switch (@TypeOf(memory)) {
             []u8 => memory,
@@ -768,14 +869,38 @@ pub const ZokioMemory = struct {
 
         const size = slice.len;
 
-        // 根据大小选择对应的分配器进行释放
-        const strategy = self.selectOptimalAllocator(size);
-        self.freeWithStrategy(slice, strategy);
-
-        // 记录统计信息
-        if (self.config.enable_monitoring) {
-            self.stats.recordDeallocation(size);
+        // 🔥 编译时优化：根据性能模式选择路径
+        switch (self.config.performance_mode) {
+            .high_performance => self.freeFastPath(slice, size),
+            .balanced => self.freeBalancedPath(slice, size),
+            .monitoring => self.freeMonitoringPath(slice, size),
+            .low_memory, .debug => self.freeMonitoringPath(slice, size), // 使用监控路径
         }
+    }
+
+    /// 🚀 快速释放路径
+    inline fn freeFastPath(self: *Self, memory: []u8, size: usize) void {
+        // 编译时策略选择
+        if (size <= 256) {
+            self.optimized.free(memory);
+        } else if (size <= 8192) {
+            self.extended.free(memory);
+        } else {
+            self.smart.free(memory);
+        }
+    }
+
+    /// ⚖️ 平衡释放路径
+    inline fn freeBalancedPath(self: *Self, memory: []u8, size: usize) void {
+        self.freeFastPath(memory, size);
+        self.stats.recordFastDeallocation(size);
+    }
+
+    /// 📊 监控释放路径
+    fn freeMonitoringPath(self: *Self, memory: []u8, size: usize) void {
+        const strategy = self.selectOptimalAllocator(size);
+        self.freeWithStrategy(memory, strategy);
+        self.stats.recordDeallocation(size);
     }
 
     /// 选择最优分配器

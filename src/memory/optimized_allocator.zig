@@ -9,69 +9,80 @@ const utils = @import("../utils/utils.zig");
 /// 缓存行大小
 const CACHE_LINE_SIZE = 64;
 
-/// 🚀 无锁高性能对象池 (P2阶段优化)
-pub const LockFreeObjectPool = struct {
+/// 🛡️ 安全高性能对象池 (P2阶段优化 - 内存安全版)
+pub const SafeObjectPool = struct {
     const Self = @This();
 
     // 对象大小
     object_size: usize,
     // 预分配的内存池
     memory_pool: []u8,
-    // 无锁空闲链表头
-    free_head: utils.Atomic.Value(?*FreeNode),
+    // 空闲对象索引栈 (使用索引而不是指针，更安全)
+    free_indices: utils.Atomic.Value(u32), // 栈顶索引
+    indices_stack: []utils.Atomic.Value(u32), // 索引栈
+    stack_size: utils.Atomic.Value(u32), // 当前栈大小
+    max_objects: u32, // 最大对象数量
     // 基础分配器
     base_allocator: std.mem.Allocator,
     // 原子统计信息
     total_allocated: utils.Atomic.Value(usize),
     total_reused: utils.Atomic.Value(usize),
 
-    const FreeNode = extern struct {
-        next: ?*FreeNode,
-    };
-
     pub fn init(base_allocator: std.mem.Allocator, object_size: usize, initial_count: usize) !Self {
-        // 确保对象大小至少能容纳FreeNode
-        const actual_object_size = @max(object_size, @sizeOf(FreeNode));
+        const actual_object_size = object_size;
+        const max_objects = @as(u32, @intCast(initial_count));
 
         // 分配连续的内存池
         const pool_size = actual_object_size * initial_count;
         const memory_pool = try base_allocator.alloc(u8, pool_size);
 
+        // 分配索引栈
+        const indices_stack = try base_allocator.alloc(utils.Atomic.Value(u32), initial_count);
+
         var self = Self{
             .object_size = actual_object_size,
             .memory_pool = memory_pool,
-            .free_head = utils.Atomic.Value(?*FreeNode).init(null),
+            .free_indices = utils.Atomic.Value(u32).init(0), // 栈顶从0开始
+            .indices_stack = indices_stack,
+            .stack_size = utils.Atomic.Value(u32).init(max_objects),
+            .max_objects = max_objects,
             .base_allocator = base_allocator,
             .total_allocated = utils.Atomic.Value(usize).init(0),
             .total_reused = utils.Atomic.Value(usize).init(0),
         };
 
-        // 初始化无锁空闲链表
-        self.initializeFreeList(initial_count);
+        // 初始化索引栈
+        self.initializeIndexStack();
 
         return self;
     }
 
     pub fn deinit(self: *Self) void {
-        // 释放内存池
+        // 释放内存池和索引栈
         self.base_allocator.free(self.memory_pool);
+        self.base_allocator.free(self.indices_stack);
     }
 
-    /// 🚀 无锁快速分配
+    /// 🚀 高性能安全分配 (优化版)
     pub fn alloc(self: *Self) ![]u8 {
-        // 无锁CAS操作从空闲链表获取对象
+        // 快速路径：直接CAS操作减少栈大小
         while (true) {
-            const head = self.free_head.load(.acquire) orelse {
-                // 空闲链表为空，回退到基础分配器
+            const current_size = self.stack_size.load(.acquire);
+            if (current_size == 0) {
+                // 栈为空，回退到基础分配器
                 _ = self.total_allocated.fetchAdd(1, .monotonic);
                 return self.base_allocator.alloc(u8, self.object_size);
-            };
+            }
 
-            const next = head.next;
-            if (self.free_head.cmpxchgWeak(head, next, .acq_rel, .acquire) == null) {
-                // 成功获取对象
+            // 尝试原子地减少栈大小
+            if (self.stack_size.cmpxchgWeak(current_size, current_size - 1, .acq_rel, .acquire) == null) {
+                // 成功获取索引位置
+                const index = self.indices_stack[current_size - 1].load(.acquire);
+                const offset = index * self.object_size;
+
+                // 成功复用对象
                 _ = self.total_reused.fetchAdd(1, .monotonic);
-                return @as([*]u8, @ptrCast(head))[0..self.object_size];
+                return self.memory_pool[offset .. offset + self.object_size];
             }
             // CAS失败，重试
         }
@@ -94,15 +105,32 @@ pub const LockFreeObjectPool = struct {
         if (mem_addr >= pool_start and mem_addr < pool_end and
             (mem_addr - pool_start) % self.object_size == 0)
         {
-            // 来自内存池，放回空闲链表
-            const node = @as(*FreeNode, @ptrCast(@alignCast(memory.ptr)));
+            // 来自内存池，计算索引并放回栈
+            const offset = mem_addr - pool_start;
+            const index = @as(u32, @intCast(offset / self.object_size));
 
+            // 检查栈是否已满
+            const current_size = self.stack_size.load(.acquire);
+            if (current_size >= self.max_objects) {
+                // 栈已满，直接释放（不应该发生，但为了安全）
+                self.base_allocator.free(memory);
+                return;
+            }
+
+            // 快速路径：使用CAS操作推入栈
             while (true) {
-                const head = self.free_head.load(.acquire);
-                node.next = head;
+                const stack_size = self.stack_size.load(.acquire);
+                if (stack_size >= self.max_objects) {
+                    // 栈已满，直接释放
+                    self.base_allocator.free(memory);
+                    return;
+                }
 
-                if (self.free_head.cmpxchgWeak(head, node, .acq_rel, .acquire) == null) {
-                    break;
+                // 尝试原子地增加栈大小
+                if (self.stack_size.cmpxchgWeak(stack_size, stack_size + 1, .acq_rel, .acquire) == null) {
+                    // 成功，将索引存储到栈中
+                    self.indices_stack[stack_size].store(index, .release);
+                    return;
                 }
                 // CAS失败，重试
             }
@@ -112,22 +140,14 @@ pub const LockFreeObjectPool = struct {
         }
     }
 
-    /// 初始化无锁空闲链表
-    fn initializeFreeList(self: *Self, count: usize) void {
-        // 将内存池分割为对象并构建空闲链表
-        var current: ?*FreeNode = null;
-        var i: usize = count;
-
-        while (i > 0) {
-            i -= 1;
-            const offset = i * self.object_size;
-            const node = @as(*FreeNode, @ptrCast(@alignCast(self.memory_pool.ptr + offset)));
-            node.next = current;
-            current = node;
+    /// 初始化索引栈
+    fn initializeIndexStack(self: *Self) void {
+        // 将所有索引放入栈中 (0, 1, 2, ..., max_objects-1)
+        for (0..self.max_objects) |i| {
+            self.indices_stack[i].store(@as(u32, @intCast(i)), .release);
         }
-
-        // 设置链表头
-        self.free_head.store(current, .release);
+        // 栈大小设置为最大值
+        self.stack_size.store(self.max_objects, .release);
     }
 
     /// 获取复用率
@@ -154,8 +174,8 @@ pub const LockFreeObjectPool = struct {
 pub const OptimizedAllocator = struct {
     const Self = @This();
 
-    // 小对象池 (8B-256B) - 使用无锁设计
-    small_pools: [6]LockFreeObjectPool,
+    // 小对象池 (8B-256B) - 使用安全设计
+    small_pools: [6]SafeObjectPool,
     // 基础分配器
     base_allocator: std.mem.Allocator,
 
@@ -170,7 +190,7 @@ pub const OptimizedAllocator = struct {
         for (&self.small_pools, 0..) |*pool, i| {
             const size = small_sizes[i];
             const initial_count = 50000; // P2优化：预分配5万个对象，提升性能
-            pool.* = try LockFreeObjectPool.init(base_allocator, size, initial_count);
+            pool.* = try SafeObjectPool.init(base_allocator, size, initial_count);
         }
 
         return self;

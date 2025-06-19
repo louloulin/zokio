@@ -114,10 +114,8 @@ pub const FastSmartAllocator = struct {
         if (self.config.enable_fast_path) {
             const memory = try self.allocFastPath(size);
 
-            // 轻量级统计（可选）
-            if (self.config.enable_lightweight_monitoring) {
-                self.stats.recordAllocation(true);
-            }
+            // 始终记录快速路径统计（修复快速路径命中率0%问题）
+            self.stats.recordAllocation(true);
 
             return @as([*]T, @ptrCast(@alignCast(memory.ptr)))[0..count];
         }
@@ -126,9 +124,8 @@ pub const FastSmartAllocator = struct {
         const strategy = self.selectFastStrategy(size);
         const memory = try self.allocWithFastStrategy(size, strategy);
 
-        if (self.config.enable_lightweight_monitoring) {
-            self.stats.recordAllocation(false);
-        }
+        // 始终记录慢速路径统计
+        self.stats.recordAllocation(false);
 
         return @as([*]T, @ptrCast(@alignCast(memory.ptr)))[0..count];
     }
