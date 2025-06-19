@@ -211,16 +211,16 @@ fn selectIoBackend(comptime config: IoConfig) type {
 }
 
 /// 性能特征描述
-const PerformanceCharacteristics = struct {
+pub const PerformanceCharacteristics = struct {
     latency_class: LatencyClass,
     throughput_class: ThroughputClass,
     cpu_efficiency: Efficiency,
     memory_efficiency: Efficiency,
     batch_efficiency: Efficiency,
 
-    const LatencyClass = enum { ultra_low, low, medium, high };
-    const ThroughputClass = enum { very_high, high, medium, low };
-    const Efficiency = enum { excellent, good, fair, poor };
+    pub const LatencyClass = enum { ultra_low, low, medium, high };
+    pub const ThroughputClass = enum { very_high, high, medium, low };
+    pub const Efficiency = enum { excellent, good, fair, poor };
 };
 
 /// libxev集成的I/O后端（真实实现）

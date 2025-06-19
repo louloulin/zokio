@@ -16,19 +16,20 @@ test "libxev I/O驱动基础功能" {
         .events_capacity = 64,
     };
 
-    var driver = try zokio.io.IoDriver(config).init(allocator);
+    const DriverType = zokio.io.IoDriver(config);
+    var driver = try DriverType.init(allocator);
     defer driver.deinit();
 
     // 验证后端类型
-    try testing.expectEqual(zokio.io.IoBackendType.libxev, driver.BACKEND_TYPE);
+    try testing.expectEqual(zokio.io.IoBackendType.libxev, DriverType.BACKEND_TYPE);
 
     // 验证性能特征
-    const perf = driver.PERFORMANCE_CHARACTERISTICS;
+    const perf = DriverType.PERFORMANCE_CHARACTERISTICS;
     try testing.expectEqual(zokio.io.PerformanceCharacteristics.LatencyClass.ultra_low, perf.latency_class);
     try testing.expectEqual(zokio.io.PerformanceCharacteristics.ThroughputClass.very_high, perf.throughput_class);
 
     // 验证支持的操作
-    const ops = driver.SUPPORTED_OPERATIONS;
+    const ops = DriverType.SUPPORTED_OPERATIONS;
     try testing.expect(ops.len > 0);
 
     // 检查是否支持基本操作
@@ -51,7 +52,8 @@ test "libxev I/O驱动文件操作" {
         .events_capacity = 64,
     };
 
-    var driver = try zokio.io.IoDriver(config).init(allocator);
+    const DriverType = zokio.io.IoDriver(config);
+    var driver = try DriverType.init(allocator);
     defer driver.deinit();
 
     // 创建临时文件
