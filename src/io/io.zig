@@ -172,6 +172,11 @@ pub fn IoDriver(comptime config: IoConfig) type {
         pub fn getStats(self: *Self) @import("libxev.zig").IoStats {
             return self.libxev_driver.getStats();
         }
+
+        /// 获取已完成的操作结果
+        pub fn getCompletions(self: *Self, results: []IoResult) u32 {
+            return self.libxev_driver.getCompletions(results);
+        }
     };
 }
 

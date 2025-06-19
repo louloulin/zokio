@@ -360,6 +360,31 @@ pub const LibxevDriver = struct {
         return timeout_count;
     }
 
+    /// 🔍 获取已完成的操作结果
+    pub fn getCompletions(self: *Self, results: []@import("../io/io.zig").IoResult) u32 {
+        var count: u32 = 0;
+        var iterator = self.op_contexts.iterator();
+
+        while (iterator.next()) |entry| {
+            if (count >= results.len) break;
+
+            const context = entry.value_ptr.*;
+            if (context.status == .completed or context.status == .error_occurred) {
+                results[count] = @import("../io/io.zig").IoResult{
+                    .handle = @import("../io/io.zig").IoHandle{ .id = context.id },
+                    .result = switch (context.result) {
+                        .success => |success| @intCast(success.bytes_transferred),
+                        .error_code => |code| -@as(i64, @intCast(code)),
+                    },
+                    .completed = (context.status == .completed),
+                };
+                count += 1;
+            }
+        }
+
+        return count;
+    }
+
     /// 📊 获取操作状态
     pub fn getOpStatus(self: *Self, op_id: u64) ?IoOpStatus {
         if (self.op_contexts.get(op_id)) |context| {
