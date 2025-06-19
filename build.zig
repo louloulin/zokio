@@ -506,6 +506,21 @@ pub fn build(b: *std.Build) void {
     const scheduler_perf_test_step = b.step("scheduler-perf", "运行调度器性能基准测试");
     scheduler_perf_test_step.dependOn(&scheduler_perf_test_cmd.step);
 
+    // 简化调度器测试
+    const simple_scheduler_test = b.addExecutable(.{
+        .name = "simple_scheduler_test",
+        .root_source_file = b.path("benchmarks/simple_scheduler_test.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    simple_scheduler_test.root_module.addImport("zokio", lib.root_module);
+    simple_scheduler_test.root_module.addOptions("config", options);
+    simple_scheduler_test.root_module.addImport("libxev", libxev.module("xev"));
+
+    const simple_scheduler_test_cmd = b.addRunArtifact(simple_scheduler_test);
+    const simple_scheduler_test_step = b.step("simple-scheduler", "运行简化调度器性能测试");
+    simple_scheduler_test_step.dependOn(&simple_scheduler_test_cmd.step);
+
     // 修复版libxev驱动测试
     const fixed_libxev_test = b.addExecutable(.{
         .name = "fixed_libxev_test",

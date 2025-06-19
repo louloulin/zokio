@@ -146,7 +146,7 @@ pub fn WorkStealingQueue(comptime T: type, comptime capacity: u32) type {
 
     return struct {
         const Self = @This();
-        const CAPACITY = capacity;
+        pub const CAPACITY = capacity;
         const MASK = capacity - 1;
 
         // 使用编译时优化的原子类型
