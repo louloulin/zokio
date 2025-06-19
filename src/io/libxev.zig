@@ -374,7 +374,8 @@ pub const LibxevDriver = struct {
                     .handle = @import("../io/io.zig").IoHandle{ .id = context.id },
                     .result = switch (context.result) {
                         .success => |success| @intCast(success.bytes_transferred),
-                        .error_code => |code| -@as(i64, @intCast(code)),
+                        .error_code => |code| -@as(i32, @intCast(code)),
+                        .timeout => 0, // 超时情况返回0
                     },
                     .completed = (context.status == .completed),
                 };
