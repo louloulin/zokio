@@ -579,13 +579,15 @@ pub const RuntimeBuilder = struct {
         return new_self;
     }
 
-    /// 构建运行时
-    pub fn build(self: Self, allocator: std.mem.Allocator) !ZokioRuntime(self.config) {
-        return ZokioRuntime(self.config).init(allocator);
+    /// 构建运行时（使用默认配置）
+    pub fn build(self: Self, allocator: std.mem.Allocator) !SimpleRuntime {
+        // 简化实现：忽略配置，使用默认配置
+        _ = self;
+        return SimpleRuntime.init(allocator);
     }
 
     /// 构建并启动运行时
-    pub fn buildAndStart(self: Self, allocator: std.mem.Allocator) !ZokioRuntime(self.config) {
+    pub fn buildAndStart(self: Self, allocator: std.mem.Allocator) !SimpleRuntime {
         var runtime = try self.build(allocator);
         try runtime.start();
         return runtime;
