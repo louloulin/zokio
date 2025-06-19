@@ -29,7 +29,7 @@ pub const testing = @import("testing/testing.zig");
 pub const utils = @import("utils/utils.zig");
 
 // 新增的高级功能模块
-pub const fs = @import("fs/async_fs.zig");
+pub const fs = @import("fs/mod.zig");
 pub const tracing = @import("tracing/tracer.zig");
 
 // 平台能力检测
