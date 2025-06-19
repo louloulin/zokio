@@ -281,6 +281,48 @@ pub fn build(b: *std.Build) void {
     const tokio_vs_zokio_step = b.step("tokio-vs-zokio", "运行Tokio vs Zokio直接性能对比");
     tokio_vs_zokio_step.dependOn(&tokio_vs_zokio_cmd.step);
 
+    // 优化的Tokio vs Zokio对比测试
+    const optimized_tokio_vs_zokio = b.addExecutable(.{
+        .name = "optimized_tokio_vs_zokio_comparison",
+        .root_source_file = b.path("benchmarks/optimized_tokio_vs_zokio_comparison.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    optimized_tokio_vs_zokio.root_module.addImport("zokio", lib.root_module);
+    optimized_tokio_vs_zokio.root_module.addOptions("config", options);
+    optimized_tokio_vs_zokio.root_module.addImport("libxev", libxev.module("xev"));
+
+    const optimized_tokio_vs_zokio_cmd = b.addRunArtifact(optimized_tokio_vs_zokio);
+    const optimized_tokio_vs_zokio_step = b.step("optimized-tokio-vs-zokio", "运行优化的Tokio vs Zokio对比测试");
+    optimized_tokio_vs_zokio_step.dependOn(&optimized_tokio_vs_zokio_cmd.step);
+
+    // 简化的优化测试
+    const simple_optimized_test = b.addExecutable(.{
+        .name = "simple_optimized_test",
+        .root_source_file = b.path("benchmarks/simple_optimized_test.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+
+    const simple_optimized_test_cmd = b.addRunArtifact(simple_optimized_test);
+    const simple_optimized_test_step = b.step("simple-optimized", "运行简化的优化性能测试");
+    simple_optimized_test_step.dependOn(&simple_optimized_test_cmd.step);
+
+    // 简化的Zokio整体测试
+    const simplified_zokio_test = b.addExecutable(.{
+        .name = "simplified_zokio_test",
+        .root_source_file = b.path("benchmarks/simplified_zokio_test.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    simplified_zokio_test.root_module.addImport("zokio", lib.root_module);
+    simplified_zokio_test.root_module.addOptions("config", options);
+    simplified_zokio_test.root_module.addImport("libxev", libxev.module("xev"));
+
+    const simplified_zokio_test_cmd = b.addRunArtifact(simplified_zokio_test);
+    const simplified_zokio_test_step = b.step("simplified-zokio", "运行简化的Zokio整体性能测试");
+    simplified_zokio_test_step.dependOn(&simplified_zokio_test_cmd.step);
+
     // 简化的性能对比测试
     const simple_comparison = b.addExecutable(.{
         .name = "simple_comparison",

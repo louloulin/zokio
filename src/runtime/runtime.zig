@@ -370,8 +370,8 @@ fn selectScheduler(comptime config: RuntimeConfig) type {
 /// 编译时I/O驱动选择
 fn selectIoDriver(comptime config: RuntimeConfig) type {
     const io_config = io.IoConfig{
-        .prefer_io_uring = config.enable_io_uring,
         .events_capacity = 1024,
+        .enable_real_io = config.enable_io_uring, // 使用enable_real_io替代prefer_io_uring
     };
 
     return io.IoDriver(io_config);

@@ -516,7 +516,7 @@ fn TieredPoolAllocator(comptime config: MemoryConfig) type {
                 const item = DelayedFreeQueue.DelayedFreeItem{
                     .ptr = buf.ptr,
                     .size = buf.len,
-                    .timestamp = std.time.nanoTimestamp(),
+                    .timestamp = @intCast(std.time.nanoTimestamp()),
                 };
                 self.delayed_free_queue.queue.writeItem(item) catch {
                     // 如果队列满了，直接释放
