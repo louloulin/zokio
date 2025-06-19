@@ -106,11 +106,12 @@ test "libxev I/O驱动批量操作" {
         .batch_size = 16,
     };
 
-    var driver = try zokio.io.IoDriver(config).init(allocator);
+    const DriverType = zokio.io.IoDriver(config);
+    var driver = try DriverType.init(allocator);
     defer driver.deinit();
 
     // 验证批量操作支持
-    try testing.expect(driver.SUPPORTS_BATCH);
+    try testing.expect(DriverType.SUPPORTS_BATCH);
 
     // 创建批量操作
     var buffers: [3][256]u8 = undefined;
@@ -185,10 +186,11 @@ test "libxev性能特征分析" {
         .events_capacity = 1024,
     };
 
-    var driver = try zokio.io.IoDriver(config).init(allocator);
+    const DriverType = zokio.io.IoDriver(config);
+    var driver = try DriverType.init(allocator);
     defer driver.deinit();
 
-    const perf = driver.PERFORMANCE_CHARACTERISTICS;
+    const perf = DriverType.PERFORMANCE_CHARACTERISTICS;
 
     // 验证libxev的性能特征
     try testing.expectEqual(perf.latency_class, .ultra_low);
@@ -198,7 +200,7 @@ test "libxev性能特征分析" {
     try testing.expectEqual(perf.batch_efficiency, .excellent);
 
     // 验证支持的操作完整性
-    const ops = driver.SUPPORTED_OPERATIONS;
+    const ops = DriverType.SUPPORTED_OPERATIONS;
     try testing.expect(ops.len >= 6); // 至少支持6种操作
 
     // 验证关键操作都被支持

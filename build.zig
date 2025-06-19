@@ -94,6 +94,20 @@ pub fn build(b: *std.Build) void {
     const libxev_availability_test_step = b.step("test-libxev-availability", "测试libxev可用性");
     libxev_availability_test_step.dependOn(&run_libxev_availability_tests.step);
 
+    // 简单libxev测试
+    const simple_libxev_tests = b.addTest(.{
+        .root_source_file = b.path("tests/simple_libxev_test.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    simple_libxev_tests.root_module.addOptions("config", options);
+    simple_libxev_tests.root_module.addImport("libxev", libxev.module("xev"));
+    simple_libxev_tests.root_module.addImport("zokio", lib.root_module);
+
+    const run_simple_libxev_tests = b.addRunArtifact(simple_libxev_tests);
+    const simple_libxev_test_step = b.step("test-simple-libxev", "运行简单libxev测试");
+    simple_libxev_test_step.dependOn(&run_simple_libxev_tests.step);
+
     // 基准测试
     const benchmarks = b.addExecutable(.{
         .name = "benchmarks",
@@ -124,6 +138,7 @@ pub fn build(b: *std.Build) void {
         "plan_api_demo",
         "complex_async_await_demo",
         "real_async_await_demo",
+        "libxev_demo",
     };
 
     for (examples) |example_name| {

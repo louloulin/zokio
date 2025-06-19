@@ -131,8 +131,8 @@ pub fn IoDriver(comptime config: IoConfig) type {
         backend: Backend,
 
         // 编译时生成的性能特征
-        pub const PERFORMANCE_CHARACTERISTICS = Backend.getPerformanceCharacteristics();
-        pub const SUPPORTED_OPERATIONS = Backend.getSupportedOperations();
+        pub const PERFORMANCE_CHARACTERISTICS = Backend.PERFORMANCE_CHARACTERISTICS;
+        pub const SUPPORTED_OPERATIONS = Backend.SUPPORTED_OPERATIONS;
         pub const BACKEND_TYPE = Backend.BACKEND_TYPE;
         pub const SUPPORTS_BATCH = Backend.SUPPORTS_BATCH;
 
@@ -236,6 +236,14 @@ fn LibxevBackend(comptime config: IoConfig) type {
         // 编译时特性
         pub const BACKEND_TYPE = IoBackendType.libxev;
         pub const SUPPORTS_BATCH = true;
+        pub const PERFORMANCE_CHARACTERISTICS = PerformanceCharacteristics{
+            .latency_class = .ultra_low,
+            .throughput_class = .very_high,
+            .cpu_efficiency = .excellent,
+            .memory_efficiency = .excellent,
+            .batch_efficiency = .excellent,
+        };
+        pub const SUPPORTED_OPERATIONS = [_]IoOpType{ .read, .write, .accept, .connect, .close, .fsync, .timeout };
 
         allocator: std.mem.Allocator,
         loop: xev.Loop,
@@ -348,7 +356,11 @@ fn LibxevBackend(comptime config: IoConfig) type {
             _ = loop;
             _ = completion;
             _ = result;
-            _ = userdata;
+
+            if (userdata) |ptr| {
+                const handle_id = @intFromPtr(ptr);
+                _ = handle_id; // 简化实现，暂时忽略
+            }
 
             return .disarm;
         }
@@ -369,12 +381,9 @@ fn LibxevBackend(comptime config: IoConfig) type {
         }
 
         pub fn poll(self: *Self, timeout_ms: ?u32) !u32 {
-            const timeout_ns = if (timeout_ms) |ms| ms * std.time.ns_per_ms else null;
+            _ = timeout_ms; // 简化实现，暂时忽略超时
 
-            try self.loop.run(.{
-                .until_done = false,
-                .timeout_ns = timeout_ns,
-            });
+            try self.loop.run(.once);
 
             // 处理完成的操作
             var completed: u32 = 0;
@@ -416,19 +425,7 @@ fn LibxevBackend(comptime config: IoConfig) type {
             return @intCast(count);
         }
 
-        pub fn getPerformanceCharacteristics() PerformanceCharacteristics {
-            return PerformanceCharacteristics{
-                .latency_class = .ultra_low,
-                .throughput_class = .very_high,
-                .cpu_efficiency = .excellent,
-                .memory_efficiency = .excellent,
-                .batch_efficiency = .excellent,
-            };
-        }
 
-        pub fn getSupportedOperations() []const IoOpType {
-            return &[_]IoOpType{ .read, .write, .accept, .connect, .close, .fsync, .timeout };
-        }
     };
 }
 
@@ -444,6 +441,14 @@ fn IoUringBackend(comptime config: IoConfig) type {
         // 编译时特性
         pub const BACKEND_TYPE = IoBackendType.io_uring;
         pub const SUPPORTS_BATCH = true;
+        pub const PERFORMANCE_CHARACTERISTICS = PerformanceCharacteristics{
+            .latency_class = .ultra_low,
+            .throughput_class = .very_high,
+            .cpu_efficiency = .excellent,
+            .memory_efficiency = .good,
+            .batch_efficiency = .excellent,
+        };
+        pub const SUPPORTED_OPERATIONS = [_]IoOpType{ .read, .write, .accept, .connect, .close, .fsync };
 
         allocator: std.mem.Allocator,
         pending_ops: std.HashMap(u64, IoResult, std.hash_map.AutoContext(u64), std.hash_map.default_max_load_percentage),
@@ -534,19 +539,7 @@ fn IoUringBackend(comptime config: IoConfig) type {
             return count;
         }
 
-        pub fn getPerformanceCharacteristics() PerformanceCharacteristics {
-            return PerformanceCharacteristics{
-                .latency_class = .ultra_low,
-                .throughput_class = .very_high,
-                .cpu_efficiency = .excellent,
-                .memory_efficiency = .good,
-                .batch_efficiency = .excellent,
-            };
-        }
 
-        pub fn getSupportedOperations() []const IoOpType {
-            return &[_]IoOpType{ .read, .write, .accept, .connect, .close, .fsync };
-        }
     };
 }
 
@@ -557,6 +550,14 @@ fn EpollBackend(_: IoConfig) type {
 
         pub const BACKEND_TYPE = IoBackendType.epoll;
         pub const SUPPORTS_BATCH = false;
+        pub const PERFORMANCE_CHARACTERISTICS = PerformanceCharacteristics{
+            .latency_class = .low,
+            .throughput_class = .high,
+            .cpu_efficiency = .good,
+            .memory_efficiency = .excellent,
+            .batch_efficiency = .poor,
+        };
+        pub const SUPPORTED_OPERATIONS = [_]IoOpType{ .read, .write, .accept, .connect };
 
         allocator: std.mem.Allocator,
 
@@ -598,19 +599,7 @@ fn EpollBackend(_: IoConfig) type {
             return 0;
         }
 
-        pub fn getPerformanceCharacteristics() PerformanceCharacteristics {
-            return PerformanceCharacteristics{
-                .latency_class = .low,
-                .throughput_class = .high,
-                .cpu_efficiency = .good,
-                .memory_efficiency = .excellent,
-                .batch_efficiency = .poor,
-            };
-        }
 
-        pub fn getSupportedOperations() []const IoOpType {
-            return &[_]IoOpType{ .read, .write, .accept, .connect };
-        }
     };
 }
 
