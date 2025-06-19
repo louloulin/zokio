@@ -323,6 +323,51 @@ pub fn build(b: *std.Build) void {
     const simplified_zokio_test_step = b.step("simplified-zokio", "运行简化的Zokio整体性能测试");
     simplified_zokio_test_step.dependOn(&simplified_zokio_test_cmd.step);
 
+    // 高性能运行时测试
+    const high_performance_runtime_test = b.addExecutable(.{
+        .name = "high_performance_runtime_test",
+        .root_source_file = b.path("benchmarks/high_performance_runtime_test.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    high_performance_runtime_test.root_module.addImport("zokio", lib.root_module);
+    high_performance_runtime_test.root_module.addOptions("config", options);
+    high_performance_runtime_test.root_module.addImport("libxev", libxev.module("xev"));
+
+    const high_performance_runtime_test_cmd = b.addRunArtifact(high_performance_runtime_test);
+    const high_performance_runtime_test_step = b.step("high-perf-runtime", "运行高性能运行时测试");
+    high_performance_runtime_test_step.dependOn(&high_performance_runtime_test_cmd.step);
+
+    // 简单运行时测试
+    const simple_runtime_test = b.addExecutable(.{
+        .name = "simple_runtime_test",
+        .root_source_file = b.path("benchmarks/simple_runtime_test.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    simple_runtime_test.root_module.addImport("zokio", lib.root_module);
+    simple_runtime_test.root_module.addOptions("config", options);
+    simple_runtime_test.root_module.addImport("libxev", libxev.module("xev"));
+
+    const simple_runtime_test_cmd = b.addRunArtifact(simple_runtime_test);
+    const simple_runtime_test_step = b.step("simple-runtime", "运行简单运行时测试");
+    simple_runtime_test_step.dependOn(&simple_runtime_test_cmd.step);
+
+    // 基础运行时验证测试
+    const basic_runtime_verification = b.addExecutable(.{
+        .name = "basic_runtime_verification",
+        .root_source_file = b.path("benchmarks/basic_runtime_verification.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    basic_runtime_verification.root_module.addImport("zokio", lib.root_module);
+    basic_runtime_verification.root_module.addOptions("config", options);
+    basic_runtime_verification.root_module.addImport("libxev", libxev.module("xev"));
+
+    const basic_runtime_verification_cmd = b.addRunArtifact(basic_runtime_verification);
+    const basic_runtime_verification_step = b.step("verify-runtime", "运行基础运行时验证测试");
+    basic_runtime_verification_step.dependOn(&basic_runtime_verification_cmd.step);
+
     // 简化的性能对比测试
     const simple_comparison = b.addExecutable(.{
         .name = "simple_comparison",

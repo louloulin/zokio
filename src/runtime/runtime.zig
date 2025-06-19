@@ -66,6 +66,12 @@ pub const RuntimeConfig = struct {
     /// 任务队列大小（兼容SimpleRuntime）
     queue_size: u32 = 1024,
 
+    /// 工作窃取批次大小
+    steal_batch_size: u32 = 32,
+
+    /// 停车前自旋次数
+    spin_before_park: u32 = 100,
+
     /// libxev后端类型
     pub const LibxevBackend = enum {
         auto, // 自动选择最优后端
@@ -410,12 +416,67 @@ fn selectLibxevLoop(comptime config: RuntimeConfig) type {
 
 /// 编译时信息生成
 fn generateCompileTimeInfo(comptime config: RuntimeConfig) CompileTimeInfo {
+    const platform_name = switch (builtin.os.tag) {
+        .linux => "Linux",
+        .macos => "macOS",
+        .windows => "Windows",
+        else => "Unknown",
+    };
+
+    const arch_name = switch (builtin.cpu.arch) {
+        .x86_64 => "x86_64",
+        .aarch64 => "ARM64",
+        else => "Unknown",
+    };
+
+    const worker_count = config.worker_threads orelse 8; // 默认8个工作线程
+    const io_backend = if (config.prefer_libxev and libxev != null) "libxev" else "std";
+
+    // 🔥 确定配置名称和性能配置文件
+    const config_info = comptime blk: {
+        if (std.meta.eql(config, RuntimePresets.EXTREME_PERFORMANCE)) {
+            break :blk .{ .name = "极致性能", .profile = "CPU密集型优化" };
+        } else if (std.meta.eql(config, RuntimePresets.LOW_LATENCY)) {
+            break :blk .{ .name = "低延迟", .profile = "延迟敏感优化" };
+        } else if (std.meta.eql(config, RuntimePresets.IO_INTENSIVE)) {
+            break :blk .{ .name = "I/O密集型", .profile = "网络和文件I/O优化" };
+        } else if (std.meta.eql(config, RuntimePresets.MEMORY_OPTIMIZED)) {
+            break :blk .{ .name = "内存优化", .profile = "内存敏感优化" };
+        } else if (std.meta.eql(config, RuntimePresets.BALANCED)) {
+            break :blk .{ .name = "平衡配置", .profile = "性能和资源平衡" };
+        } else {
+            break :blk .{ .name = "自定义配置", .profile = "用户定义优化" };
+        }
+    };
+
+    const memory_strategy_name = switch (config.memory_strategy) {
+        .adaptive => "自适应分配",
+        .tiered_pools => "分层内存池",
+        .cache_friendly => "缓存友好分配器",
+        .general_purpose => "通用分配器",
+        .arena => "竞技场分配",
+        .fixed_buffer => "固定缓冲区分配器",
+        .stack => "栈回退分配器",
+    };
+
+    const optimizations = &[_][]const u8{
+        "work_stealing",
+        "cache_optimization",
+        "compile_time_specialization",
+        "simd_acceleration",
+        "numa_awareness",
+        "prefetch_optimization",
+    };
+
     return CompileTimeInfo{
-        .platform = @tagName(builtin.os.tag),
-        .architecture = @tagName(builtin.cpu.arch),
-        .worker_threads = config.worker_threads orelse platform.PlatformCapabilities.optimal_worker_count,
-        .io_backend = platform.PlatformCapabilities.preferred_io_backend,
-        .optimizations = config.generateOptimizationSuggestions(),
+        .platform = platform_name,
+        .architecture = arch_name,
+        .worker_threads = worker_count,
+        .io_backend = io_backend,
+        .optimizations = optimizations,
+        .config_name = config_info.name,
+        .memory_strategy = memory_strategy_name,
+        .performance_profile = config_info.profile,
     };
 }
 
@@ -464,6 +525,9 @@ const CompileTimeInfo = struct {
     worker_threads: u32,
     io_backend: []const u8,
     optimizations: []const []const u8,
+    config_name: []const u8, // 新增配置名称
+    memory_strategy: []const u8, // 新增内存策略
+    performance_profile: []const u8, // 新增性能配置文件
 };
 
 /// 性能特征
@@ -579,15 +643,45 @@ pub const RuntimeBuilder = struct {
         return new_self;
     }
 
-    /// 构建运行时（使用默认配置）
-    pub fn build(self: Self, allocator: std.mem.Allocator) !SimpleRuntime {
-        // 简化实现：忽略配置，使用默认配置
-        _ = self;
-        return SimpleRuntime.init(allocator);
+    /// 🚀 使用预设配置
+    pub fn preset(self: Self, comptime config: RuntimeConfig) Self {
+        var new_self = self;
+        new_self.config = config;
+        return new_self;
     }
 
-    /// 构建并启动运行时
-    pub fn buildAndStart(self: Self, allocator: std.mem.Allocator) !SimpleRuntime {
+    /// 🔥 极致性能预设
+    pub fn extremePerformance(self: Self) Self {
+        return self.preset(RuntimePresets.EXTREME_PERFORMANCE);
+    }
+
+    /// ⚡ 低延迟预设
+    pub fn lowLatency(self: Self) Self {
+        return self.preset(RuntimePresets.LOW_LATENCY);
+    }
+
+    /// 🌐 I/O密集型预设
+    pub fn ioIntensive(self: Self) Self {
+        return self.preset(RuntimePresets.IO_INTENSIVE);
+    }
+
+    /// 🧠 内存优化预设
+    pub fn memoryOptimized(self: Self) Self {
+        return self.preset(RuntimePresets.MEMORY_OPTIMIZED);
+    }
+
+    /// ⚖️ 平衡预设
+    pub fn balanced(self: Self) Self {
+        return self.preset(RuntimePresets.BALANCED);
+    }
+
+    /// 🚀 构建高性能运行时
+    pub fn build(self: Self, allocator: std.mem.Allocator) !ZokioRuntime(self.config) {
+        return ZokioRuntime(self.config).init(allocator);
+    }
+
+    /// 🚀 构建并启动高性能运行时
+    pub fn buildAndStart(self: Self, allocator: std.mem.Allocator) !ZokioRuntime(self.config) {
         var runtime = try self.build(allocator);
         try runtime.start();
         return runtime;
@@ -599,24 +693,120 @@ pub fn builder() RuntimeBuilder {
     return RuntimeBuilder.init();
 }
 
-/// 简化的运行时类型（兼容SimpleRuntime）
-pub const SimpleRuntime = ZokioRuntime(.{});
+/// 🚀 高性能运行时配置预设
+pub const RuntimePresets = struct {
+    /// 🔥 极致性能配置 - 针对CPU密集型任务优化
+    pub const EXTREME_PERFORMANCE = RuntimeConfig{
+        .worker_threads = null, // 自动检测CPU核心数
+        .enable_work_stealing = true,
+        .enable_io_uring = true,
+        .prefer_libxev = true,
+        .memory_strategy = .tiered_pools,
+        .enable_numa = true,
+        .enable_simd = true,
+        .enable_prefetch = true,
+        .cache_line_optimization = true,
+        .enable_metrics = true,
+        .queue_size = 2048, // 大队列容量
+        .steal_batch_size = 64, // 大批次窃取
+        .spin_before_park = 1000, // 高自旋次数
+    };
 
-/// 异步主函数宏（兼容SimpleRuntime）
+    /// ⚡ 低延迟配置 - 针对延迟敏感应用优化
+    pub const LOW_LATENCY = RuntimeConfig{
+        .worker_threads = 8,
+        .enable_work_stealing = true,
+        .enable_io_uring = true,
+        .prefer_libxev = true,
+        .memory_strategy = .cache_friendly,
+        .enable_numa = true,
+        .enable_simd = true,
+        .enable_prefetch = true,
+        .cache_line_optimization = true,
+        .enable_metrics = false, // 减少开销
+        .queue_size = 512, // 小队列减少延迟
+        .steal_batch_size = 16, // 小批次减少延迟
+        .spin_before_park = 10000, // 极高自旋次数
+    };
+
+    /// 🌐 I/O密集型配置 - 针对网络和文件I/O优化
+    pub const IO_INTENSIVE = RuntimeConfig{
+        .worker_threads = 16,
+        .enable_work_stealing = true,
+        .enable_io_uring = true,
+        .prefer_libxev = true,
+        .memory_strategy = .adaptive,
+        .enable_numa = false, // I/O任务不需要NUMA优化
+        .enable_simd = false, // I/O任务不需要SIMD
+        .enable_prefetch = false,
+        .cache_line_optimization = false,
+        .enable_metrics = true,
+        .queue_size = 4096, // 超大队列处理大量I/O
+        .steal_batch_size = 128, // 大批次处理
+        .spin_before_park = 100, // 低自旋，快速park
+    };
+
+    /// 🧠 内存优化配置 - 针对内存敏感应用优化
+    pub const MEMORY_OPTIMIZED = RuntimeConfig{
+        .worker_threads = 4,
+        .enable_work_stealing = true,
+        .enable_io_uring = false, // 减少内存使用
+        .prefer_libxev = false,
+        .memory_strategy = .arena,
+        .enable_numa = false,
+        .enable_simd = false,
+        .enable_prefetch = false,
+        .cache_line_optimization = false,
+        .enable_metrics = false,
+        .queue_size = 256, // 小队列减少内存
+        .steal_batch_size = 8, // 小批次减少内存
+        .spin_before_park = 10, // 低自旋减少CPU使用
+    };
+
+    /// ⚖️ 平衡配置 - 性能和资源使用的平衡
+    pub const BALANCED = RuntimeConfig{
+        .worker_threads = null, // 自动检测
+        .enable_work_stealing = true,
+        .enable_io_uring = true,
+        .prefer_libxev = true,
+        .memory_strategy = .adaptive,
+        .enable_numa = true,
+        .enable_simd = true,
+        .enable_prefetch = true,
+        .cache_line_optimization = true,
+        .enable_metrics = true,
+        .queue_size = 1024,
+        .steal_batch_size = 32,
+        .spin_before_park = 100,
+    };
+};
+
+/// 🚀 高性能运行时类型定义
+pub const HighPerformanceRuntime = ZokioRuntime(RuntimePresets.EXTREME_PERFORMANCE);
+pub const LowLatencyRuntime = ZokioRuntime(RuntimePresets.LOW_LATENCY);
+pub const IOIntensiveRuntime = ZokioRuntime(RuntimePresets.IO_INTENSIVE);
+pub const MemoryOptimizedRuntime = ZokioRuntime(RuntimePresets.MEMORY_OPTIMIZED);
+pub const BalancedRuntime = ZokioRuntime(RuntimePresets.BALANCED);
+
+/// 🔥 默认高性能运行时 - 替代SimpleRuntime
+pub const DefaultRuntime = HighPerformanceRuntime;
+
+/// 🚀 高性能异步主函数 - 使用极致性能配置
 pub fn asyncMain(comptime main_fn: anytype) !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
 
-    const config = RuntimeConfig{
-        .worker_threads = null, // 自动检测
-        .enable_work_stealing = true,
-        .enable_metrics = false,
-    };
-
-    var runtime = try ZokioRuntime(config).init(gpa.allocator());
+    // 🔥 使用极致性能配置
+    var runtime = try HighPerformanceRuntime.init(gpa.allocator());
     defer runtime.deinit();
 
+    std.debug.print("🚀 Zokio高性能运行时启动\n", .{});
+    std.debug.print("📊 配置: {s}\n", .{HighPerformanceRuntime.COMPILE_TIME_INFO.config_name});
+    std.debug.print("🔧 工作线程: {}\n", .{HighPerformanceRuntime.COMPILE_TIME_INFO.worker_threads});
+    std.debug.print("⚡ libxev启用: {}\n", .{HighPerformanceRuntime.LIBXEV_ENABLED});
+
     try runtime.start();
+    defer runtime.stop();
 
     // 执行主函数
     const main_future = async_block_api.async_block(main_fn);

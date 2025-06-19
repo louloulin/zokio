@@ -56,13 +56,26 @@ pub const delay = future.delay;
 pub const timeout = future.timeout;
 pub const await_future = future.await_future;
 
-// 核心运行时导出（统一到runtime模块）
-pub const SimpleRuntime = runtime.SimpleRuntime;
+// 🚀 高性能运行时导出
 pub const RuntimeBuilder = runtime.RuntimeBuilder;
+pub const RuntimePresets = runtime.RuntimePresets;
+
+// 🔥 高性能运行时类型
+pub const HighPerformanceRuntime = runtime.HighPerformanceRuntime;
+pub const LowLatencyRuntime = runtime.LowLatencyRuntime;
+pub const IOIntensiveRuntime = runtime.IOIntensiveRuntime;
+pub const MemoryOptimizedRuntime = runtime.MemoryOptimizedRuntime;
+pub const BalancedRuntime = runtime.BalancedRuntime;
+pub const DefaultRuntime = runtime.DefaultRuntime;
+
+// 🚀 便捷函数
 pub const builder = runtime.builder;
 pub const asyncMain = runtime.asyncMain;
 pub const initGlobalRuntime = runtime.initGlobalRuntime;
 pub const shutdownGlobalRuntime = runtime.shutdownGlobalRuntime;
+
+// ⚠️ 已弃用：SimpleRuntime (使用DefaultRuntime替代)
+pub const SimpleRuntime = runtime.DefaultRuntime;
 
 // 核心async/await API导出
 pub const async_block_api = @import("future/async_block.zig");
