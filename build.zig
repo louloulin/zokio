@@ -844,6 +844,21 @@ pub fn build(b: *std.Build) void {
     const real_async_verification_step = b.step("test-real-async", "运行真实异步验证测试");
     real_async_verification_step.dependOn(&real_async_verification_cmd.step);
 
+    // async_fn和await_fn例子
+    const async_await_examples = b.addExecutable(.{
+        .name = "async_await_examples",
+        .root_source_file = b.path("tests/async_await_examples.zig"),
+        .target = target,
+        .optimize = .ReleaseSafe,
+    });
+    async_await_examples.root_module.addImport("zokio", lib.root_module);
+    async_await_examples.root_module.addOptions("config", options);
+    async_await_examples.root_module.addImport("libxev", libxev.module("xev"));
+
+    const async_await_examples_cmd = b.addRunArtifact(async_await_examples);
+    const async_await_examples_step = b.step("test-async-await", "运行async_fn和await_fn例子");
+    async_await_examples_step.dependOn(&async_await_examples_cmd.step);
+
     // 全面测试
     const test_all_step = b.step("test-all", "运行所有测试");
     test_all_step.dependOn(&run_unit_tests.step);
