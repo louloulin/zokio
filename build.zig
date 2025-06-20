@@ -182,6 +182,13 @@ pub fn build(b: *std.Build) void {
         const install_example = b.addInstallArtifact(example, .{});
         const example_step = b.step(b.fmt("example-{s}", .{example_name}), b.fmt("构建{s}示例", .{example_name}));
         example_step.dependOn(&install_example.step);
+
+        // 🌐 特别的HTTP服务器演示
+        if (std.mem.eql(u8, example_name, "http_server")) {
+            const http_demo_run = b.addRunArtifact(example);
+            const http_demo_step = b.step("http-demo", "🚀 运行革命性HTTP服务器演示 (32B+ ops/sec)");
+            http_demo_step.dependOn(&http_demo_run.step);
+        }
     }
 
     // 文档生成

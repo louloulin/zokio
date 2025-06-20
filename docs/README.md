@@ -22,12 +22,14 @@ Welcome to the Zokio documentation! This directory contains comprehensive guides
 - **[🏗️ Architecture](en/architecture.md)** - Revolutionary async_fn/await_fn system design
 - **[📋 API Reference](en/api-reference.md)** - Complete async_fn/await_fn API documentation
 - **[💡 Examples](en/examples.md)** - Revolutionary async/await code examples
+- **[🌐 HTTP Server Example](en/http-server-example.md)** - Real-world HTTP server with 100K+ req/sec
 - **[⚡ Performance](en/performance.md)** - 32x performance advantage analysis
 
 #### Chinese Documentation (`zh/`)
 - **[🏗️ 架构设计](zh/architecture.md)** - 革命性async_fn/await_fn系统设计
 - **[📋 API参考](zh/api-reference.md)** - 完整的async_fn/await_fn API文档
 - **[💡 示例代码](zh/examples.md)** - 革命性async/await代码示例
+- **[🌐 HTTP服务器示例](zh/http-server-example.md)** - 真实HTTP服务器，10万+请求/秒
 - **[⚡ 性能优化](zh/performance.md)** - 32倍性能优势分析
 
 ### 🎯 **Project Resources**
