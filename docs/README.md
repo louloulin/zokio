@@ -32,8 +32,9 @@ Welcome to the Zokio documentation! This directory contains comprehensive guides
 
 ### 🎯 **Project Resources**
 - **[📊 Project Overview](PROJECT_OVERVIEW.md)** - Complete project vision and achievements
-- **[🔧 Technical Specifications](TECHNICAL_SPECS.md)** - Detailed technical specifications
 - **[🛣️ Roadmap](ROADMAP.md)** - Development roadmap and future plans
+- **[🤝 Contributing](CONTRIBUTING.md)** - Contribution guidelines and standards
+- **[🛡️ Security](SECURITY.md)** - Security policy and vulnerability reporting
 
 ## 🎯 Quick Navigation
 
