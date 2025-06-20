@@ -133,10 +133,33 @@ const HttpRequest = struct {
             }
         }
 
-        // 剩余部分是body（简化处理）
-        // 在新的API中，我们需要手动处理body部分
-        // 这里简化为空body
-        request.body = "";
+        // 解析body部分
+        var body_start: usize = 0;
+        var found_empty_line = false;
+        var line_start: usize = 0;
+
+        // 找到空行后的body开始位置
+        for (raw_request, 0..) |char, i| {
+            if (char == '\n') {
+                const line_end = if (i > 0 and raw_request[i - 1] == '\r') i - 1 else i;
+                const line = raw_request[line_start..line_end];
+
+                if (line.len == 0) {
+                    // 找到空行，body从下一个字符开始
+                    body_start = i + 1;
+                    found_empty_line = true;
+                    break;
+                }
+                line_start = i + 1;
+            }
+        }
+
+        // 设置body
+        if (found_empty_line and body_start < raw_request.len) {
+            request.body = raw_request[body_start..];
+        } else {
+            request.body = "";
+        }
 
         return request;
     }
@@ -906,12 +929,41 @@ const HttpServer = struct {
     pub fn poll(self: *Self, ctx: *zokio.Context) zokio.Poll(void) {
         _ = ctx;
 
-        // 运行服务器演示
-        self.runServer(5) catch |err| {
-            print("❌ 服务器运行失败: {}\n", .{err});
+        // 运行真正的异步HTTP服务器
+        self.runRealAsyncServer() catch |err| {
+            print("❌ 异步服务器运行失败: {}\n", .{err});
         };
 
         return .{ .ready = {} };
+    }
+
+    /// 🚀 运行真正的异步HTTP服务器
+    fn runRealAsyncServer(self: *Self) !void {
+        // 只初始化一次监听器
+        if (self.listener == null) {
+            self.listener = try zokio.net.tcp.TcpListener.bind(self.allocator, self.address);
+            print("✅ 异步服务器启动成功，监听端口 {}\n", .{self.address.port()});
+            print("🌐 可以使用 curl http://localhost:{}/hello 测试\n\n", .{self.address.port()});
+            print("🔄 开始异步接受HTTP连接...\n", .{});
+        }
+
+        // 持续异步接受连接
+        while (true) {
+            // 🚀 异步接受连接
+            const accept_future = self.listener.?.accept();
+            const stream = zokio.await_fn_future(accept_future) catch |err| {
+                print("❌ 异步接受连接失败: {}\n", .{err});
+                continue;
+            };
+
+            const connection_id = self.connection_counter.fetchAdd(1, .monotonic);
+            print("🔗 异步接受连接 #{} 来自 {any}\n", .{ connection_id, stream.peerAddr() });
+
+            // 🚀 异步处理连接（不阻塞accept循环）
+            self.handleAsyncConnection(stream, connection_id) catch |err| {
+                print("❌ 异步处理连接 #{} 失败: {}\n", .{ connection_id, err });
+            };
+        }
     }
 };
 
@@ -998,10 +1050,10 @@ pub fn main() !void {
     print("   curl http://localhost:9090/api/stats | jq .\n", .{});
     print("\n", .{});
 
-    print("🚀 启动 Zokio HTTP 服务器...\n", .{});
+    print("🚀 启动 Zokio 异步 HTTP 服务器...\n", .{});
     print("=" ** 50 ++ "\n\n", .{});
 
-    // 运行服务器 - 这将持续运行直到用户按Ctrl+C
+    // 运行真正的异步服务器 - 这将持续运行直到用户按Ctrl+C
     try runtime.blockOn(server);
 
     // 注意：下面的代码只有在用户按Ctrl+C中断服务器时才会执行

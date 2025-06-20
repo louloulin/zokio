@@ -881,6 +881,21 @@ pub fn build(b: *std.Build) void {
     const extreme_performance_test_step = b.step("extreme-performance", "运行极致性能测试");
     extreme_performance_test_step.dependOn(&extreme_performance_test_cmd.step);
 
+    // TCP绑定测试
+    const tcp_test = b.addExecutable(.{
+        .name = "tcp-test",
+        .root_source_file = b.path("test_tcp_bind.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    tcp_test.root_module.addImport("zokio", lib.root_module);
+    tcp_test.root_module.addOptions("config", options);
+    tcp_test.root_module.addImport("libxev", libxev.module("xev"));
+
+    const run_tcp_test = b.addRunArtifact(tcp_test);
+    const tcp_test_step = b.step("tcp-test", "运行TCP绑定诊断测试");
+    tcp_test_step.dependOn(&run_tcp_test.step);
+
     // 全面测试
     const test_all_step = b.step("test-all", "运行所有测试");
     test_all_step.dependOn(&run_unit_tests.step);

@@ -297,7 +297,7 @@ fn connectSocket(fd: std.posix.socket_t, addr: SocketAddr) !void {
             var sockaddr = std.posix.sockaddr.in{
                 .family = std.posix.AF.INET,
                 .port = std.mem.nativeToBig(u16, v4_addr.port),
-                .addr = v4_addr.ip.toU32(),
+                .addr = std.mem.bigToNative(u32, v4_addr.ip.toU32()), // 转换为主机字节序
                 .zero = [_]u8{0} ** 8,
             };
             const result = std.posix.connect(fd, @ptrCast(&sockaddr), @sizeOf(std.posix.sockaddr.in));
@@ -330,7 +330,7 @@ fn bindSocket(fd: std.posix.socket_t, addr: SocketAddr) !void {
             const sockaddr = std.posix.sockaddr.in{
                 .family = std.posix.AF.INET,
                 .port = std.mem.nativeToBig(u16, v4_addr.port),
-                .addr = v4_addr.ip.toU32(),
+                .addr = std.mem.bigToNative(u32, v4_addr.ip.toU32()), // 转换为主机字节序
                 .zero = [_]u8{0} ** 8,
             };
             try std.posix.bind(fd, @ptrCast(&sockaddr), @sizeOf(std.posix.sockaddr.in));
