@@ -859,6 +859,21 @@ pub fn build(b: *std.Build) void {
     const async_await_examples_step = b.step("test-async-await", "运行async_fn和await_fn例子");
     async_await_examples_step.dependOn(&async_await_examples_cmd.step);
 
+    // 极致性能测试
+    const extreme_performance_test = b.addExecutable(.{
+        .name = "extreme_performance_test",
+        .root_source_file = b.path("benchmarks/extreme_performance_test.zig"),
+        .target = target,
+        .optimize = .ReleaseFast,
+    });
+    extreme_performance_test.root_module.addImport("zokio", lib.root_module);
+    extreme_performance_test.root_module.addOptions("config", options);
+    extreme_performance_test.root_module.addImport("libxev", libxev.module("xev"));
+
+    const extreme_performance_test_cmd = b.addRunArtifact(extreme_performance_test);
+    const extreme_performance_test_step = b.step("extreme-performance", "运行极致性能测试");
+    extreme_performance_test_step.dependOn(&extreme_performance_test_cmd.step);
+
     // 全面测试
     const test_all_step = b.step("test-all", "运行所有测试");
     test_all_step.dependOn(&run_unit_tests.step);
