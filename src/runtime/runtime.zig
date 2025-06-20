@@ -425,8 +425,8 @@ pub const RuntimeConfig = struct {
     /// 是否检查异步上下文
     check_async_context: bool = true,
 
-    /// 任务队列大小（兼容SimpleRuntime）
-    queue_size: u32 = 1024,
+    /// 任务队列大小（兼容SimpleRuntime）- 🔥 减少默认大小避免栈溢出
+    queue_size: u32 = 256,
 
     /// 工作窃取批次大小
     steal_batch_size: u32 = 32,
@@ -532,16 +532,19 @@ pub fn ZokioRuntime(comptime config: RuntimeConfig) type {
     return struct {
         const Self = @This();
 
-        // 编译时确定的组件
-        scheduler: OptimalScheduler,
-        io_driver: OptimalIoDriver,
-        allocator: OptimalAllocator,
+        // 🔥 使用指针减少栈使用（对于大型组件）
+        scheduler: if (@sizeOf(OptimalScheduler) > 1024) *OptimalScheduler else OptimalScheduler,
+        io_driver: if (@sizeOf(OptimalIoDriver) > 1024) *OptimalIoDriver else OptimalIoDriver,
+        allocator: if (@sizeOf(OptimalAllocator) > 1024) *OptimalAllocator else OptimalAllocator,
 
         // libxev事件循环（如果启用）
         libxev_loop: if (config.prefer_libxev and libxev != null) ?LibxevLoop else void,
 
         // 运行状态
         running: utils.Atomic.Value(bool),
+
+        // 基础分配器引用（用于清理堆分配的组件）
+        base_allocator: std.mem.Allocator,
 
         // 编译时生成的统计信息
         pub const COMPILE_TIME_INFO = generateCompileTimeInfo(config);
@@ -552,17 +555,37 @@ pub fn ZokioRuntime(comptime config: RuntimeConfig) type {
         pub fn init(base_allocator: std.mem.Allocator) !Self {
             // 🔥 分步安全初始化，每步都有错误处理
 
-            // 1. 初始化调度器（通常不会失败）
-            const scheduler_instance = OptimalScheduler.init();
+            // 1. 智能初始化调度器（堆分配大型组件）
+            const scheduler_instance = if (@sizeOf(OptimalScheduler) > 1024) blk: {
+                const ptr = try base_allocator.create(OptimalScheduler);
+                ptr.* = OptimalScheduler.init();
+                break :blk ptr;
+            } else OptimalScheduler.init();
 
-            // 2. 安全初始化I/O驱动
-            const io_driver = OptimalIoDriver.init(base_allocator) catch |err| {
+            // 2. 智能初始化I/O驱动
+            const io_driver = if (@sizeOf(OptimalIoDriver) > 1024) blk: {
+                const ptr = try base_allocator.create(OptimalIoDriver);
+                ptr.* = OptimalIoDriver.init(base_allocator) catch |err| {
+                    base_allocator.destroy(ptr);
+                    std.log.warn("I/O驱动初始化失败: {}, 使用降级模式", .{err});
+                    return err;
+                };
+                break :blk ptr;
+            } else OptimalIoDriver.init(base_allocator) catch |err| {
                 std.log.warn("I/O驱动初始化失败: {}, 使用降级模式", .{err});
-                return err; // 暂时返回错误，后续可以实现降级
+                return err;
             };
 
-            // 3. 安全初始化内存分配器
-            const allocator_instance = OptimalAllocator.init(base_allocator) catch |err| {
+            // 3. 智能初始化内存分配器
+            const allocator_instance = if (@sizeOf(OptimalAllocator) > 1024) blk: {
+                const ptr = try base_allocator.create(OptimalAllocator);
+                ptr.* = OptimalAllocator.init(base_allocator) catch |err| {
+                    base_allocator.destroy(ptr);
+                    std.log.warn("优化分配器初始化失败: {}", .{err});
+                    return err;
+                };
+                break :blk ptr;
+            } else OptimalAllocator.init(base_allocator) catch |err| {
                 std.log.warn("优化分配器初始化失败: {}", .{err});
                 return err;
             };
@@ -573,6 +596,7 @@ pub fn ZokioRuntime(comptime config: RuntimeConfig) type {
                 .allocator = allocator_instance,
                 .libxev_loop = if (comptime LIBXEV_ENABLED) null else {},
                 .running = utils.Atomic.Value(bool).init(false),
+                .base_allocator = base_allocator,
             };
 
             // 4. 🔥 安全初始化libxev事件循环
@@ -596,13 +620,40 @@ pub fn ZokioRuntime(comptime config: RuntimeConfig) type {
                 }
             }
 
-            // 🔥 安全清理I/O驱动和分配器
-            if (@hasDecl(@TypeOf(self.io_driver), "deinit")) {
-                self.io_driver.deinit();
+            // 🔥 智能清理I/O驱动（堆分配的需要destroy）
+            if (@sizeOf(OptimalIoDriver) > 1024) {
+                if (@hasDecl(OptimalIoDriver, "deinit")) {
+                    self.io_driver.deinit();
+                }
+                self.base_allocator.destroy(self.io_driver);
+            } else {
+                if (@hasDecl(@TypeOf(self.io_driver), "deinit")) {
+                    self.io_driver.deinit();
+                }
             }
 
-            if (@hasDecl(@TypeOf(self.allocator), "deinit")) {
-                self.allocator.deinit();
+            // 🔥 智能清理内存分配器（堆分配的需要destroy）
+            if (@sizeOf(OptimalAllocator) > 1024) {
+                if (@hasDecl(OptimalAllocator, "deinit")) {
+                    self.allocator.deinit();
+                }
+                self.base_allocator.destroy(self.allocator);
+            } else {
+                if (@hasDecl(@TypeOf(self.allocator), "deinit")) {
+                    self.allocator.deinit();
+                }
+            }
+
+            // 🔥 智能清理调度器（堆分配的需要destroy）
+            if (@sizeOf(OptimalScheduler) > 1024) {
+                if (@hasDecl(OptimalScheduler, "deinit")) {
+                    self.scheduler.deinit();
+                }
+                self.base_allocator.destroy(self.scheduler);
+            } else {
+                if (@hasDecl(@TypeOf(self.scheduler), "deinit")) {
+                    self.scheduler.deinit();
+                }
             }
         }
 
@@ -845,8 +896,10 @@ pub fn ZokioRuntime(comptime config: RuntimeConfig) type {
 fn selectScheduler(comptime config: RuntimeConfig) type {
     const scheduler_config = scheduler.SchedulerConfig{
         .worker_threads = config.worker_threads,
+        .queue_capacity = config.queue_size, // 🔥 使用配置的队列大小
         .enable_work_stealing = config.enable_work_stealing,
         .enable_statistics = config.enable_metrics,
+        .steal_batch_size = @min(config.queue_size / 4, config.steal_batch_size), // 🔥 确保批次大小合理
     };
 
     return scheduler.Scheduler(scheduler_config);
@@ -1304,8 +1357,8 @@ pub const RuntimePresets = struct {
         .enable_prefetch = true,
         .cache_line_optimization = true,
         .enable_metrics = true,
-        .queue_size = 2048, // 大队列容量
-        .steal_batch_size = 64, // 大批次窃取
+        .queue_size = 512, // 🔥 减少队列容量避免栈溢出
+        .steal_batch_size = 32, // 🔥 减少批次大小
         .spin_before_park = 1000, // 高自旋次数
     };
 
@@ -1321,7 +1374,7 @@ pub const RuntimePresets = struct {
         .enable_prefetch = true,
         .cache_line_optimization = true,
         .enable_metrics = false, // 减少开销
-        .queue_size = 512, // 小队列减少延迟
+        .queue_size = 256, // 🔥 进一步减少队列大小
         .steal_batch_size = 16, // 小批次减少延迟
         .spin_before_park = 10000, // 极高自旋次数
     };
@@ -1338,8 +1391,8 @@ pub const RuntimePresets = struct {
         .enable_prefetch = false,
         .cache_line_optimization = false,
         .enable_metrics = true,
-        .queue_size = 4096, // 超大队列处理大量I/O
-        .steal_batch_size = 128, // 大批次处理
+        .queue_size = 1024, // 🔥 大幅减少I/O队列大小
+        .steal_batch_size = 64, // 🔥 减少批次大小
         .spin_before_park = 100, // 低自旋，快速park
     };
 
@@ -1372,7 +1425,7 @@ pub const RuntimePresets = struct {
         .enable_prefetch = true,
         .cache_line_optimization = true,
         .enable_metrics = true,
-        .queue_size = 1024,
+        .queue_size = 512, // 🔥 减少平衡配置的队列大小
         .steal_batch_size = 32,
         .spin_before_park = 100,
     };
@@ -1385,8 +1438,8 @@ pub const IOIntensiveRuntime = ZokioRuntime(RuntimePresets.IO_INTENSIVE);
 pub const MemoryOptimizedRuntime = ZokioRuntime(RuntimePresets.MEMORY_OPTIMIZED);
 pub const BalancedRuntime = ZokioRuntime(RuntimePresets.BALANCED);
 
-/// 🔥 默认高性能运行时 - 替代SimpleRuntime
-pub const DefaultRuntime = HighPerformanceRuntime;
+/// 🔥 默认运行时 - 使用内存优化配置避免栈溢出
+pub const DefaultRuntime = MemoryOptimizedRuntime;
 
 /// 🚀 高性能异步主函数 - 使用极致性能配置
 pub fn asyncMain(comptime main_fn: anytype) !void {

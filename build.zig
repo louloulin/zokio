@@ -702,6 +702,39 @@ pub fn build(b: *std.Build) void {
     const runtime_diagnosis_step = b.step("diagnose", "运行Runtime系统性诊断");
     runtime_diagnosis_step.dependOn(&runtime_diagnosis_cmd.step);
 
+    // Runtime组件分层诊断测试
+    const runtime_component_diagnosis = b.addExecutable(.{
+        .name = "runtime_component_diagnosis",
+        .root_source_file = b.path("runtime_component_diagnosis.zig"),
+        .target = target,
+        .optimize = .Debug,
+    });
+
+    // 添加详细的调试信息
+    runtime_component_diagnosis.root_module.strip = false;
+    runtime_component_diagnosis.root_module.addImport("zokio", lib.root_module);
+    runtime_component_diagnosis.root_module.addOptions("config", options);
+    runtime_component_diagnosis.root_module.addImport("libxev", libxev.module("xev"));
+
+    const runtime_component_diagnosis_cmd = b.addRunArtifact(runtime_component_diagnosis);
+    const runtime_component_diagnosis_step = b.step("diagnose-runtime", "运行Runtime组件分层诊断");
+    runtime_component_diagnosis_step.dependOn(&runtime_component_diagnosis_cmd.step);
+
+    // 简化Runtime诊断测试
+    const simple_runtime_diagnosis = b.addExecutable(.{
+        .name = "simple_runtime_diagnosis",
+        .root_source_file = b.path("simple_runtime_diagnosis.zig"),
+        .target = target,
+        .optimize = .ReleaseSafe,
+    });
+    simple_runtime_diagnosis.root_module.addImport("zokio", lib.root_module);
+    simple_runtime_diagnosis.root_module.addOptions("config", options);
+    simple_runtime_diagnosis.root_module.addImport("libxev", libxev.module("xev"));
+
+    const simple_runtime_diagnosis_cmd = b.addRunArtifact(simple_runtime_diagnosis);
+    const simple_runtime_diagnosis_step = b.step("diagnose-simple", "运行简化Runtime诊断");
+    simple_runtime_diagnosis_step.dependOn(&simple_runtime_diagnosis_cmd.step);
+
     // 全面测试
     const test_all_step = b.step("test-all", "运行所有测试");
     test_all_step.dependOn(&run_unit_tests.step);
