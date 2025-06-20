@@ -101,8 +101,8 @@ fn TaskCell(comptime T: type, comptime S: type) type {
         // 调度器
         scheduler: S,
 
-        // 任务输出（使用原子保护）
-        output: std.atomic.Value(?T.Output) = std.atomic.Value(?T.Output).init(null),
+        // 任务输出（使用安全的结果存储）
+        output: ResultStorage(T.Output) = .{},
 
         // 🔥 安全的等待者通知机制
         completion_notifier: ?*CompletionNotifier = null,
@@ -158,8 +158,7 @@ fn TaskCell(comptime T: type, comptime S: type) type {
         pub fn poll(self: *Self, ctx: *future.Context) future.Poll(T.Output) {
             // 检查是否已完成
             if (self.header.state.isComplete()) {
-                const current_output = self.output.load(.acquire);
-                if (current_output) |output| {
+                if (self.output.load()) |output| {
                     return .{ .ready = output };
                 }
             }
@@ -176,7 +175,7 @@ fn TaskCell(comptime T: type, comptime S: type) type {
                 switch (result) {
                     .ready => |output| {
                         // 🔥 安全设置输出
-                        self.output.store(output, .release);
+                        self.output.store(output);
                         self.header.state.setComplete();
 
                         // 🔥 安全通知等待者
@@ -219,6 +218,41 @@ fn TaskCell(comptime T: type, comptime S: type) type {
     };
 }
 
+/// 🚀 安全的结果存储
+fn ResultStorage(comptime T: type) type {
+    return struct {
+        const Self = @This();
+
+        // 使用原子布尔值标记是否有结果
+        has_result: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
+
+        // 结果值（受has_result保护）
+        result: T = undefined,
+
+        // 互斥锁保护结果访问
+        mutex: std.Thread.Mutex = .{},
+
+        pub fn store(self: *Self, value: T) void {
+            self.mutex.lock();
+            defer self.mutex.unlock();
+
+            self.result = value;
+            self.has_result.store(true, .release);
+        }
+
+        pub fn load(self: *Self) ?T {
+            if (!self.has_result.load(.acquire)) {
+                return null;
+            }
+
+            self.mutex.lock();
+            defer self.mutex.unlock();
+
+            return self.result;
+        }
+    };
+}
+
 /// 🚀 安全的JoinHandle - 真正的异步任务句柄（参考Tokio）
 pub fn JoinHandle(comptime T: type) type {
     return struct {
@@ -230,8 +264,8 @@ pub fn JoinHandle(comptime T: type) type {
         // 🔥 安全的完成通知器
         completion_notifier: ?*CompletionNotifier = null,
 
-        // 任务结果存储
-        result_storage: ?*std.atomic.Value(?T) = null,
+        // 任务结果存储 - 使用简单的结果存储结构
+        result_storage: ?*ResultStorage(T) = null,
 
         // 分配器引用
         allocator: std.mem.Allocator,
@@ -247,7 +281,7 @@ pub fn JoinHandle(comptime T: type) type {
 
             // 🔥 安全获取结果
             if (self.result_storage) |storage| {
-                if (storage.load(.acquire)) |result| {
+                if (storage.load()) |result| {
                     return result;
                 }
             }
@@ -271,7 +305,7 @@ pub fn JoinHandle(comptime T: type) type {
         /// 🔥 安全设置结果（内部使用）
         pub fn setResult(self: *Self, result: T) void {
             if (self.result_storage) |storage| {
-                storage.store(result, .release);
+                storage.store(result);
             }
 
             if (self.completion_notifier) |notifier| {
@@ -704,22 +738,22 @@ pub fn ZokioRuntime(comptime config: RuntimeConfig) type {
             const SchedulerType = @TypeOf(self.scheduler);
             const CellType = TaskCell(FutureType, SchedulerType);
 
-            const task_cell = try CellType.new(future_instance, self.scheduler, task_id, self.allocator);
+            const task_cell = try CellType.new(future_instance, self.scheduler, task_id, self.base_allocator);
 
             // 🔥 创建安全的完成通知器
-            const completion_notifier = try CompletionNotifier.new(self.allocator);
+            const completion_notifier = try CompletionNotifier.new(self.base_allocator);
             task_cell.completion_notifier = completion_notifier;
 
             // 🔥 创建结果存储
-            const result_storage = try self.allocator.create(std.atomic.Value(?@TypeOf(future_instance).Output));
-            result_storage.* = std.atomic.Value(?@TypeOf(future_instance).Output).init(null);
+            const result_storage = try self.base_allocator.create(ResultStorage(@TypeOf(future_instance).Output));
+            result_storage.* = ResultStorage(@TypeOf(future_instance).Output){};
 
             // 🔥 创建安全的JoinHandle
             const handle = JoinHandle(@TypeOf(future_instance).Output){
                 .task_cell = @ptrCast(task_cell),
                 .completion_notifier = completion_notifier,
                 .result_storage = result_storage,
-                .allocator = self.allocator,
+                .allocator = self.base_allocator,
             };
 
             // 🔥 增加TaskCell引用计数（JoinHandle持有引用）

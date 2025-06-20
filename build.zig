@@ -799,6 +799,36 @@ pub fn build(b: *std.Build) void {
     const debug_global_size_step = b.step("debug-global-size", "调试全局数据大小问题");
     debug_global_size_step.dependOn(&debug_global_size_cmd.step);
 
+    // Spawn功能验证测试
+    const spawn_functionality_test = b.addExecutable(.{
+        .name = "spawn_functionality_test",
+        .root_source_file = b.path("tests/spawn_functionality_test.zig"),
+        .target = target,
+        .optimize = .ReleaseSafe,
+    });
+    spawn_functionality_test.root_module.addImport("zokio", lib.root_module);
+    spawn_functionality_test.root_module.addOptions("config", options);
+    spawn_functionality_test.root_module.addImport("libxev", libxev.module("xev"));
+
+    const spawn_functionality_test_cmd = b.addRunArtifact(spawn_functionality_test);
+    const spawn_functionality_test_step = b.step("test-spawn-functionality", "运行Spawn功能验证测试");
+    spawn_functionality_test_step.dependOn(&spawn_functionality_test_cmd.step);
+
+    // 简化Spawn测试
+    const simple_spawn_test = b.addExecutable(.{
+        .name = "simple_spawn_test",
+        .root_source_file = b.path("tests/simple_spawn_test.zig"),
+        .target = target,
+        .optimize = .Debug, // 使用Debug模式便于调试
+    });
+    simple_spawn_test.root_module.addImport("zokio", lib.root_module);
+    simple_spawn_test.root_module.addOptions("config", options);
+    simple_spawn_test.root_module.addImport("libxev", libxev.module("xev"));
+
+    const simple_spawn_test_cmd = b.addRunArtifact(simple_spawn_test);
+    const simple_spawn_test_step = b.step("test-simple-spawn", "运行简化Spawn测试");
+    simple_spawn_test_step.dependOn(&simple_spawn_test_cmd.step);
+
     // 全面测试
     const test_all_step = b.step("test-all", "运行所有测试");
     test_all_step.dependOn(&run_unit_tests.step);
