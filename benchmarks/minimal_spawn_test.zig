@@ -68,7 +68,7 @@ fn testBlockOn(allocator: std.mem.Allocator) !void {
     const result = try runtime.blockOn(task);
 
     std.debug.print("  ✅ 任务完成，结果: {}\n", .{result});
-    
+
     if (result == 42) {
         std.debug.print("  🎉 blockOn测试通过\n", .{});
     } else {

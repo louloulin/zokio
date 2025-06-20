@@ -41,7 +41,7 @@ fn testOptimizedScheduler(allocator: std.mem.Allocator) !void {
             sum = sum +% (i + j);
         }
         completed += 1;
-        
+
         // 防止编译器优化
         std.mem.doNotOptimizeAway(sum);
     }
@@ -111,7 +111,7 @@ fn testOptimizedIO(allocator: std.mem.Allocator) !void {
         // 模拟高效的I/O操作
         var buffer = [_]u8{0} ** 1024;
         @memset(&buffer, @intCast(i % 256));
-        
+
         // 模拟I/O处理
         const checksum = blk: {
             var sum: u32 = 0;
@@ -120,9 +120,9 @@ fn testOptimizedIO(allocator: std.mem.Allocator) !void {
             }
             break :blk sum;
         };
-        
+
         completed += 1;
-        
+
         // 防止编译器优化
         std.mem.doNotOptimizeAway(checksum);
     }

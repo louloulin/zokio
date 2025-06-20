@@ -33,16 +33,16 @@ fn testBasicAllocation(allocator: std.mem.Allocator) !void {
 
     std.debug.print("测试标准分配器性能...\n", .{});
     const start_time = std.time.nanoTimestamp();
-    
+
     for (0..iterations) |i| {
         const size = 64 + (i % 192); // 64-256字节
         const memory = try allocator.alloc(u8, size);
         defer allocator.free(memory);
-        
+
         // 简单的内存使用
         @memset(memory, @as(u8, @intCast(i % 256)));
     }
-    
+
     const end_time = std.time.nanoTimestamp();
     const duration = @as(f64, @floatFromInt(end_time - start_time)) / 1_000_000_000.0;
     const ops_per_sec = @as(f64, @floatFromInt(iterations)) / duration;
@@ -61,7 +61,7 @@ fn testBasicAllocation(allocator: std.mem.Allocator) !void {
     std.debug.print("  当前性能: {d:.0} ops/sec\n", .{ops_per_sec});
     std.debug.print("  Tokio基准: {d:.0} ops/sec\n", .{tokio_baseline});
     std.debug.print("  性能比: {d:.2}x ", .{improvement});
-    
+
     if (improvement >= 3.0) {
         std.debug.print("🌟🌟🌟 (超越目标3倍)\n", .{});
     } else if (improvement >= 2.0) {
@@ -82,21 +82,21 @@ fn testSmallObjectAllocation(allocator: std.mem.Allocator) !void {
     const small_sizes = [_]usize{ 8, 16, 32, 64, 128, 256 };
 
     std.debug.print("测试小对象分配 (8B-256B)...\n", .{});
-    
+
     const start_time = std.time.nanoTimestamp();
-    
+
     for (0..iterations) |i| {
         const size = small_sizes[i % small_sizes.len];
         const memory = try allocator.alloc(u8, size);
         defer allocator.free(memory);
-        
+
         // 验证内存可用性
         memory[0] = @as(u8, @intCast(i % 256));
         if (memory.len > 1) {
             memory[memory.len - 1] = @as(u8, @intCast((i + 1) % 256));
         }
     }
-    
+
     const end_time = std.time.nanoTimestamp();
     const duration = @as(f64, @floatFromInt(end_time - start_time)) / 1_000_000_000.0;
     const ops_per_sec = @as(f64, @floatFromInt(iterations)) / duration;
@@ -123,21 +123,21 @@ fn testComparisonWithPrevious(allocator: std.mem.Allocator) !void {
     std.debug.print("-" ** 40 ++ "\n", .{});
 
     const iterations = 5000; // 与之前的对比测试保持一致
-    
+
     std.debug.print("执行与之前相同的内存分配模式...\n", .{});
-    
+
     const start_time = std.time.nanoTimestamp();
-    
+
     for (0..iterations) |i| {
         // 模拟之前测试中的分配模式
         const size = 1024 + (i % 4096); // 1KB-5KB
         const memory = try allocator.alloc(u8, size);
         defer allocator.free(memory);
-        
+
         // 初始化内存（与之前测试相同）
         @memset(memory, 0);
     }
-    
+
     const end_time = std.time.nanoTimestamp();
     const duration = @as(f64, @floatFromInt(end_time - start_time)) / 1_000_000_000.0;
     const ops_per_sec = @as(f64, @floatFromInt(iterations)) / duration;
@@ -150,7 +150,7 @@ fn testComparisonWithPrevious(allocator: std.mem.Allocator) !void {
     std.debug.print("  当前性能: {d:.0} ops/sec\n", .{ops_per_sec});
     std.debug.print("  之前结果: {d:.0} ops/sec\n", .{previous_result});
     std.debug.print("  性能提升: {d:.2}x ", .{improvement});
-    
+
     if (improvement >= 2.0) {
         std.debug.print("🌟🌟 (显著提升)\n", .{});
     } else if (improvement >= 1.2) {
@@ -177,11 +177,11 @@ fn testComparisonWithPrevious(allocator: std.mem.Allocator) !void {
     // 与Tokio的最终对比
     const tokio_baseline = 1_500_000.0;
     const tokio_ratio = ops_per_sec / tokio_baseline;
-    
+
     std.debug.print("\n🎯 最终目标评估:\n", .{});
     std.debug.print("  当前 vs Tokio: {d:.2}x\n", .{tokio_ratio});
     std.debug.print("  目标 (3.3x): {d:.1}% 完成\n", .{(tokio_ratio / 3.3) * 100.0});
-    
+
     if (tokio_ratio >= 3.3) {
         std.debug.print("  🎉 Phase 1 内存优化目标达成！\n", .{});
     } else if (tokio_ratio >= 2.0) {

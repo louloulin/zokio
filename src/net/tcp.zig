@@ -178,7 +178,7 @@ pub const ReadFuture = struct {
 
     pub fn poll(self: *Self, ctx: *Context) Poll(!usize) {
         _ = ctx;
-        
+
         const result = std.posix.read(self.fd, self.buffer);
         if (result) |bytes_read| {
             self.bytes_read = bytes_read;
@@ -212,7 +212,7 @@ pub const WriteFuture = struct {
 
     pub fn poll(self: *Self, ctx: *Context) Poll(!usize) {
         _ = ctx;
-        
+
         const result = std.posix.write(self.fd, self.data[self.bytes_written..]);
         if (result) |bytes_written| {
             self.bytes_written += bytes_written;
@@ -249,10 +249,10 @@ pub const AcceptFuture = struct {
 
     pub fn poll(self: *Self, ctx: *Context) Poll(!TcpStream) {
         _ = ctx;
-        
+
         var addr: std.posix.sockaddr = undefined;
         var addr_len: std.posix.socklen_t = @sizeOf(std.posix.sockaddr);
-        
+
         const result = std.posix.accept(self.fd, &addr, &addr_len, std.posix.SOCK.CLOEXEC);
         if (result) |client_fd| {
             // 设置非阻塞模式
@@ -260,12 +260,12 @@ pub const AcceptFuture = struct {
                 std.posix.close(client_fd);
                 return .{ .ready = err };
             };
-            
+
             const stream = TcpStream.fromFd(self.allocator, client_fd) catch |err| {
                 std.posix.close(client_fd);
                 return .{ .ready = err };
             };
-            
+
             return .{ .ready = stream };
         } else |err| switch (err) {
             error.WouldBlock => return .pending,
@@ -348,9 +348,9 @@ fn bindSocket(fd: std.posix.socket_t, addr: SocketAddr) !void {
 fn getLocalAddr(fd: std.posix.socket_t) !SocketAddr {
     var addr: std.posix.sockaddr = undefined;
     var addr_len: std.posix.socklen_t = @sizeOf(std.posix.sockaddr);
-    
+
     try std.posix.getsockname(fd, &addr, &addr_len);
-    
+
     return parseSocketAddr(&addr);
 }
 
@@ -358,9 +358,9 @@ fn getLocalAddr(fd: std.posix.socket_t) !SocketAddr {
 fn getPeerAddr(fd: std.posix.socket_t) !SocketAddr {
     var addr: std.posix.sockaddr = undefined;
     var addr_len: std.posix.socklen_t = @sizeOf(std.posix.sockaddr);
-    
+
     try std.posix.getpeername(fd, &addr, &addr_len);
-    
+
     return parseSocketAddr(&addr);
 }
 
@@ -392,7 +392,7 @@ fn parseSocketAddr(addr: *const std.posix.sockaddr) !SocketAddr {
 // 测试
 test "TCP地址解析" {
     const testing = std.testing;
-    
+
     const addr = try SocketAddr.parse("127.0.0.1:8080");
     try testing.expect(addr.isIpv4());
     try testing.expectEqual(@as(u16, 8080), addr.port());

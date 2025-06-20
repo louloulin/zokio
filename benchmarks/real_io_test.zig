@@ -91,11 +91,11 @@ fn testRealFileIo(allocator: std.mem.Allocator) !void {
         if (result.completed) {
             const bytes_read = @as(usize, @intCast(result.result));
             std.debug.print("  读取字节数: {}\n", .{bytes_read});
-            
+
             if (bytes_read > 0) {
                 const read_data = read_buffer[0..bytes_read];
                 std.debug.print("  读取内容: \"{s}\"\n", .{read_data});
-                
+
                 if (std.mem.eql(u8, read_data, test_data)) {
                     std.debug.print("  ✅ 数据验证成功！\n", .{});
                 } else {
@@ -169,11 +169,7 @@ fn testRealIoPerformance(allocator: std.mem.Allocator) !void {
     var handles: [file_count]zokio.io.IoHandle = undefined;
     for (0..iterations) |iter| {
         const file_idx = iter % file_count;
-        handles[file_idx] = try driver.submitRead(
-            @intCast(temp_files[file_idx].handle),
-            &read_buffers[file_idx],
-            0
-        );
+        handles[file_idx] = try driver.submitRead(@intCast(temp_files[file_idx].handle), &read_buffers[file_idx], 0);
     }
 
     // 轮询完成
@@ -185,7 +181,7 @@ fn testRealIoPerformance(allocator: std.mem.Allocator) !void {
         const completed = try driver.poll(1);
         total_completed += completed;
         poll_rounds += 1;
-        
+
         if (completed == 0) {
             std.time.sleep(100000); // 0.1毫秒
         }

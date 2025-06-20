@@ -193,7 +193,7 @@ pub const SendToFuture = struct {
 
     pub fn poll(self: *Self, ctx: *Context) Poll(!usize) {
         _ = ctx;
-        
+
         const result = sendToSocket(self.fd, self.data, self.addr);
         if (result) |bytes_sent| {
             self.bytes_sent = bytes_sent;
@@ -228,7 +228,7 @@ pub const RecvFromFuture = struct {
 
     pub fn poll(self: *Self, ctx: *Context) Poll(!struct { usize, SocketAddr }) {
         _ = ctx;
-        
+
         const result = recvFromSocket(self.fd, self.buffer);
         if (result) |recv_result| {
             self.bytes_received = recv_result.bytes;
@@ -263,7 +263,7 @@ pub const SendFuture = struct {
 
     pub fn poll(self: *Self, ctx: *Context) Poll(!usize) {
         _ = ctx;
-        
+
         const result = std.posix.send(self.fd, self.data, 0);
         if (result) |bytes_sent| {
             self.bytes_sent = bytes_sent;
@@ -297,7 +297,7 @@ pub const RecvFuture = struct {
 
     pub fn poll(self: *Self, ctx: *Context) Poll(!usize) {
         _ = ctx;
-        
+
         const result = std.posix.recv(self.fd, self.buffer, 0);
         if (result) |bytes_received| {
             self.bytes_received = bytes_received;
@@ -375,9 +375,9 @@ fn connectSocket(fd: std.posix.socket_t, addr: SocketAddr) !void {
 fn getLocalAddr(fd: std.posix.socket_t) !SocketAddr {
     var addr: std.posix.sockaddr = undefined;
     var addr_len: std.posix.socklen_t = @sizeOf(std.posix.sockaddr);
-    
+
     try std.posix.getsockname(fd, &addr, &addr_len);
-    
+
     return parseSocketAddr(&addr);
 }
 
@@ -410,10 +410,10 @@ fn sendToSocket(fd: std.posix.socket_t, data: []const u8, addr: SocketAddr) !usi
 fn recvFromSocket(fd: std.posix.socket_t, buffer: []u8) !struct { bytes: usize, addr: SocketAddr } {
     var addr: std.posix.sockaddr = undefined;
     var addr_len: std.posix.socklen_t = @sizeOf(std.posix.sockaddr);
-    
+
     const bytes = try std.posix.recvfrom(fd, buffer, 0, &addr, &addr_len);
     const socket_addr = try parseSocketAddr(&addr);
-    
+
     return .{ .bytes = bytes, .addr = socket_addr };
 }
 
@@ -445,10 +445,10 @@ fn parseSocketAddr(addr: *const std.posix.sockaddr) !SocketAddr {
 // 测试
 test "UDP套接字创建" {
     const testing = std.testing;
-    
+
     const addr = try SocketAddr.parse("127.0.0.1:0");
     var socket_obj = try UdpSocket.bind(testing.allocator, addr);
     defer socket_obj.close();
-    
+
     try testing.expect(socket_obj.localAddr().isIpv4());
 }

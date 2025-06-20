@@ -61,9 +61,7 @@ fn benchmarkAsyncFnWithSpawn(allocator: std.mem.Allocator) !void {
 
     // 批量spawn任务
     for (handles, 0..) |*handle, i| {
-        const task = ComputeTask{
-            .params = .{ .arg0 = @intCast(i) }
-        };
+        const task = ComputeTask{ .params = .{ .arg0 = @intCast(i) } };
 
         handle.* = try runtime.spawn(task);
     }

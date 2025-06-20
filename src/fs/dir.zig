@@ -99,7 +99,7 @@ pub const Dir = struct {
         while (try iterator.next()) |entry| {
             // 构建完整路径
             const full_path = try std.fs.path.join(self.allocator, &[_][]const u8{ self.path, entry.name });
-            
+
             // 复制文件名
             const name = try self.allocator.dupe(u8, entry.name);
 
@@ -154,13 +154,13 @@ pub const Dir = struct {
         while (i < path_buf.len) {
             if (path_buf[i] == '/' and i > 0) {
                 path_buf[i] = 0; // 临时终止字符串
-                
+
                 // 尝试创建目录
                 create(path_buf[0..i], mode) catch |err| switch (err) {
                     FsError.FileExists => {}, // 目录已存在，继续
                     else => return err,
                 };
-                
+
                 path_buf[i] = '/'; // 恢复字符
             }
             i += 1;
@@ -239,7 +239,7 @@ pub const WalkFuture = struct {
 
     pub fn poll(self: *Self, ctx: *Context) Poll(![]DirEntry) {
         _ = ctx;
-        
+
         if (self.entries == null) {
             // 第一次调用，读取目录条目
             self.entries = self.dir.readEntries() catch |err| {
@@ -301,20 +301,20 @@ pub fn isEmpty(allocator: std.mem.Allocator, path: []const u8) !bool {
 // 测试
 test "目录创建和删除" {
     const testing = std.testing;
-    
+
     const test_dir = "/tmp/zokio_test_dir";
-    
+
     // 清理可能存在的目录
     Dir.removeAll(testing.allocator, test_dir) catch {};
-    
+
     // 创建目录
     try Dir.create(test_dir, 0o755);
     try testing.expect(exists(test_dir));
-    
+
     // 检查目录是否为空
     const is_empty = try isEmpty(testing.allocator, test_dir);
     try testing.expect(is_empty);
-    
+
     // 删除目录
     try Dir.remove(test_dir);
     try testing.expect(!exists(test_dir));
@@ -322,18 +322,18 @@ test "目录创建和删除" {
 
 test "递归目录操作" {
     const testing = std.testing;
-    
+
     const base_dir = "/tmp/zokio_test_recursive";
     const sub_dir = "/tmp/zokio_test_recursive/sub/deep";
-    
+
     // 清理
     Dir.removeAll(testing.allocator, base_dir) catch {};
-    
+
     // 递归创建目录
     try Dir.createAll(testing.allocator, sub_dir, 0o755);
     try testing.expect(exists(base_dir));
     try testing.expect(exists(sub_dir));
-    
+
     // 递归删除
     try Dir.removeAll(testing.allocator, base_dir);
     try testing.expect(!exists(base_dir));

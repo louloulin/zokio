@@ -147,25 +147,19 @@ pub const PerformanceMetrics = struct {
     /// 与目标性能对比
     pub fn compareWithTarget(self: *const Self, target: PerformanceMetrics, name: []const u8) void {
         std.debug.print("\n=== {s} 性能对比 ===\n", .{name});
-        
+
         const throughput_ratio = self.throughput_ops_per_sec / target.throughput_ops_per_sec;
         const latency_ratio = @as(f64, @floatFromInt(target.avg_latency_ns)) / @as(f64, @floatFromInt(self.avg_latency_ns));
-        
-        std.debug.print("吞吐量对比: {d:.2}x (目标: {d:.2}, 实际: {d:.2})\n", .{
-            throughput_ratio, target.throughput_ops_per_sec, self.throughput_ops_per_sec
-        });
-        std.debug.print("延迟对比: {d:.2}x (目标: {d:.2}μs, 实际: {d:.2}μs)\n", .{
-            latency_ratio,
-            @as(f64, @floatFromInt(target.avg_latency_ns)) / 1_000.0,
-            @as(f64, @floatFromInt(self.avg_latency_ns)) / 1_000.0
-        });
-        
+
+        std.debug.print("吞吐量对比: {d:.2}x (目标: {d:.2}, 实际: {d:.2})\n", .{ throughput_ratio, target.throughput_ops_per_sec, self.throughput_ops_per_sec });
+        std.debug.print("延迟对比: {d:.2}x (目标: {d:.2}μs, 实际: {d:.2}μs)\n", .{ latency_ratio, @as(f64, @floatFromInt(target.avg_latency_ns)) / 1_000.0, @as(f64, @floatFromInt(self.avg_latency_ns)) / 1_000.0 });
+
         if (throughput_ratio >= 1.0) {
             std.debug.print("✅ 吞吐量达标\n", .{});
         } else {
             std.debug.print("❌ 吞吐量未达标\n", .{});
         }
-        
+
         if (latency_ratio >= 1.0) {
             std.debug.print("✅ 延迟达标\n", .{});
         } else {
@@ -219,7 +213,7 @@ pub const BenchmarkManager = struct {
         defer self.allocator.free(latencies);
 
         std.debug.print("测试中... ({} 次迭代)\n", .{self.config.test_iterations});
-        
+
         var i: u32 = 0;
         while (i < self.config.test_iterations) : (i += 1) {
             const start = std.time.nanoTimestamp();

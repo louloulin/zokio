@@ -86,9 +86,7 @@ pub const OptimizedZokioRunner = struct {
         const SchedulerType = Scheduler(config);
         var scheduler = SchedulerType.init();
 
-        std.debug.print("✅ 调度器初始化完成 - 工作线程: {}, 队列容量: {}\n", .{
-            SchedulerType.WORKER_COUNT, SchedulerType.QUEUE_CAPACITY
-        });
+        std.debug.print("✅ 调度器初始化完成 - 工作线程: {}, 队列容量: {}\n", .{ SchedulerType.WORKER_COUNT, SchedulerType.QUEUE_CAPACITY });
 
         // 原子计数器用于高并发统计
         var completed_tasks = std.atomic.Value(u64).init(0);
@@ -177,9 +175,7 @@ pub const OptimizedZokioRunner = struct {
 
         const schedule_end = std.time.nanoTimestamp();
 
-        std.debug.print("⚡ 真实异步调度完成，耗时: {d:.2} ms\n", .{
-            @as(f64, @floatFromInt(schedule_end - schedule_start)) / 1_000_000.0
-        });
+        std.debug.print("⚡ 真实异步调度完成，耗时: {d:.2} ms\n", .{@as(f64, @floatFromInt(schedule_end - schedule_start)) / 1_000_000.0});
 
         // 等待所有任务完成 - 真实异步执行
         const execution_start = std.time.nanoTimestamp();
@@ -231,7 +227,8 @@ pub const OptimizedZokioRunner = struct {
         // 计算调度器效率
         const schedule_efficiency = if (iterations > 0)
             (@as(f64, @floatFromInt(final_completed)) / @as(f64, @floatFromInt(iterations))) * 100.0
-        else 0.0;
+        else
+            0.0;
 
         std.debug.print("=== 🚀 真实高性能Zokio任务调度结果 ===\n", .{});
         std.debug.print("📊 性能指标:\n", .{});
@@ -316,7 +313,7 @@ pub const OptimizedZokioRunner = struct {
             // 这里使用高性能的内存操作模拟I/O
             var buffer = [_]u8{0} ** 1024;
             @memset(&buffer, @intCast(i % 256));
-            
+
             // 模拟异步I/O完成
             const checksum = blk: {
                 var sum: u32 = 0;

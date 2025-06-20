@@ -69,10 +69,11 @@ fn performanceComparison(test_name: []const u8, zokio_metrics: PerformanceMetric
     std.debug.print("--------------------------------------------------\n", .{});
 
     // 吞吐量对比
-    const throughput_ratio = if (tokio_metrics.throughput_ops_per_sec > 0) 
-        zokio_metrics.throughput_ops_per_sec / tokio_metrics.throughput_ops_per_sec 
-    else 0.0;
-    
+    const throughput_ratio = if (tokio_metrics.throughput_ops_per_sec > 0)
+        zokio_metrics.throughput_ops_per_sec / tokio_metrics.throughput_ops_per_sec
+    else
+        0.0;
+
     std.debug.print("🔥 吞吐量对比:\n", .{});
     std.debug.print("  优化Zokio:  {d:.0} ops/sec\n", .{zokio_metrics.throughput_ops_per_sec});
     std.debug.print("  Tokio:      {d:.0} ops/sec\n", .{tokio_metrics.throughput_ops_per_sec});
@@ -89,10 +90,11 @@ fn performanceComparison(test_name: []const u8, zokio_metrics: PerformanceMetric
     }
 
     // 延迟对比
-    const latency_ratio = if (zokio_metrics.avg_latency_ns > 0) 
+    const latency_ratio = if (zokio_metrics.avg_latency_ns > 0)
         @as(f64, @floatFromInt(tokio_metrics.avg_latency_ns)) / @as(f64, @floatFromInt(zokio_metrics.avg_latency_ns))
-    else 0.0;
-    
+    else
+        0.0;
+
     std.debug.print("\n⏱️  延迟对比:\n", .{});
     std.debug.print("  优化Zokio:  {d:.2} μs\n", .{@as(f64, @floatFromInt(zokio_metrics.avg_latency_ns)) / 1000.0});
     std.debug.print("  Tokio:      {d:.2} μs\n", .{@as(f64, @floatFromInt(tokio_metrics.avg_latency_ns)) / 1000.0});
@@ -138,13 +140,15 @@ fn performanceComparison(test_name: []const u8, zokio_metrics: PerformanceMetric
 
 /// 计算得分
 fn calculateScore(zokio_metrics: PerformanceMetrics, tokio_metrics: PerformanceMetrics) struct { zokio: f64, tokio: f64 } {
-    const throughput_ratio = if (tokio_metrics.throughput_ops_per_sec > 0) 
-        zokio_metrics.throughput_ops_per_sec / tokio_metrics.throughput_ops_per_sec 
-    else 1.0;
-    
-    const latency_ratio = if (zokio_metrics.avg_latency_ns > 0) 
+    const throughput_ratio = if (tokio_metrics.throughput_ops_per_sec > 0)
+        zokio_metrics.throughput_ops_per_sec / tokio_metrics.throughput_ops_per_sec
+    else
+        1.0;
+
+    const latency_ratio = if (zokio_metrics.avg_latency_ns > 0)
         @as(f64, @floatFromInt(tokio_metrics.avg_latency_ns)) / @as(f64, @floatFromInt(zokio_metrics.avg_latency_ns))
-    else 1.0;
+    else
+        1.0;
 
     const zokio_score = (throughput_ratio + latency_ratio) / 2.0;
     const tokio_score = 1.0; // 基准分数

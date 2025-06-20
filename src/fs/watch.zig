@@ -108,7 +108,7 @@ pub const Watcher = struct {
             self.allocator.free(entry.value_ptr.path);
         }
         self.watched_paths.deinit();
-        
+
         // 清理事件缓冲区
         for (self.event_buffer.items) |event| {
             self.allocator.free(event.path);
@@ -117,7 +117,7 @@ pub const Watcher = struct {
             }
         }
         self.event_buffer.deinit();
-        
+
         self.backend.deinit();
     }
 
@@ -149,7 +149,7 @@ pub const Watcher = struct {
         if (self.watched_paths.fetchRemove(path)) |entry| {
             // 从后端移除监控
             try self.backend.removeWatch(entry.value.fd);
-            
+
             // 清理内存
             self.allocator.free(entry.key);
             self.allocator.free(entry.value.path);
@@ -195,7 +195,7 @@ pub const WatchFuture = struct {
 
     pub fn poll(self: *Self, ctx: *Context) Poll(![]Event) {
         _ = ctx;
-        
+
         if (self.events == null) {
             self.events = self.watcher.pollEvents() catch |err| {
                 return .{ .ready = err };
@@ -244,7 +244,7 @@ const LinuxBackend = struct {
 
     pub fn addWatch(self: *Self, path: []const u8, recursive: bool) !i32 {
         _ = recursive; // TODO: 实现递归监控
-        
+
         const mask = std.c.IN.CREATE | std.c.IN.DELETE | std.c.IN.MODIFY | std.c.IN.MOVE;
         const wd = std.c.inotify_add_watch(self.inotify_fd, path.ptr, mask);
         if (wd < 0) {
@@ -263,7 +263,7 @@ const LinuxBackend = struct {
     pub fn readEvents(self: *Self, event_buffer: *std.ArrayList(Event), allocator: std.mem.Allocator) !void {
         var buffer: [4096]u8 = undefined;
         const bytes_read = std.c.read(self.inotify_fd, &buffer, buffer.len);
-        
+
         if (bytes_read < 0) {
             const errno = std.c._errno().*;
             if (errno == std.c.E.AGAIN or errno == std.c.E.WOULDBLOCK) {
@@ -279,11 +279,7 @@ const LinuxBackend = struct {
             offset += @sizeOf(std.c.inotify_event) + inotify_event.len;
 
             // 转换事件类型
-            const event_type = if (inotify_event.mask & std.c.IN.CREATE != 0) EventType.created
-                else if (inotify_event.mask & std.c.IN.DELETE != 0) EventType.deleted
-                else if (inotify_event.mask & std.c.IN.MODIFY != 0) EventType.modified
-                else if (inotify_event.mask & std.c.IN.MOVE != 0) EventType.moved
-                else EventType.other;
+            const event_type = if (inotify_event.mask & std.c.IN.CREATE != 0) EventType.created else if (inotify_event.mask & std.c.IN.DELETE != 0) EventType.deleted else if (inotify_event.mask & std.c.IN.MODIFY != 0) EventType.modified else if (inotify_event.mask & std.c.IN.MOVE != 0) EventType.moved else EventType.other;
 
             // 获取文件名
             const name_ptr = @as([*:0]const u8, @ptrCast(&buffer[@sizeOf(std.c.inotify_event)]));

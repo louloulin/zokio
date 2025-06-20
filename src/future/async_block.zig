@@ -92,10 +92,10 @@ pub fn AsyncBlock(comptime ReturnType: type) type {
 
         /// 执行状态枚举
         const State = enum {
-            initial,   // 初始状态
-            running,   // 运行中
+            initial, // 初始状态
+            running, // 运行中
             completed, // 已完成
-            failed,    // 执行失败
+            failed, // 执行失败
         };
 
         pub fn init(comptime func: anytype) Self {

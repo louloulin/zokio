@@ -40,7 +40,7 @@ pub fn main() !void {
         std.debug.print("\n🚀 运行Zokio基准测试...\n", .{});
         var zokio_runner = ZokioRunner.init(allocator);
         defer zokio_runner.deinit();
-        
+
         const zokio_metrics = zokio_runner.runBenchmark(config.bench_type, config.iterations) catch |err| {
             std.debug.print("Zokio测试失败: {}\n", .{err});
             continue;
@@ -49,7 +49,7 @@ pub fn main() !void {
         // 运行Tokio基准测试
         std.debug.print("\n🦀 运行Tokio基准测试...\n", .{});
         var tokio_runner = TokioRunner.init(allocator, null);
-        
+
         const tokio_metrics = tokio_runner.runBenchmark(config.bench_type, config.iterations) catch |err| {
             std.debug.print("Tokio测试失败，使用基线数据: {}\n", .{err});
             tokio_runner.getLiteratureBaseline(config.bench_type);
@@ -57,12 +57,13 @@ pub fn main() !void {
 
         // 性能对比分析
         try performanceComparison(config.name, zokio_metrics, tokio_metrics);
-        
+
         // 累计得分
-        const throughput_ratio = if (tokio_metrics.throughput_ops_per_sec > 0) 
-            zokio_metrics.throughput_ops_per_sec / tokio_metrics.throughput_ops_per_sec 
-        else 1.0;
-        
+        const throughput_ratio = if (tokio_metrics.throughput_ops_per_sec > 0)
+            zokio_metrics.throughput_ops_per_sec / tokio_metrics.throughput_ops_per_sec
+        else
+            1.0;
+
         total_zokio_score += throughput_ratio;
         total_tokio_score += 1.0;
         test_count += 1;
@@ -80,7 +81,8 @@ fn performanceComparison(test_name: []const u8, zokio_metrics: PerformanceMetric
     // 吞吐量对比
     const throughput_ratio = if (tokio_metrics.throughput_ops_per_sec > 0)
         zokio_metrics.throughput_ops_per_sec / tokio_metrics.throughput_ops_per_sec
-    else 0.0;
+    else
+        0.0;
 
     std.debug.print("🔥 吞吐量对比:\n", .{});
     std.debug.print("  Zokio:  {d:.0} ops/sec\n", .{zokio_metrics.throughput_ops_per_sec});
@@ -95,7 +97,8 @@ fn performanceComparison(test_name: []const u8, zokio_metrics: PerformanceMetric
     // 延迟对比
     const latency_ratio = if (zokio_metrics.avg_latency_ns > 0)
         @as(f64, @floatFromInt(tokio_metrics.avg_latency_ns)) / @as(f64, @floatFromInt(zokio_metrics.avg_latency_ns))
-    else 0.0;
+    else
+        0.0;
 
     std.debug.print("\n⏱️  延迟对比:\n", .{});
     std.debug.print("  Zokio:  {d:.2} μs\n", .{@as(f64, @floatFromInt(zokio_metrics.avg_latency_ns)) / 1000.0});

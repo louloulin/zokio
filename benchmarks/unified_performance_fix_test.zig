@@ -52,14 +52,14 @@ fn testHighPerformanceMode(base_allocator: std.mem.Allocator) !void {
     std.debug.print("执行 {} 次高性能模式分配...\n", .{iterations});
 
     const start_time = std.time.nanoTimestamp();
-    
+
     for (0..iterations) |i| {
         const size = 512 + (i % 1024); // 512B-1.5KB
         const memory = try memory_manager.alloc(u8, size);
         defer memory_manager.free(memory);
         @memset(memory, @as(u8, @intCast(i % 256)));
     }
-    
+
     const end_time = std.time.nanoTimestamp();
     const duration = @as(f64, @floatFromInt(end_time - start_time)) / 1_000_000_000.0;
     const ops_per_sec = @as(f64, @floatFromInt(iterations)) / duration;
@@ -100,14 +100,14 @@ fn testBalancedMode(base_allocator: std.mem.Allocator) !void {
     std.debug.print("执行 {} 次平衡模式分配...\n", .{iterations});
 
     const start_time = std.time.nanoTimestamp();
-    
+
     for (0..iterations) |i| {
         const size = 512 + (i % 1024);
         const memory = try memory_manager.alloc(u8, size);
         defer memory_manager.free(memory);
         @memset(memory, @as(u8, @intCast(i % 256)));
     }
-    
+
     const end_time = std.time.nanoTimestamp();
     const duration = @as(f64, @floatFromInt(end_time - start_time)) / 1_000_000_000.0;
     const ops_per_sec = @as(f64, @floatFromInt(iterations)) / duration;
@@ -152,14 +152,14 @@ fn testMonitoringMode(base_allocator: std.mem.Allocator) !void {
     std.debug.print("执行 {} 次监控模式分配...\n", .{iterations});
 
     const start_time = std.time.nanoTimestamp();
-    
+
     for (0..iterations) |i| {
         const size = 512 + (i % 1024);
         const memory = try memory_manager.alloc(u8, size);
         defer memory_manager.free(memory);
         @memset(memory, @as(u8, @intCast(i % 256)));
     }
-    
+
     const end_time = std.time.nanoTimestamp();
     const duration = @as(f64, @floatFromInt(end_time - start_time)) / 1_000_000_000.0;
     const ops_per_sec = @as(f64, @floatFromInt(iterations)) / duration;
@@ -198,14 +198,14 @@ fn testPerformanceComparison(base_allocator: std.mem.Allocator) !void {
     // 测试标准分配器
     std.debug.print("测试标准分配器基准...\n", .{});
     const std_start = std.time.nanoTimestamp();
-    
+
     for (0..iterations) |i| {
         const size = 512 + (i % 1024);
         const memory = try base_allocator.alloc(u8, size);
         defer base_allocator.free(memory);
         @memset(memory, @as(u8, @intCast(i % 256)));
     }
-    
+
     const std_end = std.time.nanoTimestamp();
     const std_duration = @as(f64, @floatFromInt(std_end - std_start)) / 1_000_000_000.0;
     const std_ops_per_sec = @as(f64, @floatFromInt(iterations)) / std_duration;
@@ -225,14 +225,14 @@ fn testPerformanceComparison(base_allocator: std.mem.Allocator) !void {
     defer memory_manager.deinit();
 
     const new_start = std.time.nanoTimestamp();
-    
+
     for (0..iterations) |i| {
         const size = 512 + (i % 1024);
         const memory = try memory_manager.alloc(u8, size);
         defer memory_manager.free(memory);
         @memset(memory, @as(u8, @intCast(i % 256)));
     }
-    
+
     const new_end = std.time.nanoTimestamp();
     const new_duration = @as(f64, @floatFromInt(new_end - new_start)) / 1_000_000_000.0;
     const new_ops_per_sec = @as(f64, @floatFromInt(iterations)) / new_duration;
@@ -241,10 +241,10 @@ fn testPerformanceComparison(base_allocator: std.mem.Allocator) !void {
     std.debug.print("  标准分配器: {d:.0} ops/sec\n", .{std_ops_per_sec});
     std.debug.print("  修复前统一接口: {d:.0} ops/sec\n", .{old_unified_ops_per_sec});
     std.debug.print("  修复后统一接口: {d:.0} ops/sec\n", .{new_ops_per_sec});
-    
+
     const improvement_vs_old = new_ops_per_sec / old_unified_ops_per_sec;
     const improvement_vs_std = new_ops_per_sec / std_ops_per_sec;
-    
+
     std.debug.print("  修复效果: {d:.1}x ", .{improvement_vs_old});
     if (improvement_vs_old >= 3.0) {
         std.debug.print("🌟🌟🌟 (巨大提升)\n", .{});
@@ -255,7 +255,7 @@ fn testPerformanceComparison(base_allocator: std.mem.Allocator) !void {
     } else {
         std.debug.print("⚠️ (提升有限)\n", .{});
     }
-    
+
     std.debug.print("  vs 标准分配器: {d:.1}x ", .{improvement_vs_std});
     if (improvement_vs_std >= 1.0) {
         std.debug.print("✅ (超越标准)\n", .{});
@@ -272,7 +272,7 @@ fn testTargetAchievement(base_allocator: std.mem.Allocator) !void {
     std.debug.print("-" ** 50 ++ "\n", .{});
 
     const target_ops_per_sec = 15_000_000.0; // 15M ops/sec目标
-    
+
     // 使用最优配置进行测试
     const config = ZokioMemory.UnifiedConfig{
         .performance_mode = .high_performance, // 最高性能模式
@@ -290,14 +290,14 @@ fn testTargetAchievement(base_allocator: std.mem.Allocator) !void {
     std.debug.print("执行 {} 次最优配置分配测试...\n", .{iterations});
 
     const start_time = std.time.nanoTimestamp();
-    
+
     for (0..iterations) |i| {
         const size = 512 + (i % 1024);
         const memory = try memory_manager.alloc(u8, size);
         defer memory_manager.free(memory);
         @memset(memory, @as(u8, @intCast(i % 256)));
     }
-    
+
     const end_time = std.time.nanoTimestamp();
     const duration = @as(f64, @floatFromInt(end_time - start_time)) / 1_000_000_000.0;
     const ops_per_sec = @as(f64, @floatFromInt(iterations)) / duration;
@@ -306,11 +306,11 @@ fn testTargetAchievement(base_allocator: std.mem.Allocator) !void {
     std.debug.print("  实际性能: {d:.0} ops/sec\n", .{ops_per_sec});
     std.debug.print("  目标性能: {d:.0} ops/sec\n", .{target_ops_per_sec});
     std.debug.print("  达成率: {d:.1}%\n", .{(ops_per_sec / target_ops_per_sec) * 100});
-    
+
     if (ops_per_sec >= target_ops_per_sec) {
         const exceed_ratio = ops_per_sec / target_ops_per_sec;
         std.debug.print("  🎉 目标达成: {d:.1}x 超越目标！\n", .{exceed_ratio});
-        
+
         if (exceed_ratio >= 2.0) {
             std.debug.print("  🚀🚀🚀 性能表现卓越！\n", .{});
         } else if (exceed_ratio >= 1.5) {
@@ -321,7 +321,7 @@ fn testTargetAchievement(base_allocator: std.mem.Allocator) !void {
     } else {
         const shortfall = target_ops_per_sec / ops_per_sec;
         std.debug.print("  ⚠️ 目标未达成: 还需提升 {d:.1}x\n", .{shortfall});
-        
+
         if (ops_per_sec >= target_ops_per_sec * 0.8) {
             std.debug.print("  📈 接近目标，需要微调\n", .{});
         } else if (ops_per_sec >= target_ops_per_sec * 0.5) {
@@ -333,11 +333,8 @@ fn testTargetAchievement(base_allocator: std.mem.Allocator) !void {
 
     std.debug.print("\n📋 修复总结:\n", .{});
     std.debug.print("  修复前: 4.33M ops/sec (0.3x 低于目标)\n", .{});
-    std.debug.print("  修复后: {d:.2}M ops/sec ({d:.1}x 相对目标)\n", .{
-        ops_per_sec / 1_000_000.0, 
-        ops_per_sec / target_ops_per_sec
-    });
-    
+    std.debug.print("  修复后: {d:.2}M ops/sec ({d:.1}x 相对目标)\n", .{ ops_per_sec / 1_000_000.0, ops_per_sec / target_ops_per_sec });
+
     const total_improvement = ops_per_sec / 4_330_000.0;
     std.debug.print("  总体提升: {d:.1}x 🚀\n", .{total_improvement});
 }

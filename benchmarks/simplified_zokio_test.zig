@@ -68,7 +68,7 @@ fn testZokioRuntimePerformance(allocator: std.mem.Allocator) !void {
     for (tasks) |task| {
         const result = task.run();
         completed += 1;
-        
+
         // 防止编译器优化
         std.mem.doNotOptimizeAway(result);
     }
@@ -97,11 +97,11 @@ fn testZokioVsTokioComparison(allocator: std.mem.Allocator) !void {
 
     // 测试Zokio
     const zokio_result = try benchmarkZokio(allocator);
-    
+
     // 模拟Tokio基准（基于实际测试数据）
     const tokio_baseline = struct {
         task_scheduling: f64 = 365_686.0, // ops/sec
-        io_operations: f64 = 327_065.0,   // ops/sec
+        io_operations: f64 = 327_065.0, // ops/sec
         memory_allocation: f64 = 1_229_760.0, // ops/sec
     }{};
 
@@ -114,7 +114,7 @@ fn testZokioVsTokioComparison(allocator: std.mem.Allocator) !void {
     std.debug.print("  Zokio:  {d:.0} ops/sec\n", .{zokio_result.task_scheduling});
     std.debug.print("  Tokio:  {d:.0} ops/sec\n", .{tokio_baseline.task_scheduling});
     std.debug.print("  比率:   {d:.2}x ", .{task_ratio});
-    
+
     if (task_ratio >= 2.0) {
         std.debug.print("🚀🚀🚀 (Zokio大幅领先)\n", .{});
     } else if (task_ratio >= 1.0) {
@@ -131,7 +131,7 @@ fn testZokioVsTokioComparison(allocator: std.mem.Allocator) !void {
     std.debug.print("  Zokio:  {d:.0} ops/sec\n", .{zokio_result.io_operations});
     std.debug.print("  Tokio:  {d:.0} ops/sec\n", .{tokio_baseline.io_operations});
     std.debug.print("  比率:   {d:.2}x ", .{io_ratio});
-    
+
     if (io_ratio >= 2.0) {
         std.debug.print("🚀🚀🚀 (Zokio大幅领先)\n", .{});
     } else if (io_ratio >= 1.0) {
@@ -148,7 +148,7 @@ fn testZokioVsTokioComparison(allocator: std.mem.Allocator) !void {
     std.debug.print("  Zokio:  {d:.0} ops/sec\n", .{zokio_result.memory_allocation});
     std.debug.print("  Tokio:  {d:.0} ops/sec\n", .{tokio_baseline.memory_allocation});
     std.debug.print("  比率:   {d:.2}x ", .{memory_ratio});
-    
+
     if (memory_ratio >= 2.0) {
         std.debug.print("🚀🚀🚀 (Zokio大幅领先)\n", .{});
     } else if (memory_ratio >= 1.0) {
@@ -162,7 +162,7 @@ fn testZokioVsTokioComparison(allocator: std.mem.Allocator) !void {
     // 综合评分
     const overall_score = (task_ratio + io_ratio + memory_ratio) / 3.0;
     std.debug.print("\n🏆 综合评分: {d:.2}x ", .{overall_score});
-    
+
     if (overall_score >= 2.0) {
         std.debug.print("🌟🌟🌟 (Zokio显著优于Tokio)\n", .{});
     } else if (overall_score >= 1.5) {
@@ -184,10 +184,10 @@ fn benchmarkZokio(allocator: std.mem.Allocator) !struct {
 } {
     // 任务调度基准
     const task_perf = try benchmarkTaskScheduling(allocator);
-    
+
     // I/O操作基准
     const io_perf = try benchmarkIOOperations(allocator);
-    
+
     // 内存分配基准
     const memory_perf = try benchmarkMemoryAllocation(allocator);
 
@@ -213,14 +213,14 @@ fn benchmarkTaskScheduling(allocator: std.mem.Allocator) !f64 {
             sum = sum +% (i + j);
         }
         completed += 1;
-        
+
         // 防止编译器优化
         std.mem.doNotOptimizeAway(sum);
     }
 
     const end_time = std.time.nanoTimestamp();
     const duration = @as(f64, @floatFromInt(end_time - start_time)) / 1_000_000_000.0;
-    
+
     _ = allocator;
     return @as(f64, @floatFromInt(completed)) / duration;
 }
@@ -236,22 +236,22 @@ fn benchmarkIOOperations(allocator: std.mem.Allocator) !f64 {
         // 模拟I/O操作
         var buffer = [_]u8{0} ** 512;
         @memset(&buffer, @intCast(i % 256));
-        
+
         // 计算校验和
         var checksum: u32 = 0;
         for (buffer) |byte| {
             checksum +%= byte;
         }
-        
+
         completed += 1;
-        
+
         // 防止编译器优化
         std.mem.doNotOptimizeAway(checksum);
     }
 
     const end_time = std.time.nanoTimestamp();
     const duration = @as(f64, @floatFromInt(end_time - start_time)) / 1_000_000_000.0;
-    
+
     _ = allocator;
     return @as(f64, @floatFromInt(completed)) / duration;
 }
@@ -276,6 +276,6 @@ fn benchmarkMemoryAllocation(allocator: std.mem.Allocator) !f64 {
 
     const end_time = std.time.nanoTimestamp();
     const duration = @as(f64, @floatFromInt(end_time - start_time)) / 1_000_000_000.0;
-    
+
     return @as(f64, @floatFromInt(completed)) / duration;
 }

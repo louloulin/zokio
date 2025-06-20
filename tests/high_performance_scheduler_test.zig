@@ -85,7 +85,7 @@ test "工作窃取队列批量操作" {
     };
 
     var queue = zokio.scheduler.WorkStealingQueue(*TestItem, 16).init();
-    
+
     // 创建测试项
     var items: [8]TestItem = undefined;
     for (&items, 0..) |*item, i| {
@@ -102,7 +102,7 @@ test "工作窃取队列批量操作" {
     // 批量窃取
     var batch_buffer: [4]*TestItem = undefined;
     const stolen_count = queue.stealBatch(&batch_buffer, 4);
-    
+
     try testing.expectEqual(@as(u32, 4), stolen_count);
     try testing.expectEqual(@as(u32, 4), queue.len());
 
@@ -120,7 +120,7 @@ test "调度器统计功能" {
     };
 
     var scheduler = zokio.scheduler.Scheduler(config).init();
-    
+
     // 初始统计应该为0
     const initial_stats = scheduler.getStats();
     try testing.expectEqual(@as(u64, 0), initial_stats.tasks_executed);
@@ -138,7 +138,7 @@ test "调度器统计功能" {
     try testing.expectEqual(@as(u64, 1), updated_stats.steals_attempted);
     try testing.expectEqual(@as(u64, 1), updated_stats.steals_successful);
     try testing.expectEqual(@as(u64, 1), updated_stats.lifo_hits);
-    
+
     try testing.expectEqual(1.0, updated_stats.stealSuccessRate());
     try testing.expectEqual(1.0, updated_stats.lifoHitRate());
 }
@@ -197,7 +197,7 @@ test "负载均衡功能" {
     // 总任务数应该保持不变（可能有些在全局队列中）
     const global_queue_count: u32 = if (scheduler.global_queue.isEmpty()) 0 else 1; // 简化检查
     total_after_rebalance += global_queue_count;
-    
+
     // 第一个队列的任务数应该减少
     try testing.expect(scheduler.local_queues[0].len() < 16);
 }
@@ -209,19 +209,19 @@ test "工作线程暂停和唤醒" {
     };
 
     var scheduler = zokio.scheduler.Scheduler(config).init();
-    
+
     var worker_state = &scheduler.worker_states[0];
-    
+
     // 初始状态应该是未暂停
     try testing.expectEqual(false, worker_state.is_parked.load(.acquire));
-    
+
     // 模拟暂停状态
     worker_state.is_parked.store(true, .release);
     try testing.expectEqual(true, worker_state.is_parked.load(.acquire));
-    
+
     // 测试唤醒机制
     scheduler.tryUnparkWorker();
-    
+
     // 注意：实际的unpark会在另一个线程中执行，这里只是测试接口
 }
 
@@ -234,10 +234,10 @@ test "编译时配置验证" {
         .global_queue_interval = 31,
         .spin_before_park = 100,
     };
-    
+
     // 编译时验证应该通过
     comptime valid_config.validate();
-    
+
     // 创建调度器应该成功
     const scheduler = zokio.scheduler.Scheduler(valid_config).init();
     const SchedulerType = @TypeOf(scheduler);

@@ -81,9 +81,9 @@ fn printStats(stats: zokio.scheduler.SchedulerStats) void {
 
 fn testLifoSlot() void {
     std.debug.print("测试LIFO槽基础功能...\n", .{});
-    
+
     var lifo_slot = zokio.scheduler.LifoSlot.init();
-    
+
     // 创建测试任务
     var test_task = zokio.scheduler.Task{
         .id = zokio.future.TaskId.generate(),
@@ -110,11 +110,11 @@ fn testWorkStealingQueue(allocator: std.mem.Allocator) !void {
     };
 
     var queue = zokio.scheduler.WorkStealingQueue(*TestItem, 16).init();
-    
+
     // 创建测试项
     const items = try allocator.alloc(TestItem, 8);
     defer allocator.free(items);
-    
+
     for (items, 0..) |*item, i| {
         item.value = @intCast(i);
     }
@@ -126,7 +126,7 @@ fn testWorkStealingQueue(allocator: std.mem.Allocator) !void {
             pushed_count += 1;
         }
     }
-    
+
     std.debug.print("  推入项目数: {}\n", .{pushed_count});
     std.debug.print("  队列长度: {}\n", .{queue.len()});
 

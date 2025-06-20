@@ -20,14 +20,14 @@ pub const CallInfo = struct {
     pub fn update(self: *Self, duration_ns: u64) void {
         self.call_count += 1;
         self.total_time_ns += duration_ns;
-        
+
         if (duration_ns < self.min_time_ns) {
             self.min_time_ns = duration_ns;
         }
         if (duration_ns > self.max_time_ns) {
             self.max_time_ns = duration_ns;
         }
-        
+
         self.avg_time_ns = self.total_time_ns / self.call_count;
     }
 
@@ -93,7 +93,7 @@ pub const Profiler = struct {
             .name = name,
             .start_time = std.time.nanoTimestamp(),
         };
-        
+
         try self.call_stack.append(frame);
     }
 
@@ -102,7 +102,7 @@ pub const Profiler = struct {
         if (!self.enabled) return;
 
         if (self.call_stack.items.len == 0) return;
-        
+
         const frame = self.call_stack.pop();
         if (!std.mem.eql(u8, frame.name, name)) {
             std.debug.print("警告: 函数调用不匹配 - 期望: {s}, 实际: {s}\n", .{ frame.name, name });
@@ -124,7 +124,7 @@ pub const Profiler = struct {
                 .avg_time_ns = 0,
             };
         }
-        
+
         result.value_ptr.update(duration);
     }
 
@@ -143,7 +143,7 @@ pub const Profiler = struct {
                 .avg_time_ns = 0,
             };
         }
-        
+
         result.value_ptr.update(duration_ns);
     }
 
@@ -165,12 +165,12 @@ pub const Profiler = struct {
         // 收集所有调用信息并按总耗时排序
         var call_list = std.ArrayList(CallInfo).init(self.allocator);
         defer call_list.deinit();
-        
+
         var iterator = self.call_info.iterator();
         while (iterator.next()) |entry| {
             call_list.append(entry.value_ptr.*) catch continue;
         }
-        
+
         // 按总耗时降序排序
         std.mem.sort(CallInfo, call_list.items, {}, struct {
             fn lessThan(context: void, a: CallInfo, b: CallInfo) bool {
@@ -268,7 +268,7 @@ pub const Profiler = struct {
 pub fn profile(profiler: *Profiler, comptime name: []const u8, func: anytype) !@TypeOf(func()) {
     try profiler.beginCall(name);
     defer profiler.endCall(name) catch {};
-    
+
     return func();
 }
 
@@ -340,13 +340,13 @@ test "性能分析器基本功能" {
 
 test "计时器功能" {
     var timer = Timer.start("test_timer");
-    
+
     // 模拟一些工作
     var i: u32 = 0;
     while (i < 1000) : (i += 1) {
         _ = i * i;
     }
-    
+
     const duration = timer.end();
     std.testing.expect(duration > 0) catch {};
 }

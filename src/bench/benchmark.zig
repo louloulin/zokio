@@ -44,7 +44,7 @@ pub const Benchmark = struct {
         const allocator = arena.allocator();
 
         var latencies = try allocator.alloc(u64, iterations);
-        
+
         var i: u32 = 0;
         while (i < iterations) : (i += 1) {
             const start = std.time.nanoTimestamp();
@@ -73,13 +73,13 @@ pub const TaskSchedulingBenchmarks = struct {
         // 模拟任务创建开销
         var task_data: [64]u8 = undefined;
         @memset(&task_data, 0);
-        
+
         // 模拟任务执行
         var sum: u64 = 0;
         for (task_data) |byte| {
             sum += byte;
         }
-        
+
         // 防止编译器优化
         std.mem.doNotOptimizeAway(sum);
     }
@@ -105,7 +105,7 @@ pub const TaskSchedulingBenchmarks = struct {
     pub fn workStealingSimulation() void {
         var local_queue = std.ArrayList(u64).init(std.heap.page_allocator);
         defer local_queue.deinit();
-        
+
         var global_queue = std.ArrayList(u64).init(std.heap.page_allocator);
         defer global_queue.deinit();
 
@@ -134,10 +134,10 @@ pub const IoOperationBenchmarks = struct {
     pub fn memoryIoSimulation() void {
         var src: [1024]u8 = undefined;
         var dst: [1024]u8 = undefined;
-        
+
         @memset(&src, 0xAA);
         @memcpy(&dst, &src);
-        
+
         std.mem.doNotOptimizeAway(dst);
     }
 
@@ -157,7 +157,7 @@ pub const IoOperationBenchmarks = struct {
         for (buffer.items) |byte| {
             sum += byte;
         }
-        
+
         std.mem.doNotOptimizeAway(sum);
     }
 
@@ -166,7 +166,7 @@ pub const IoOperationBenchmarks = struct {
         // 模拟异步I/O状态机
         const State = enum { pending, ready, completed };
         var state = State.pending;
-        
+
         var cycles: u32 = 0;
         while (state != .completed and cycles < 100) : (cycles += 1) {
             switch (state) {
@@ -179,7 +179,7 @@ pub const IoOperationBenchmarks = struct {
                 .completed => break,
             }
         }
-        
+
         std.mem.doNotOptimizeAway(cycles);
     }
 };
@@ -237,7 +237,7 @@ pub const MemoryAllocationBenchmarks = struct {
         // 分配大块内存
         const large_mem = allocator.alloc(u8, 1024 * 1024) catch return;
         @memset(large_mem, 0xFF);
-        
+
         std.mem.doNotOptimizeAway(large_mem.ptr);
     }
 };
@@ -248,15 +248,15 @@ pub const FutureCompositionBenchmarks = struct {
     pub fn simpleFutureChain() void {
         // 模拟Future状态转换
         const FutureState = enum { pending, ready };
-        
+
         var futures: [10]FutureState = undefined;
         @memset(&futures, .pending);
-        
+
         // 模拟Future链执行
         for (&futures) |*future| {
             future.* = .ready;
         }
-        
+
         std.mem.doNotOptimizeAway(futures);
     }
 
@@ -267,12 +267,12 @@ pub const FutureCompositionBenchmarks = struct {
         for (&values, 0..) |*value, i| {
             value.* = @as(u32, @intCast(i));
         }
-        
+
         // 模拟变换
         for (&values) |*value| {
             value.* = value.* * 2;
         }
-        
+
         std.mem.doNotOptimizeAway(values);
     }
 
@@ -280,12 +280,12 @@ pub const FutureCompositionBenchmarks = struct {
     pub fn concurrentFutureExecution() void {
         // 模拟多个并发Future
         var results: [50]u64 = undefined;
-        
+
         for (&results, 0..) |*result, i| {
             // 模拟异步计算
             result.* = @as(u64, @intCast(i)) * @as(u64, @intCast(i));
         }
-        
+
         std.mem.doNotOptimizeAway(results);
     }
 };
@@ -295,13 +295,13 @@ pub const ConcurrencyBenchmarks = struct {
     /// 原子操作
     pub fn atomicOperations() void {
         var counter = std.atomic.Value(u64).init(0);
-        
+
         // 模拟多线程原子操作
         var i: u32 = 0;
         while (i < 1000) : (i += 1) {
             _ = counter.fetchAdd(1, .monotonic);
         }
-        
+
         std.mem.doNotOptimizeAway(counter.load(.monotonic));
     }
 
@@ -309,7 +309,7 @@ pub const ConcurrencyBenchmarks = struct {
     pub fn lockContentionSimulation() void {
         var mutex = std.Thread.Mutex{};
         var shared_data: u64 = 0;
-        
+
         // 模拟锁竞争
         var i: u32 = 0;
         while (i < 100) : (i += 1) {
@@ -317,7 +317,7 @@ pub const ConcurrencyBenchmarks = struct {
             shared_data += 1;
             mutex.unlock();
         }
-        
+
         std.mem.doNotOptimizeAway(shared_data);
     }
 
@@ -326,19 +326,19 @@ pub const ConcurrencyBenchmarks = struct {
         // 简化的无锁队列模拟
         var queue_head = std.atomic.Value(u64).init(0);
         var queue_tail = std.atomic.Value(u64).init(0);
-        
+
         // 模拟入队和出队操作
         var i: u32 = 0;
         while (i < 500) : (i += 1) {
             // 入队
             _ = queue_tail.fetchAdd(1, .monotonic);
-            
+
             // 出队
             if (queue_head.load(.monotonic) < queue_tail.load(.monotonic)) {
                 _ = queue_head.fetchAdd(1, .monotonic);
             }
         }
-        
+
         std.mem.doNotOptimizeAway(queue_head.load(.monotonic));
         std.mem.doNotOptimizeAway(queue_tail.load(.monotonic));
     }

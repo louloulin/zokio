@@ -249,7 +249,7 @@ pub const TlsReadFuture = struct {
         // 现在简化为直接读取TCP流
         var read_future = self.tls_stream.tcp_stream.read(self.buffer);
         const result = read_future.poll(ctx);
-        
+
         switch (result) {
             .ready => |read_result| {
                 if (read_result) |bytes| {
@@ -294,7 +294,7 @@ pub const TlsWriteFuture = struct {
         // 现在简化为直接写入TCP流
         var write_future = self.tls_stream.tcp_stream.write(self.data);
         const result = write_future.poll(ctx);
-        
+
         switch (result) {
             .ready => |write_result| {
                 if (write_result) |bytes| {
@@ -354,17 +354,17 @@ pub const TlsConnectFuture = struct {
                 // 进行TLS握手
                 // 在实际实现中，这里会进行真正的TLS握手
                 self.state = .completed;
-                
+
                 var tls_stream = TlsStream.connectOverTcp(self.tcp_stream.?, self.config);
                 tls_stream.state = .connected; // 简化：直接设置为已连接
-                
+
                 return .{ .ready = tls_stream };
             },
             .completed => {
                 return .{ .ready = error.AlreadyCompleted };
             },
         }
-        
+
         _ = ctx;
     }
 
@@ -394,14 +394,14 @@ pub const TlsAcceptFuture = struct {
         // 接受TCP连接
         var accept_future = self.tcp_listener.accept();
         const result = accept_future.poll(ctx);
-        
+
         switch (result) {
             .ready => |accept_result| {
                 if (accept_result) |tcp_stream| {
                     // 创建TLS流并进行握手
                     var tls_stream = TlsStream.acceptOverTcp(tcp_stream, self.config);
                     tls_stream.state = .connected; // 简化：直接设置为已连接
-                    
+
                     return .{ .ready = tls_stream };
                 } else |err| {
                     return .{ .ready = err };

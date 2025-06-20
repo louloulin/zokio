@@ -35,31 +35,32 @@ pub const SystemMetrics = struct {
     /// 收集系统指标
     pub fn collect() Self {
         var metrics = Self{};
-        
+
         // 收集CPU使用率
         metrics.cpu_usage_percent = getCpuUsage();
-        
+
         // 收集内存信息
         const memory_info = getMemoryInfo();
         metrics.memory_usage_bytes = memory_info.used;
         metrics.available_memory_bytes = memory_info.available;
-        metrics.memory_usage_percent = if (memory_info.total > 0) 
-            @as(f64, @floatFromInt(memory_info.used)) / @as(f64, @floatFromInt(memory_info.total)) * 100.0 
-        else 0.0;
-        
+        metrics.memory_usage_percent = if (memory_info.total > 0)
+            @as(f64, @floatFromInt(memory_info.used)) / @as(f64, @floatFromInt(memory_info.total)) * 100.0
+        else
+            0.0;
+
         // 收集系统负载
         metrics.load_average = getLoadAverage();
-        
+
         // 收集网络统计
         const network_stats = getNetworkStats();
         metrics.network_rx_bytes = network_stats.rx_bytes;
         metrics.network_tx_bytes = network_stats.tx_bytes;
-        
+
         // 收集磁盘统计
         const disk_stats = getDiskStats();
         metrics.disk_read_bytes = disk_stats.read_bytes;
         metrics.disk_write_bytes = disk_stats.write_bytes;
-        
+
         return metrics;
     }
 
@@ -67,26 +68,13 @@ pub const SystemMetrics = struct {
     pub fn print(self: *const Self) void {
         std.debug.print("\n=== 系统性能指标 ===\n", .{});
         std.debug.print("CPU使用率: {d:.2}%\n", .{self.cpu_usage_percent});
-        std.debug.print("内存使用: {d:.2} MB ({d:.2}%)\n", .{
-            @as(f64, @floatFromInt(self.memory_usage_bytes)) / (1024.0 * 1024.0),
-            self.memory_usage_percent
-        });
-        std.debug.print("可用内存: {d:.2} MB\n", .{
-            @as(f64, @floatFromInt(self.available_memory_bytes)) / (1024.0 * 1024.0)
-        });
+        std.debug.print("内存使用: {d:.2} MB ({d:.2}%)\n", .{ @as(f64, @floatFromInt(self.memory_usage_bytes)) / (1024.0 * 1024.0), self.memory_usage_percent });
+        std.debug.print("可用内存: {d:.2} MB\n", .{@as(f64, @floatFromInt(self.available_memory_bytes)) / (1024.0 * 1024.0)});
         std.debug.print("系统负载: {d:.2}\n", .{self.load_average});
-        std.debug.print("网络接收: {d:.2} MB\n", .{
-            @as(f64, @floatFromInt(self.network_rx_bytes)) / (1024.0 * 1024.0)
-        });
-        std.debug.print("网络发送: {d:.2} MB\n", .{
-            @as(f64, @floatFromInt(self.network_tx_bytes)) / (1024.0 * 1024.0)
-        });
-        std.debug.print("磁盘读取: {d:.2} MB\n", .{
-            @as(f64, @floatFromInt(self.disk_read_bytes)) / (1024.0 * 1024.0)
-        });
-        std.debug.print("磁盘写入: {d:.2} MB\n", .{
-            @as(f64, @floatFromInt(self.disk_write_bytes)) / (1024.0 * 1024.0)
-        });
+        std.debug.print("网络接收: {d:.2} MB\n", .{@as(f64, @floatFromInt(self.network_rx_bytes)) / (1024.0 * 1024.0)});
+        std.debug.print("网络发送: {d:.2} MB\n", .{@as(f64, @floatFromInt(self.network_tx_bytes)) / (1024.0 * 1024.0)});
+        std.debug.print("磁盘读取: {d:.2} MB\n", .{@as(f64, @floatFromInt(self.disk_read_bytes)) / (1024.0 * 1024.0)});
+        std.debug.print("磁盘写入: {d:.2} MB\n", .{@as(f64, @floatFromInt(self.disk_write_bytes)) / (1024.0 * 1024.0)});
     }
 };
 
@@ -184,16 +172,16 @@ pub const Metrics = struct {
     /// 更新指标
     pub fn update(self: *Self) !void {
         self.system = SystemMetrics.collect();
-        
+
         // 保存快照
         const snapshot = MetricsSnapshot{
             .timestamp = std.time.timestamp(),
             .system = self.system,
             .runtime = self.runtime,
         };
-        
+
         try self.history.append(snapshot);
-        
+
         // 限制历史记录数量
         if (self.history.items.len > 1000) {
             _ = self.history.orderedRemove(0);
@@ -209,7 +197,7 @@ pub const Metrics = struct {
     pub fn printCurrent(self: *const Self) void {
         self.system.print();
         self.runtime.print();
-        
+
         std.debug.print("\n=== 综合指标 ===\n", .{});
         std.debug.print("线程利用率: {d:.2}%\n", .{self.runtime.getThreadUtilization()});
         std.debug.print("任务完成率: {d:.2}%\n", .{self.runtime.getTaskCompletionRate()});
@@ -221,7 +209,7 @@ pub const Metrics = struct {
         std.debug.print("\n" ++ "=" ** 60 ++ "\n", .{});
         std.debug.print("Zokio 性能监控报告\n", .{});
         std.debug.print("=" ** 60 ++ "\n", .{});
-        
+
         if (self.history.items.len == 0) {
             std.debug.print("暂无历史数据\n", .{});
             return;
@@ -231,25 +219,25 @@ pub const Metrics = struct {
         var avg_cpu: f64 = 0;
         var avg_memory: f64 = 0;
         var avg_thread_util: f64 = 0;
-        
+
         for (self.history.items) |snapshot| {
             avg_cpu += snapshot.system.cpu_usage_percent;
             avg_memory += snapshot.system.memory_usage_percent;
             avg_thread_util += snapshot.runtime.getThreadUtilization();
         }
-        
+
         const count = @as(f64, @floatFromInt(self.history.items.len));
         avg_cpu /= count;
         avg_memory /= count;
         avg_thread_util /= count;
-        
+
         std.debug.print("监控时间段: {} - {}\n", .{ self.history.items[0].timestamp, self.history.items[self.history.items.len - 1].timestamp });
         std.debug.print("数据点数量: {}\n", .{self.history.items.len});
         std.debug.print("\n平均性能指标:\n", .{});
         std.debug.print("  平均CPU使用率: {d:.2}%\n", .{avg_cpu});
         std.debug.print("  平均内存使用率: {d:.2}%\n", .{avg_memory});
         std.debug.print("  平均线程利用率: {d:.2}%\n", .{avg_thread_util});
-        
+
         // 当前状态
         std.debug.print("\n当前状态:\n", .{});
         self.printCurrent();
@@ -290,7 +278,7 @@ fn getMemoryInfo() MemoryInfo {
     // TODO: 实现真实的内存信息获取
     return MemoryInfo{
         .total = 8 * 1024 * 1024 * 1024, // 8GB
-        .used = 2 * 1024 * 1024 * 1024,  // 2GB
+        .used = 2 * 1024 * 1024 * 1024, // 2GB
         .available = 6 * 1024 * 1024 * 1024, // 6GB
     };
 }
@@ -308,7 +296,7 @@ fn getNetworkStats() NetworkStats {
     // TODO: 实现真实的网络统计获取
     return NetworkStats{
         .rx_bytes = 1024 * 1024 * 100, // 100MB
-        .tx_bytes = 1024 * 1024 * 50,  // 50MB
+        .tx_bytes = 1024 * 1024 * 50, // 50MB
     };
 }
 
@@ -325,7 +313,7 @@ fn getDiskStats() DiskStats {
 // 测试
 test "系统指标收集" {
     const metrics = SystemMetrics.collect();
-    
+
     // 基本验证
     std.testing.expect(metrics.cpu_usage_percent >= 0.0) catch {};
     std.testing.expect(metrics.memory_usage_bytes > 0) catch {};
@@ -340,29 +328,29 @@ test "运行时指标" {
         .active_tasks = 10,
         .pending_tasks = 5,
     };
-    
+
     const thread_util = runtime.getThreadUtilization();
     const completion_rate = runtime.getTaskCompletionRate();
-    
+
     std.testing.expect(thread_util == 75.0) catch {}; // (4-1)/4 * 100
     std.testing.expect(completion_rate > 80.0) catch {}; // 100/(100+10+5) * 100
 }
 
 test "指标收集器" {
     const testing = std.testing;
-    
+
     var metrics = Metrics.init(testing.allocator);
     defer metrics.deinit();
-    
+
     try metrics.update();
     try testing.expect(metrics.history.items.len == 1);
-    
+
     const runtime = RuntimeMetrics{
         .active_tasks = 5,
         .worker_threads = 2,
     };
     metrics.updateRuntime(runtime);
-    
+
     try testing.expectEqual(@as(u64, 5), metrics.runtime.active_tasks);
     try testing.expectEqual(@as(u32, 2), metrics.runtime.worker_threads);
 }

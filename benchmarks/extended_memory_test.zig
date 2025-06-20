@@ -37,19 +37,19 @@ fn testCoverageRange(base_allocator: std.mem.Allocator) !void {
     defer ext_allocator.deinit();
 
     const test_sizes = [_]usize{ 8, 64, 256, 512, 1024, 2048, 4096, 8192 };
-    
+
     std.debug.print("测试各种大小的对象分配...\n", .{});
-    
+
     for (test_sizes) |size| {
         const memory = try ext_allocator.alloc(size);
         defer ext_allocator.free(memory);
-        
+
         // 验证内存可用性
         @memset(memory, 0xAA);
-        
+
         std.debug.print("  {d}B: ✅ 分配成功\n", .{size});
     }
-    
+
     const stats = ext_allocator.getStats();
     std.debug.print("\n📊 覆盖范围统计:\n", .{});
     std.debug.print("  总池数: {}\n", .{stats.total_pools});
@@ -65,18 +65,18 @@ fn testTokioEquivalentLoadFixed(base_allocator: std.mem.Allocator) !void {
     // 测试标准分配器性能
     std.debug.print("测试标准分配器...\n", .{});
     const std_start = std.time.nanoTimestamp();
-    
+
     const iterations = 50000; // 增加测试量以获得更准确的结果
-    
+
     for (0..iterations) |i| {
         const size = 1024 + (i % 4096); // 1KB-5KB
         const memory = try base_allocator.alloc(u8, size);
         defer base_allocator.free(memory);
-        
+
         // 初始化内存
         @memset(memory, 0);
     }
-    
+
     const std_end = std.time.nanoTimestamp();
     const std_duration = @as(f64, @floatFromInt(std_end - std_start)) / 1_000_000_000.0;
     const std_ops_per_sec = @as(f64, @floatFromInt(iterations)) / std_duration;
@@ -87,16 +87,16 @@ fn testTokioEquivalentLoadFixed(base_allocator: std.mem.Allocator) !void {
     defer ext_allocator.deinit();
 
     const ext_start = std.time.nanoTimestamp();
-    
+
     for (0..iterations) |i| {
         const size = 1024 + (i % 4096); // 1KB-5KB
         const memory = try ext_allocator.alloc(size);
         defer ext_allocator.free(memory);
-        
+
         // 初始化内存
         @memset(memory, 0);
     }
-    
+
     const ext_end = std.time.nanoTimestamp();
     const ext_duration = @as(f64, @floatFromInt(ext_end - ext_start)) / 1_000_000_000.0;
     const ext_ops_per_sec = @as(f64, @floatFromInt(iterations)) / ext_duration;
@@ -106,11 +106,11 @@ fn testTokioEquivalentLoadFixed(base_allocator: std.mem.Allocator) !void {
     std.debug.print("  标准分配器:\n", .{});
     std.debug.print("    吞吐量: {d:.0} ops/sec\n", .{std_ops_per_sec});
     std.debug.print("    耗时: {d:.3} 秒\n", .{std_duration});
-    
+
     std.debug.print("  扩展分配器:\n", .{});
     std.debug.print("    吞吐量: {d:.0} ops/sec\n", .{ext_ops_per_sec});
     std.debug.print("    耗时: {d:.3} 秒\n", .{ext_duration});
-    
+
     const improvement = ext_ops_per_sec / std_ops_per_sec;
     std.debug.print("  性能提升: {d:.2}x ", .{improvement});
     if (improvement >= 3.0) {
@@ -128,12 +128,12 @@ fn testTokioEquivalentLoadFixed(base_allocator: std.mem.Allocator) !void {
     // 与Tokio基准对比
     const tokio_baseline = 1_500_000.0;
     const tokio_ratio = ext_ops_per_sec / tokio_baseline;
-    
+
     std.debug.print("\n🦀 与Tokio基准对比:\n", .{});
     std.debug.print("  扩展分配器: {d:.0} ops/sec\n", .{ext_ops_per_sec});
     std.debug.print("  Tokio基准: {d:.0} ops/sec\n", .{tokio_baseline});
     std.debug.print("  性能比: {d:.2}x ", .{tokio_ratio});
-    
+
     if (tokio_ratio >= 3.3) {
         std.debug.print("🌟🌟🌟 (超越目标)\n", .{});
     } else if (tokio_ratio >= 2.0) {
@@ -161,28 +161,28 @@ fn testLargeObjectAllocation(base_allocator: std.mem.Allocator) !void {
     const iterations_per_size = 10000;
 
     std.debug.print("测试不同大小的大对象分配...\n", .{});
-    
+
     for (large_sizes) |size| {
         const start_time = std.time.nanoTimestamp();
-        
+
         for (0..iterations_per_size) |i| {
             const memory = try ext_allocator.alloc(size);
             defer ext_allocator.free(memory);
-            
+
             // 简单使用
             memory[0] = @as(u8, @intCast(i % 256));
             if (memory.len > 1) {
                 memory[memory.len - 1] = @as(u8, @intCast((i + 1) % 256));
             }
         }
-        
+
         const end_time = std.time.nanoTimestamp();
         const duration = @as(f64, @floatFromInt(end_time - start_time)) / 1_000_000_000.0;
         const ops_per_sec = @as(f64, @floatFromInt(iterations_per_size)) / duration;
-        
+
         std.debug.print("  {d}B: {d:.0} ops/sec\n", .{ size, ops_per_sec });
     }
-    
+
     const stats = ext_allocator.getStats();
     std.debug.print("\n📊 大对象分配统计:\n", .{});
     std.debug.print("  总复用率: {d:.1}%\n", .{stats.reuse_rate * 100.0});
@@ -206,40 +206,38 @@ fn testFullRangeComparison(base_allocator: std.mem.Allocator) !void {
     };
 
     std.debug.print("测试全范围混合分配...\n", .{});
-    
+
     for (size_ranges) |range| {
         const start_time = std.time.nanoTimestamp();
-        
+
         for (0..iterations) |i| {
             const size = range.min + (i % (range.max - range.min));
             const memory = try ext_allocator.alloc(size);
             defer ext_allocator.free(memory);
-            
+
             // 模拟实际使用
             @memset(memory, @as(u8, @intCast(i % 256)));
         }
-        
+
         const end_time = std.time.nanoTimestamp();
         const duration = @as(f64, @floatFromInt(end_time - start_time)) / 1_000_000_000.0;
         const ops_per_sec = @as(f64, @floatFromInt(iterations)) / duration;
-        
+
         std.debug.print("  {s} ({d}B-{d}B): {d:.0} ops/sec\n", .{ range.name, range.min, range.max, ops_per_sec });
     }
-    
+
     // 获取详细统计
     const detailed_stats = ext_allocator.getDetailedStats();
-    
+
     std.debug.print("\n📊 详细池使用统计:\n", .{});
     for (detailed_stats.pool_stats, 0..) |pool_stat, i| {
         if (pool_stat.allocated + pool_stat.reused > 0) {
-            std.debug.print("  池{d} ({d}B): 分配{d} 复用{d} 复用率{d:.1}%\n", .{
-                i, pool_stat.size, pool_stat.allocated, pool_stat.reused, pool_stat.reuse_rate * 100.0
-            });
+            std.debug.print("  池{d} ({d}B): 分配{d} 复用{d} 复用率{d:.1}%\n", .{ i, pool_stat.size, pool_stat.allocated, pool_stat.reused, pool_stat.reuse_rate * 100.0 });
         }
     }
-    
+
     std.debug.print("  总内存使用: {d:.2} MB\n", .{@as(f64, @floatFromInt(detailed_stats.total_memory_used)) / (1024.0 * 1024.0)});
-    
+
     const overall_stats = ext_allocator.getStats();
     std.debug.print("  整体复用率: {d:.1}%\n", .{overall_stats.reuse_rate * 100.0});
 }

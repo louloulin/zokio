@@ -170,14 +170,14 @@ fn testComputeIntensiveTask() !f64 {
             sum = sum +% (i + j);
         }
         completed += 1;
-        
+
         // 防止编译器优化
         std.mem.doNotOptimizeAway(sum);
     }
 
     const end_time = std.time.nanoTimestamp();
     const duration = @as(f64, @floatFromInt(end_time - start_time)) / 1_000_000_000.0;
-    
+
     return @as(f64, @floatFromInt(completed)) / duration;
 }
 
@@ -201,7 +201,7 @@ fn testMemoryAllocationPerformance(allocator: std.mem.Allocator) !f64 {
 
     const end_time = std.time.nanoTimestamp();
     const duration = @as(f64, @floatFromInt(end_time - start_time)) / 1_000_000_000.0;
-    
+
     return @as(f64, @floatFromInt(completed)) / duration;
 }
 
@@ -216,22 +216,22 @@ fn testDataProcessingPerformance(allocator: std.mem.Allocator) !f64 {
         // 数据处理测试
         var buffer = [_]u8{0} ** 512;
         @memset(&buffer, @intCast(i % 256));
-        
+
         // 计算校验和
         var checksum: u32 = 0;
         for (buffer) |byte| {
             checksum +%= byte;
         }
-        
+
         completed += 1;
-        
+
         // 防止编译器优化
         std.mem.doNotOptimizeAway(checksum);
     }
 
     const end_time = std.time.nanoTimestamp();
     const duration = @as(f64, @floatFromInt(end_time - start_time)) / 1_000_000_000.0;
-    
+
     _ = allocator;
     return @as(f64, @floatFromInt(completed)) / duration;
 }

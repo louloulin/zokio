@@ -209,7 +209,7 @@ pub const SocketAddr = union(enum) {
 
             return Self.init(ip_addr, port_num);
         }
-        
+
         return error.InvalidAddress;
     }
 

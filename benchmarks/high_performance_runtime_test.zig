@@ -203,7 +203,7 @@ fn testIOIntensiveRuntime(allocator: std.mem.Allocator) !void {
     while (i < iterations) : (i += 1) {
         const task = IOTask{
             .id = i,
-            .data_size = 512 + (i % 512) // 可变数据大小
+            .data_size = 512 + (i % 512), // 可变数据大小
         };
         const result = try runtime.blockOn(task);
         completed += 1;

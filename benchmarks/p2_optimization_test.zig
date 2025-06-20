@@ -43,14 +43,14 @@ fn testExtendedAllocatorPerformance(base_allocator: std.mem.Allocator) !void {
     std.debug.print("执行 {} 次ExtendedAllocator分配...\n", .{iterations});
 
     const start_time = std.time.nanoTimestamp();
-    
+
     for (0..iterations) |i| {
         const size = 512 + (i % 2048); // 512B-2.5KB
         const memory = try extended_allocator.alloc(size);
         defer extended_allocator.free(memory);
         @memset(memory, @as(u8, @intCast(i % 256)));
     }
-    
+
     const end_time = std.time.nanoTimestamp();
     const duration = @as(f64, @floatFromInt(end_time - start_time)) / 1_000_000_000.0;
     const ops_per_sec = @as(f64, @floatFromInt(iterations)) / duration;
@@ -89,14 +89,14 @@ fn testFastSmartAllocatorPerformance(base_allocator: std.mem.Allocator) !void {
     std.debug.print("执行 {} 次FastSmartAllocator分配...\n", .{iterations});
 
     const start_time = std.time.nanoTimestamp();
-    
+
     for (0..iterations) |i| {
         const size = 512 + (i % 2048); // 512B-2.5KB
         const memory = try fast_allocator.alloc(u8, size);
         defer fast_allocator.free(memory);
         @memset(memory, @as(u8, @intCast(i % 256)));
     }
-    
+
     const end_time = std.time.nanoTimestamp();
     const duration = @as(f64, @floatFromInt(end_time - start_time)) / 1_000_000_000.0;
     const ops_per_sec = @as(f64, @floatFromInt(iterations)) / duration;
@@ -138,14 +138,14 @@ fn testUnifiedInterfacePerformance(base_allocator: std.mem.Allocator) !void {
     std.debug.print("执行 {} 次统一接口分配...\n", .{iterations});
 
     const start_time = std.time.nanoTimestamp();
-    
+
     for (0..iterations) |i| {
         const size = 512 + (i % 2048); // 512B-2.5KB
         const memory = try memory_manager.alloc(u8, size);
         defer memory_manager.free(memory);
         @memset(memory, @as(u8, @intCast(i % 256)));
     }
-    
+
     const end_time = std.time.nanoTimestamp();
     const duration = @as(f64, @floatFromInt(end_time - start_time)) / 1_000_000_000.0;
     const ops_per_sec = @as(f64, @floatFromInt(iterations)) / duration;
@@ -173,7 +173,7 @@ fn testP2TargetAchievement(base_allocator: std.mem.Allocator) !void {
     // P2阶段性能目标
     const p2_targets = struct {
         const fast_smart: f64 = 10_000_000.0; // 10M+ ops/sec
-        const extended: f64 = 25_000_000.0;   // 25M+ ops/sec  
+        const extended: f64 = 25_000_000.0; // 25M+ ops/sec
         const unified_avg: f64 = 15_000_000.0; // 15M+ ops/sec
     };
 
@@ -238,7 +238,7 @@ fn testP2TargetAchievement(base_allocator: std.mem.Allocator) !void {
 
     // 输出结果
     std.debug.print("📊 P2阶段目标达成情况:\n", .{});
-    
+
     std.debug.print("  FastSmartAllocator:\n", .{});
     std.debug.print("    实际性能: {d:.0} ops/sec\n", .{fast_ops_per_sec});
     std.debug.print("    目标性能: {d:.0} ops/sec\n", .{p2_targets.fast_smart});
@@ -268,12 +268,12 @@ fn testP2TargetAchievement(base_allocator: std.mem.Allocator) !void {
 
     // 总体评估
     const targets_met = (if (fast_ops_per_sec >= p2_targets.fast_smart) @as(u32, 1) else 0) +
-                       (if (ext_ops_per_sec >= p2_targets.extended) @as(u32, 1) else 0) +
-                       (if (unified_ops_per_sec >= p2_targets.unified_avg) @as(u32, 1) else 0);
+        (if (ext_ops_per_sec >= p2_targets.extended) @as(u32, 1) else 0) +
+        (if (unified_ops_per_sec >= p2_targets.unified_avg) @as(u32, 1) else 0);
 
     std.debug.print("\n🎯 P2阶段总体评估:\n", .{});
     std.debug.print("  目标达成率: {}/3 ({d:.1}%)\n", .{ targets_met, @as(f64, @floatFromInt(targets_met)) / 3.0 * 100.0 });
-    
+
     if (targets_met == 3) {
         std.debug.print("  🌟🌟🌟 P2阶段圆满完成！\n", .{});
     } else if (targets_met == 2) {

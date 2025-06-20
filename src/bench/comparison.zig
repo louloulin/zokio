@@ -117,21 +117,25 @@ pub const ComparisonResult = struct {
 
     /// 创建对比结果
     pub fn create(zokio: PerformanceMetrics, tokio: PerformanceMetrics) Self {
-        const throughput_ratio = if (tokio.throughput_ops_per_sec > 0) 
-            zokio.throughput_ops_per_sec / tokio.throughput_ops_per_sec 
-        else 0.0;
-        
-        const latency_ratio = if (zokio.avg_latency_ns > 0) 
+        const throughput_ratio = if (tokio.throughput_ops_per_sec > 0)
+            zokio.throughput_ops_per_sec / tokio.throughput_ops_per_sec
+        else
+            0.0;
+
+        const latency_ratio = if (zokio.avg_latency_ns > 0)
             @as(f64, @floatFromInt(tokio.avg_latency_ns)) / @as(f64, @floatFromInt(zokio.avg_latency_ns))
-        else 0.0;
-        
-        const p95_ratio = if (zokio.p95_latency_ns > 0) 
+        else
+            0.0;
+
+        const p95_ratio = if (zokio.p95_latency_ns > 0)
             @as(f64, @floatFromInt(tokio.p95_latency_ns)) / @as(f64, @floatFromInt(zokio.p95_latency_ns))
-        else 0.0;
-        
-        const p99_ratio = if (zokio.p99_latency_ns > 0) 
+        else
+            0.0;
+
+        const p99_ratio = if (zokio.p99_latency_ns > 0)
             @as(f64, @floatFromInt(tokio.p99_latency_ns)) / @as(f64, @floatFromInt(zokio.p99_latency_ns))
-        else 0.0;
+        else
+            0.0;
 
         // 计算综合得分 (吞吐量权重40%, 平均延迟权重30%, P95延迟权重20%, P99延迟权重10%)
         const overall_score = (throughput_ratio * 0.4) + (latency_ratio * 0.3) + (p95_ratio * 0.2) + (p99_ratio * 0.1);

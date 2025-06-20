@@ -49,17 +49,17 @@ pub const MapFlags = struct {
     /// 转换为系统映射标志
     pub fn toFlags(self: MapFlags) u32 {
         var flags: u32 = 0;
-        
+
         if (self.shared) flags |= std.posix.MAP.SHARED;
         if (self.private) flags |= std.posix.MAP.PRIVATE;
         if (self.anonymous) flags |= std.posix.MAP.ANONYMOUS;
         if (self.fixed) flags |= std.posix.MAP.FIXED;
-        
+
         // 平台特定标志
         if (builtin.os.tag == .linux and self.populate) {
             flags |= std.posix.MAP.POPULATE;
         }
-        
+
         return flags;
     }
 };
@@ -158,7 +158,7 @@ pub const MmapFile = struct {
     /// 同步内存到磁盘
     pub fn sync(self: *Self, async_sync: bool) !void {
         const flags: u32 = if (async_sync) std.posix.MS.ASYNC else std.posix.MS.SYNC;
-        
+
         std.posix.msync(@as([*]align(std.mem.page_size) u8, @alignCast(self.ptr))[0..self.len], flags) catch |err| switch (err) {
             error.UnmappedMemory => return FsError.InvalidArgument,
             else => return FsError.IoError,
@@ -168,7 +168,7 @@ pub const MmapFile = struct {
     /// 建议内存使用模式
     pub fn advise(self: *Self, advice: MemoryAdvice) !void {
         const advice_flag = advice.toFlag();
-        
+
         // 在支持madvise的平台上调用
         if (builtin.os.tag == .linux or builtin.os.tag == .macos) {
             const result = std.c.madvise(@as(*anyopaque, @ptrCast(self.ptr)), self.len, advice_flag);
@@ -198,12 +198,12 @@ pub const MmapFile = struct {
     /// 改变内存保护模式
     pub fn protect(self: *Self, new_protection: Protection) !void {
         const prot_flags = new_protection.toFlags();
-        
+
         std.posix.mprotect(@as([*]align(std.mem.page_size) u8, @alignCast(self.ptr))[0..self.len], prot_flags) catch |err| switch (err) {
             error.AccessDenied => return FsError.PermissionDenied,
             else => return FsError.IoError,
         };
-        
+
         self.protection = new_protection;
     }
 
@@ -250,7 +250,7 @@ pub fn mapFile(fd: std.posix.fd_t, protection: Protection, config: MmapConfig) !
     // 获取文件大小
     const stat = try std.posix.fstat(fd);
     const file_size = @as(usize, @intCast(stat.size));
-    
+
     const flags = if (protection.write) MapFlags.SHARED else MapFlags.PRIVATE;
     return try MmapFile.fromFile(fd, 0, file_size, protection, flags, config);
 }

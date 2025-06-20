@@ -144,7 +144,7 @@ fn demonstrateFutureCombinators() !void {
     var timeout_future = zokio.future.TimeoutFuture(@TypeOf(delay_future)).init(delay_future, 50); // 50ms超时
 
     std.debug.print("   创建超时Future（10ms延迟，50ms超时）\n", .{});
-    
+
     // 第一次轮询应该pending
     const timeout_result1 = timeout_future.poll(&ctx);
     switch (timeout_result1) {
@@ -181,7 +181,7 @@ fn demonstrateResultType() !void {
             return @as(u64, x) * 3;
         }
     }.triple);
-    
+
     if (mapped_result.isOk()) {
         std.debug.print("   映射结果: {} -> {}\n", .{ 100, mapped_result.unwrap() });
     }

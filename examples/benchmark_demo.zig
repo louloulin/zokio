@@ -95,10 +95,10 @@ fn demonstrateMetricsCollection(allocator: std.mem.Allocator) !void {
         runtime.active_tasks = 120 + (i * 10);
         runtime.pending_tasks = 40 - (i * 5);
         runtime.work_steals += 50;
-        
+
         metrics.updateRuntime(runtime);
         try metrics.update();
-        
+
         // 模拟时间间隔
         std.time.sleep(100 * std.time.ns_per_ms);
     }
@@ -124,13 +124,13 @@ fn demonstrateProfiler(allocator: std.mem.Allocator) !void {
     var i: u32 = 0;
     while (i < 100) : (i += 1) {
         const timer = zokio.bench.profiler.Timer.start("task_schedule");
-        
+
         // 模拟任务调度工作
         var j: u32 = 0;
         while (j < 1000) : (j += 1) {
             _ = j * j;
         }
-        
+
         const duration = timer.end();
         try profiler.recordCall("task_schedule", duration);
     }
@@ -139,11 +139,11 @@ fn demonstrateProfiler(allocator: std.mem.Allocator) !void {
     i = 0;
     while (i < 50) : (i += 1) {
         const timer = zokio.bench.profiler.Timer.start("io_operation");
-        
+
         // 模拟I/O操作工作
         var buffer: [1024]u8 = undefined;
         @memset(&buffer, @as(u8, @intCast(i % 256)));
-        
+
         const duration = timer.end();
         try profiler.recordCall("io_operation", duration);
     }
@@ -152,15 +152,15 @@ fn demonstrateProfiler(allocator: std.mem.Allocator) !void {
     i = 0;
     while (i < 200) : (i += 1) {
         const timer = zokio.bench.profiler.Timer.start("memory_alloc");
-        
+
         // 模拟内存分配工作
         var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
         defer arena.deinit();
         const temp_allocator = arena.allocator();
-        
+
         const mem = temp_allocator.alloc(u8, 64) catch continue;
         @memset(mem, 0xFF);
-        
+
         const duration = timer.end();
         try profiler.recordCall("memory_alloc", duration);
     }
@@ -200,10 +200,7 @@ fn demonstrateTokioComparison(allocator: std.mem.Allocator) !void {
     task_metrics.calculate(&task_latencies);
     task_metrics.throughput_ops_per_sec = 1_200_000.0; // 比Tokio的1M更高
 
-    const task_result = zokio.bench.comparison.ComparisonResult.create(
-        task_metrics,
-        zokio.bench.comparison.TokioBaselines.getStaticBaseline(.task_scheduling)
-    );
+    const task_result = zokio.bench.comparison.ComparisonResult.create(task_metrics, zokio.bench.comparison.TokioBaselines.getStaticBaseline(.task_scheduling));
     task_result.print("任务调度");
 
     if (use_real_benchmarks) {
@@ -218,10 +215,7 @@ fn demonstrateTokioComparison(allocator: std.mem.Allocator) !void {
     io_metrics.calculate(&io_latencies);
     io_metrics.throughput_ops_per_sec = 480_000.0; // 略低于Tokio的500K
 
-    const io_result = zokio.bench.comparison.ComparisonResult.create(
-        io_metrics,
-        zokio.bench.comparison.TokioBaselines.getStaticBaseline(.io_operations)
-    );
+    const io_result = zokio.bench.comparison.ComparisonResult.create(io_metrics, zokio.bench.comparison.TokioBaselines.getStaticBaseline(.io_operations));
     io_result.print("I/O操作");
 
     if (use_real_benchmarks) {
@@ -236,10 +230,7 @@ fn demonstrateTokioComparison(allocator: std.mem.Allocator) !void {
     network_metrics.calculate(&network_latencies);
     network_metrics.throughput_ops_per_sec = 120_000.0; // 高于Tokio的100K
 
-    const network_result = zokio.bench.comparison.ComparisonResult.create(
-        network_metrics,
-        zokio.bench.comparison.TokioBaselines.getStaticBaseline(.network_operations)
-    );
+    const network_result = zokio.bench.comparison.ComparisonResult.create(network_metrics, zokio.bench.comparison.TokioBaselines.getStaticBaseline(.network_operations));
     network_result.print("网络操作");
 
     if (use_real_benchmarks) {
@@ -254,10 +245,7 @@ fn demonstrateTokioComparison(allocator: std.mem.Allocator) !void {
     memory_metrics.calculate(&memory_latencies);
     memory_metrics.throughput_ops_per_sec = 8_000_000.0; // 低于Tokio的10M
 
-    const memory_result = zokio.bench.comparison.ComparisonResult.create(
-        memory_metrics,
-        zokio.bench.comparison.TokioBaselines.getStaticBaseline(.memory_allocation)
-    );
+    const memory_result = zokio.bench.comparison.ComparisonResult.create(memory_metrics, zokio.bench.comparison.TokioBaselines.getStaticBaseline(.memory_allocation));
     memory_result.print("内存分配");
 
     if (use_real_benchmarks) {
@@ -272,10 +260,7 @@ fn demonstrateTokioComparison(allocator: std.mem.Allocator) !void {
     future_metrics.calculate(&future_latencies);
     future_metrics.throughput_ops_per_sec = 2_500_000.0; // 高于Tokio的2M
 
-    const future_result = zokio.bench.comparison.ComparisonResult.create(
-        future_metrics,
-        zokio.bench.comparison.TokioBaselines.getStaticBaseline(.future_composition)
-    );
+    const future_result = zokio.bench.comparison.ComparisonResult.create(future_metrics, zokio.bench.comparison.TokioBaselines.getStaticBaseline(.future_composition));
     future_result.print("Future组合");
 
     if (use_real_benchmarks) {

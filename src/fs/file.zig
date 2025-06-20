@@ -87,7 +87,7 @@ pub const File = struct {
                 error.BrokenPipe => break,
                 else => return FsError.IoError,
             };
-            
+
             if (bytes_read == 0) break; // EOF
             total_read += bytes_read;
         }
@@ -106,7 +106,7 @@ pub const File = struct {
                 error.BrokenPipe => return FsError.IoError,
                 else => return FsError.IoError,
             };
-            
+
             total_written += bytes_written;
         }
         return total_written;
@@ -178,7 +178,7 @@ pub const ReadFuture = struct {
 
     pub fn poll(self: *Self, ctx: *Context) Poll(!usize) {
         _ = ctx;
-        
+
         const result = std.posix.read(self.file.fd, self.buffer);
         if (result) |bytes_read| {
             self.bytes_read = bytes_read;
@@ -216,12 +216,12 @@ pub const WriteFuture = struct {
 
     pub fn poll(self: *Self, ctx: *Context) Poll(!usize) {
         _ = ctx;
-        
+
         const result = std.posix.write(self.file.fd, self.data[self.bytes_written..]);
         if (result) |bytes_written| {
             self.bytes_written += bytes_written;
             self.file.position += bytes_written;
-            
+
             if (self.bytes_written >= self.data.len) {
                 return .{ .ready = self.bytes_written };
             } else {
@@ -253,13 +253,13 @@ fn setNonBlocking(fd: std.posix.fd_t) !void {
 // 测试
 test "文件打开和关闭" {
     const testing = std.testing;
-    
+
     // 创建临时文件进行测试
     const temp_path = "/tmp/zokio_test_file.txt";
-    
+
     // 清理可能存在的文件
     std.posix.unlink(temp_path) catch {};
-    
+
     // 测试创建新文件
     var file = File.open(testing.allocator, temp_path, .{ .write = true, .create = true }) catch |err| {
         std.debug.print("Failed to create file: {}\n", .{err});
@@ -267,36 +267,36 @@ test "文件打开和关闭" {
     };
     defer file.close();
     defer std.posix.unlink(temp_path) catch {};
-    
+
     try testing.expect(file.fd >= 0);
     try testing.expect(std.mem.eql(u8, temp_path, file.path));
 }
 
 test "文件读写操作" {
     const testing = std.testing;
-    
+
     const temp_path = "/tmp/zokio_test_rw.txt";
     std.posix.unlink(temp_path) catch {};
-    
+
     // 写入测试数据
     {
         var file = File.open(testing.allocator, temp_path, .{ .write = true, .create = true }) catch return;
         defer file.close();
-        
+
         const test_data = "Hello, Zokio File System!";
         const bytes_written = try file.writeAll(test_data);
         try testing.expectEqual(test_data.len, bytes_written);
     }
-    
+
     // 读取测试数据
     {
         var file = File.open(testing.allocator, temp_path, .{ .read = true }) catch return;
         defer file.close();
         defer std.posix.unlink(temp_path) catch {};
-        
+
         var buffer: [100]u8 = undefined;
         const bytes_read = try file.readAll(&buffer);
-        
+
         const expected = "Hello, Zokio File System!";
         try testing.expectEqual(expected.len, bytes_read);
         try testing.expect(std.mem.eql(u8, expected, buffer[0..bytes_read]));

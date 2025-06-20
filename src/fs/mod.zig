@@ -289,13 +289,13 @@ pub const FsManager = struct {
 pub fn readFile(allocator: std.mem.Allocator, path: []const u8) ![]u8 {
     var file_handle = try File.open(allocator, path, OpenMode.READ_ONLY);
     defer file_handle.close();
-    
+
     const file_metadata = try file_handle.getMetadata();
     const file_size = file_metadata.size;
-    
+
     const contents = try allocator.alloc(u8, file_size);
     _ = try file_handle.readAll(contents);
-    
+
     return contents;
 }
 
@@ -303,7 +303,7 @@ pub fn readFile(allocator: std.mem.Allocator, path: []const u8) ![]u8 {
 pub fn writeFile(allocator: std.mem.Allocator, path: []const u8, data: []const u8) !void {
     var file_handle = try File.open(allocator, path, OpenMode{ .write = true, .create = true, .truncate = true });
     defer file_handle.close();
-    
+
     _ = try file_handle.writeAll(data);
 }
 

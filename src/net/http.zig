@@ -63,25 +63,25 @@ pub const StatusCode = enum(u16) {
     // 1xx 信息性状态码
     Continue = 100,
     SwitchingProtocols = 101,
-    
+
     // 2xx 成功状态码
     OK = 200,
     Created = 201,
     Accepted = 202,
     NoContent = 204,
-    
+
     // 3xx 重定向状态码
     MovedPermanently = 301,
     Found = 302,
     NotModified = 304,
-    
+
     // 4xx 客户端错误状态码
     BadRequest = 400,
     Unauthorized = 401,
     Forbidden = 403,
     NotFound = 404,
     MethodNotAllowed = 405,
-    
+
     // 5xx 服务器错误状态码
     InternalServerError = 500,
     NotImplemented = 501,
@@ -327,11 +327,7 @@ pub const Response = struct {
     /// 序列化响应为字符串
     pub fn serialize(self: *const Self, writer: anytype) !void {
         // 写入状态行
-        try writer.print("{s} {} {s}\r\n", .{ 
-            self.version.toString(), 
-            @intFromEnum(self.status_code), 
-            self.status_code.reasonPhrase() 
-        });
+        try writer.print("{s} {} {s}\r\n", .{ self.version.toString(), @intFromEnum(self.status_code), self.status_code.reasonPhrase() });
 
         // 写入头部
         var iterator = self.headers.headers.iterator();
@@ -430,7 +426,7 @@ pub const RequestFuture = struct {
                 // 接收响应
                 // 这里需要实际的接收和解析逻辑
                 self.state = .completed;
-                
+
                 // 创建一个简单的响应
                 const response = Response.init(self.allocator, .OK);
                 return .{ .ready = response };

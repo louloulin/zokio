@@ -88,12 +88,10 @@ fn testPerformancePrediction(base_allocator: std.mem.Allocator) !void {
 
     for (0..10) |i| {
         const factor = 1.0 + @as(f64, @floatFromInt(i)) * 0.1; // 逐渐增长
-        try predictor.recordPerformance(
-            base_throughput / factor, // 吞吐量下降
-            base_latency * factor,    // 延迟增加
+        try predictor.recordPerformance(base_throughput / factor, // 吞吐量下降
+            base_latency * factor, // 延迟增加
             @as(usize, @intFromFloat(@as(f64, @floatFromInt(base_memory)) * factor)), // 内存增长
-            .high_frequency_small
-        );
+            .high_frequency_small);
     }
 
     // 预测未来性能
@@ -163,10 +161,10 @@ fn testIntegratedIntelligence(base_allocator: std.mem.Allocator) !void {
     // 创建智能组件
     var detector = try PatternDetector.init(base_allocator);
     defer detector.deinit();
-    
+
     var predictor = PerformancePredictor.init(base_allocator);
     defer predictor.deinit();
-    
+
     var tuner = AutoTuner.init(base_allocator);
     defer tuner.deinit();
 
@@ -175,16 +173,16 @@ fn testIntegratedIntelligence(base_allocator: std.mem.Allocator) !void {
     // 场景1: 启动阶段 - 高频小对象
     std.debug.print("  场景1: 应用启动阶段\n", .{});
     const startup_time = @as(u64, @intCast(std.time.nanoTimestamp()));
-    
+
     for (0..50) |i| {
         detector.recordAllocation(32, startup_time + i * 500);
     }
-    
+
     try predictor.recordPerformance(2000000.0, 50.0, 512 * 1024, .high_frequency_small);
-    
+
     var pattern = detector.getCurrentPattern();
     std.debug.print("    检测模式: {any} (置信度: {d:.1}%)\n", .{ pattern.pattern, pattern.confidence * 100 });
-    
+
     const tuned = try tuner.autoTune(2000000.0, pattern.pattern);
     if (tuned) {
         std.debug.print("    自动调优: 已优化参数\n", .{});
@@ -192,13 +190,13 @@ fn testIntegratedIntelligence(base_allocator: std.mem.Allocator) !void {
 
     // 场景2: 稳定运行 - 批量中等对象
     std.debug.print("  场景2: 稳定运行阶段\n", .{});
-    
+
     for (0..30) |i| {
         detector.recordAllocation(1024, startup_time + 100000 + i * 5000);
     }
-    
+
     try predictor.recordPerformance(1500000.0, 80.0, 2 * 1024 * 1024, .batch_medium);
-    
+
     pattern = detector.getCurrentPattern();
     std.debug.print("    检测模式: {any} (置信度: {d:.1}%)\n", .{ pattern.pattern, pattern.confidence * 100 });
 
@@ -231,20 +229,20 @@ fn testPerformanceFixValidation(base_allocator: std.mem.Allocator) !void {
 
     const iterations = 10000;
     const start_time = std.time.nanoTimestamp();
-    
+
     for (0..iterations) |i| {
         const size = 512 + (i % 1024);
         const memory = try allocator.alloc(u8, size);
         defer allocator.free(memory);
         @memset(memory, @as(u8, @intCast(i % 256)));
     }
-    
+
     const end_time = std.time.nanoTimestamp();
     const duration = @as(f64, @floatFromInt(end_time - start_time)) / 1_000_000_000.0;
     const ops_per_sec = @as(f64, @floatFromInt(iterations)) / duration;
 
     const stats = allocator.getStats();
-    
+
     std.debug.print("📊 修复验证结果:\n", .{});
     std.debug.print("  吞吐量: {d:.0} ops/sec\n", .{ops_per_sec});
     std.debug.print("  快速路径命中率: {d:.1}%\n", .{stats.fast_path_rate * 100});
