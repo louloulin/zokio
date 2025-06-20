@@ -829,6 +829,21 @@ pub fn build(b: *std.Build) void {
     const simple_spawn_test_step = b.step("test-simple-spawn", "运行简化Spawn测试");
     simple_spawn_test_step.dependOn(&simple_spawn_test_cmd.step);
 
+    // 真实异步验证测试
+    const real_async_verification = b.addExecutable(.{
+        .name = "real_async_verification",
+        .root_source_file = b.path("tests/real_async_verification.zig"),
+        .target = target,
+        .optimize = .ReleaseSafe,
+    });
+    real_async_verification.root_module.addImport("zokio", lib.root_module);
+    real_async_verification.root_module.addOptions("config", options);
+    real_async_verification.root_module.addImport("libxev", libxev.module("xev"));
+
+    const real_async_verification_cmd = b.addRunArtifact(real_async_verification);
+    const real_async_verification_step = b.step("test-real-async", "运行真实异步验证测试");
+    real_async_verification_step.dependOn(&real_async_verification_cmd.step);
+
     // 全面测试
     const test_all_step = b.step("test-all", "运行所有测试");
     test_all_step.dependOn(&run_unit_tests.step);

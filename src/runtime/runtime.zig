@@ -135,13 +135,10 @@ fn TaskCell(comptime T: type, comptime S: type) type {
             return cell;
         }
 
-        /// 🔥 简化的释放TaskCell（不使用引用计数）
+        /// 🔥 安全的释放TaskCell（简化版本）
         pub fn destroy(self: *Self) void {
             // 🚀 简化实现：直接释放，不使用引用计数
-            // 清理completion_notifier（但不在这里清理，因为JoinHandle也会清理）
-            // if (self.completion_notifier) |notifier| {
-            //     notifier.destroy();
-            // }
+            // 注意：completion_notifier由JoinHandle管理，不在这里清理
 
             // 释放内存
             const allocator = self.allocator;
@@ -381,16 +378,19 @@ const CompletionNotifier = struct {
 
     /// 销毁通知器
     pub fn destroy(self: *Self) void {
-        // 清理等待者列表
+        // 🔥 安全清理等待者列表
         self.waiters_mutex.lock();
-        defer self.waiters_mutex.unlock();
 
-        // 通知所有等待者
+        // 通知所有等待者（在清理前）
         for (self.waiters.items) |condition| {
             condition.signal();
         }
 
+        // 清理等待者列表
         self.waiters.deinit();
+        self.waiters_mutex.unlock();
+
+        // 最后释放自身内存
         const allocator = self.allocator;
         allocator.destroy(self);
     }
