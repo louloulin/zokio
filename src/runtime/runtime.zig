@@ -135,18 +135,24 @@ fn TaskCell(comptime T: type, comptime S: type) type {
             return cell;
         }
 
-        /// 🔥 安全释放TaskCell
+        /// 🔥 简化的释放TaskCell（不使用引用计数）
         pub fn destroy(self: *Self) void {
-            if (self.ref_count.decRef()) {
-                // 清理completion_notifier
-                if (self.completion_notifier) |notifier| {
-                    notifier.destroy();
-                }
+            // 🚀 简化实现：直接释放，不使用引用计数
+            // 清理completion_notifier（但不在这里清理，因为JoinHandle也会清理）
+            // if (self.completion_notifier) |notifier| {
+            //     notifier.destroy();
+            // }
 
-                // 释放内存
-                const allocator = self.allocator;
-                allocator.destroy(self);
-            }
+            // 释放内存
+            const allocator = self.allocator;
+            allocator.destroy(self);
+        }
+
+        /// 🚀 类型擦除的清理函数（供JoinHandle使用）
+        pub fn destroyErased(ptr: *anyopaque, allocator: std.mem.Allocator) void {
+            const self = @as(*Self, @ptrCast(@alignCast(ptr)));
+            _ = allocator; // 分配器已经存储在TaskCell中
+            self.destroy();
         }
 
         /// 增加引用计数
@@ -261,6 +267,9 @@ pub fn JoinHandle(comptime T: type) type {
         // 🔥 安全的TaskCell引用（带引用计数）
         task_cell: ?*anyopaque = null,
 
+        // 🔥 TaskCell清理函数指针（解决类型擦除问题）
+        task_cell_destroy_fn: ?*const fn (*anyopaque, std.mem.Allocator) void = null,
+
         // 🔥 安全的完成通知器
         completion_notifier: ?*CompletionNotifier = null,
 
@@ -327,13 +336,20 @@ pub fn JoinHandle(comptime T: type) type {
                 self.completion_notifier = null;
             }
 
-            // 🔥 减少TaskCell引用计数
+            // 🔥 安全清理TaskCell（使用类型特定的清理函数）
             if (self.task_cell) |cell_ptr| {
-                // 🚀 简化实现：由于类型擦除的复杂性，暂时不释放TaskCell
-                // 在真实实现中，这里会通过引用计数和vtable安全释放
-                // TaskCell的内存会在程序结束时由GPA自动清理
-                _ = cell_ptr; // 标记为已使用
+                if (self.task_cell_destroy_fn) |destroy_fn| {
+                    // 🚀 调用类型特定的清理函数
+                    destroy_fn(cell_ptr, self.allocator);
+                } else {
+                    // 🚀 备用清理：直接释放内存（不推荐，但比泄漏好）
+                    // 注意：这可能不会调用析构函数，但至少释放了内存
+                    const ptr = @as([*]u8, @ptrCast(cell_ptr));
+                    // 由于不知道确切大小，我们无法安全释放，所以还是暂时跳过
+                    _ = ptr;
+                }
                 self.task_cell = null;
+                self.task_cell_destroy_fn = null;
             }
         }
     };
@@ -759,13 +775,14 @@ pub fn ZokioRuntime(comptime config: RuntimeConfig) type {
             // 🔥 创建安全的JoinHandle
             const handle = JoinHandle(@TypeOf(future_instance).Output){
                 .task_cell = @ptrCast(task_cell),
+                .task_cell_destroy_fn = &CellType.destroyErased, // 🚀 设置类型特定的清理函数
                 .completion_notifier = completion_notifier,
                 .result_storage = result_storage,
                 .allocator = self.base_allocator,
             };
 
-            // 🔥 增加TaskCell引用计数（JoinHandle持有引用）
-            task_cell.incRef();
+            // 🔥 简化实现：不使用引用计数，JoinHandle直接拥有TaskCell
+            // task_cell.incRef(); // 移除引用计数
 
             // 🔥 创建调度器任务
             var sched_task = scheduler.Task{
@@ -1176,8 +1193,10 @@ fn executeTaskSafely(task_cell: *anyopaque, completion_notifier: *CompletionNoti
     }
 
     // 🔥 清理：减少TaskCell引用计数
-    // 在真实实现中，这里会调用task_cell.decRef()
-    _ = task_cell; // 暂时忽略，避免内存泄漏问题
+    // 由于类型擦除，我们需要通过特定的方式来减少引用计数
+    // 这里我们假设task_cell是TaskCell类型的指针
+    // 在真实实现中，这里会通过vtable调用decRef
+    _ = task_cell; // 暂时忽略，避免复杂的类型转换
 }
 
 /// 🚀 后台执行任务的函数（保留兼容性）
