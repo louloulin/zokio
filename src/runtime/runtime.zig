@@ -723,10 +723,7 @@ pub fn ZokioRuntime(comptime config: RuntimeConfig) type {
 
             while (true) {
                 // 🔥 安全的poll调用
-                const poll_result = future_obj.poll(&ctx) catch |err| {
-                    std.log.err("Future poll失败: {}", .{err});
-                    return err;
-                };
+                const poll_result = future_obj.poll(&ctx);
 
                 switch (poll_result) {
                     .ready => |value| return value,
@@ -749,7 +746,7 @@ pub fn ZokioRuntime(comptime config: RuntimeConfig) type {
                             // 🔥 自适应延迟策略
                             if (spin_count > max_spin) {
                                 // 根据连续pending次数调整延迟
-                                const delay_ns = if (consecutive_pending < 10)
+                                const delay_ns: u64 = if (consecutive_pending < 10)
                                     100 // 100ns - 超低延迟
                                 else if (consecutive_pending < 100)
                                     500 // 500ns - 低延迟

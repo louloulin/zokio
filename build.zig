@@ -690,6 +690,18 @@ pub fn build(b: *std.Build) void {
     stress_all_step.dependOn(&real_async_stress_cmd.step);
     stress_all_step.dependOn(&tokio_vs_zokio_cmd.step);
 
+    // Runtime系统性诊断测试
+    const runtime_diagnosis = b.addExecutable(.{
+        .name = "runtime_diagnosis",
+        .root_source_file = b.path("runtime_diagnosis.zig"),
+        .target = target,
+        .optimize = .ReleaseSafe,
+    });
+
+    const runtime_diagnosis_cmd = b.addRunArtifact(runtime_diagnosis);
+    const runtime_diagnosis_step = b.step("diagnose", "运行Runtime系统性诊断");
+    runtime_diagnosis_step.dependOn(&runtime_diagnosis_cmd.step);
+
     // 全面测试
     const test_all_step = b.step("test-all", "运行所有测试");
     test_all_step.dependOn(&run_unit_tests.step);
