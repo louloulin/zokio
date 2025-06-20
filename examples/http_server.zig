@@ -301,6 +301,12 @@ const HttpHandler = struct {
         return self.routeRequest(request);
     }
 
+    /// 🚀 使用Arena分配器处理HTTP请求（内存安全版本）
+    pub fn handleRequestWithArena(self: *Self, request: HttpRequest, arena_allocator: std.mem.Allocator) !HttpResponse {
+        // 使用Arena分配器处理请求
+        return self.routeRequestWithArena(request, arena_allocator);
+    }
+
     /// 路由请求到不同的处理器
     fn routeRequest(self: *Self, request: HttpRequest) !HttpResponse {
         var response = HttpResponse.init(self.allocator);
@@ -645,12 +651,17 @@ const HttpConnection = struct {
     fn processRequest(self: *Self, raw_request: []const u8) !void {
         print("🔗 处理连接 #{}: {} 字节\n", .{ self.connection_id, raw_request.len });
 
+        // 使用Arena分配器确保所有内存都能被正确释放
+        var arena = std.heap.ArenaAllocator.init(self.allocator);
+        defer arena.deinit(); // 一次性释放所有内存
+        const arena_allocator = arena.allocator();
+
         // 解析HTTP请求
-        var request = HttpRequest.parse(self.allocator, raw_request) catch |err| {
+        var request = HttpRequest.parse(arena_allocator, raw_request) catch |err| {
             print("❌ 解析请求失败: {}\n", .{err});
             return self.sendErrorResponse(.BAD_REQUEST);
         };
-        defer request.deinit();
+        // 不需要defer request.deinit() - Arena会自动释放
 
         print("📥 {s} {s} HTTP/1.1\n", .{ request.method.toString(), request.path });
 
@@ -659,7 +670,7 @@ const HttpConnection = struct {
             print("❌ 处理请求失败: {}\n", .{err});
             return self.sendErrorResponse(.INTERNAL_SERVER_ERROR);
         };
-        defer response.deinit();
+        // 不需要defer response.deinit() - Arena会自动释放
 
         // 发送响应
         try self.sendResponse(&response);
