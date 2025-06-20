@@ -6,7 +6,7 @@
 //! - 1.51M ops/sec libxev I/O
 
 const std = @import("std");
-const SimpleRuntime = @import("../runtime/runtime.zig").SimpleRuntime;
+const DefaultRuntime = @import("../runtime/runtime.zig").DefaultRuntime;
 const PerformanceMetrics = @import("mod.zig").PerformanceMetrics;
 const BenchType = @import("mod.zig").BenchType;
 
@@ -25,7 +25,7 @@ const IoConfig = @import("../io/io.zig").IoConfig;
 /// 优化的Zokio基准测试运行器
 pub const OptimizedZokioRunner = struct {
     allocator: std.mem.Allocator,
-    runtime: ?*SimpleRuntime,
+    runtime: ?*DefaultRuntime,
 
     const Self = @This();
 
@@ -49,7 +49,7 @@ pub const OptimizedZokioRunner = struct {
         std.debug.print("🚀 运行优化的Zokio基准测试...\n", .{});
 
         // 初始化高性能运行时
-        var runtime = try SimpleRuntime.init(self.allocator);
+        var runtime = try DefaultRuntime.init(self.allocator);
         defer runtime.deinit();
         try runtime.start();
         self.runtime = &runtime;
