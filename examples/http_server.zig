@@ -760,7 +760,7 @@ const HttpServer = struct {
         }
 
         print("\n🚀 演示完成，服务器现在进入持续运行模式...\n", .{});
-        print("📡 监听地址: 127.0.0.1:8080\n", .{});
+        print("📡 监听地址: 127.0.0.1:9090\n", .{});
         print("🔄 服务器正在运行，按 Ctrl+C 停止\n", .{});
         print("=" ** 50 ++ "\n\n", .{});
 
@@ -884,7 +884,7 @@ const HttpServer = struct {
         const stats = self.stats.getStats();
         print("\n📊 服务器状态报告:\n", .{});
         print("   🔄 状态: 运行中\n", .{});
-        print("   📡 监听: 127.0.0.1:8080\n", .{});
+        print("   📡 监听: 127.0.0.1:9090\n", .{});
         print("   📈 总请求: {} 个\n", .{stats.requests});
         print("   📤 总字节: {} 字节\n", .{stats.bytes});
         print("   ⏱️  运行时间: {} 毫秒\n", .{stats.uptime});
@@ -966,7 +966,7 @@ pub fn main() !void {
     };
 
     // 创建服务器地址
-    const address = try zokio.net.SocketAddr.parse("127.0.0.1:8080");
+    const address = try zokio.net.SocketAddr.parse("127.0.0.1:9090");
 
     // 创建HTTP服务器
     var server = HttpServer{
@@ -993,9 +993,9 @@ pub fn main() !void {
     print("\n", .{});
 
     print("🧪 测试命令:\n", .{});
-    print("   curl http://localhost:8080/hello\n", .{});
-    print("   curl -X POST http://localhost:8080/api/echo -d \"Hello Zokio!\"\n", .{});
-    print("   curl http://localhost:8080/api/stats | jq .\n", .{});
+    print("   curl http://localhost:9090/hello\n", .{});
+    print("   curl -X POST http://localhost:9090/api/echo -d \"Hello Zokio!\"\n", .{});
+    print("   curl http://localhost:9090/api/stats | jq .\n", .{});
     print("\n", .{});
 
     print("🚀 启动 Zokio HTTP 服务器...\n", .{});
