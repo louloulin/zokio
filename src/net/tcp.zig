@@ -27,7 +27,7 @@ pub const TcpStream = struct {
 
     /// 连接到指定地址
     pub fn connect(allocator: std.mem.Allocator, addr: SocketAddr) !Self {
-        const family = switch (addr) {
+        const family: u32 = switch (addr) {
             .v4 => std.posix.AF.INET,
             .v6 => std.posix.AF.INET6,
         };
@@ -113,7 +113,7 @@ pub const TcpListener = struct {
 
     /// 绑定到指定地址并开始监听
     pub fn bind(allocator: std.mem.Allocator, addr: SocketAddr) !Self {
-        const family = switch (addr) {
+        const family: u32 = switch (addr) {
             .v4 => std.posix.AF.INET,
             .v6 => std.posix.AF.INET6,
         };
@@ -167,7 +167,7 @@ pub const ReadFuture = struct {
     bytes_read: usize = 0,
 
     const Self = @This();
-    pub const Output = !usize;
+    pub const Output = anyerror!usize;
 
     pub fn init(fd: std.posix.socket_t, buffer: []u8) Self {
         return Self{
@@ -176,7 +176,7 @@ pub const ReadFuture = struct {
         };
     }
 
-    pub fn poll(self: *Self, ctx: *Context) Poll(!usize) {
+    pub fn poll(self: *Self, ctx: *Context) Poll(anyerror!usize) {
         _ = ctx;
 
         const result = std.posix.read(self.fd, self.buffer);
@@ -201,7 +201,7 @@ pub const WriteFuture = struct {
     bytes_written: usize = 0,
 
     const Self = @This();
-    pub const Output = !usize;
+    pub const Output = anyerror!usize;
 
     pub fn init(fd: std.posix.socket_t, data: []const u8) Self {
         return Self{
@@ -210,7 +210,7 @@ pub const WriteFuture = struct {
         };
     }
 
-    pub fn poll(self: *Self, ctx: *Context) Poll(!usize) {
+    pub fn poll(self: *Self, ctx: *Context) Poll(anyerror!usize) {
         _ = ctx;
 
         const result = std.posix.write(self.fd, self.data[self.bytes_written..]);
@@ -238,7 +238,7 @@ pub const AcceptFuture = struct {
     allocator: std.mem.Allocator,
 
     const Self = @This();
-    pub const Output = !TcpStream;
+    pub const Output = anyerror!TcpStream;
 
     pub fn init(fd: std.posix.socket_t, allocator: std.mem.Allocator) Self {
         return Self{
@@ -247,7 +247,7 @@ pub const AcceptFuture = struct {
         };
     }
 
-    pub fn poll(self: *Self, ctx: *Context) Poll(!TcpStream) {
+    pub fn poll(self: *Self, ctx: *Context) Poll(anyerror!TcpStream) {
         _ = ctx;
 
         var addr: std.posix.sockaddr = undefined;
@@ -283,7 +283,11 @@ pub const AcceptFuture = struct {
 /// 设置套接字为非阻塞模式
 fn setNonBlocking(fd: std.posix.socket_t) !void {
     const flags = try std.posix.fcntl(fd, std.posix.F.GETFL, 0);
-    _ = try std.posix.fcntl(fd, std.posix.F.SETFL, flags | std.posix.O.NONBLOCK);
+    const nonblock_flag = switch (builtin.os.tag) {
+        .macos, .ios, .tvos, .watchos, .visionos => 0x0004, // O_NONBLOCK on Darwin
+        else => std.posix.O.NONBLOCK,
+    };
+    _ = try std.posix.fcntl(fd, std.posix.F.SETFL, flags | nonblock_flag);
 }
 
 /// 连接套接字到指定地址
