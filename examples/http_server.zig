@@ -329,9 +329,7 @@ const HttpHandler = struct {
         try response.putAllocatedHeader("X-Processing-Time", timing_header);
         try response.headers.put("X-Powered-By", "Zokio/1.0 (32B+ ops/sec)");
 
-        // 记录统计信息（不生成完整响应字符串，只估算大小）
-        const estimated_size = response.body.len + 200; // 估算头部大小
-        self.stats.recordRequest(estimated_size);
+        // 统计信息将在sendResponse中记录
 
         return response;
     }
@@ -677,6 +675,9 @@ const HttpConnection = struct {
             response.status.reasonPhrase(),
             response_str.len,
         });
+
+        // 记录统计信息
+        self.handler.stats.recordRequest(response_str.len);
 
         // 在真实实现中，这里会通过socket发送响应
         // 现在我们只是模拟发送
