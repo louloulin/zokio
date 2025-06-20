@@ -198,7 +198,7 @@ fn benchmarkRuntime(allocator: std.mem.Allocator, name: []const u8, buildFn: any
     std.debug.print("    线程数: {}\n", .{stats.thread_count});
 
     // 性能测试：简单操作循环
-    const ops_count = 1000000;
+    const ops_count = 10_000_000; // 增加操作数量确保有足够的测试时间
     const perf_start = std.time.nanoTimestamp();
 
     for (0..ops_count) |_| {
@@ -207,7 +207,7 @@ fn benchmarkRuntime(allocator: std.mem.Allocator, name: []const u8, buildFn: any
 
     const perf_end = std.time.nanoTimestamp();
     const perf_time = @as(u64, @intCast(perf_end - perf_start));
-    const ops_per_second = if (perf_time > 0) (ops_count * 1_000_000_000) / perf_time else 0;
+    const ops_per_second = if (perf_time > 1000) (ops_count * 1_000_000_000) / perf_time else ops_count; // 防止除零，最小1μs
 
     std.debug.print("    性能: {} ops/sec\n", .{ops_per_second});
 
