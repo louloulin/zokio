@@ -12,6 +12,9 @@ pub fn build(b: *std.Build) void {
     const enable_simd = b.option(bool, "simd", "启用SIMD优化") orelse true;
     const debug_mode = b.option(bool, "debug", "启用调试模式") orelse false;
 
+    // 基准测试配置选择
+    const benchmark_config = b.option([]const u8, "benchmark_config", "基准测试配置选择") orelse "memory_optimized";
+
     // 编译时配置选项
     const options = b.addOptions();
     options.addOption(bool, "enable_metrics", enable_metrics);
@@ -20,6 +23,7 @@ pub fn build(b: *std.Build) void {
     options.addOption(bool, "enable_io_uring", enable_io_uring);
     options.addOption(bool, "enable_simd", enable_simd);
     options.addOption(bool, "debug_mode", debug_mode);
+    options.addOption(?[]const u8, "benchmark_config", benchmark_config);
 
     // libxev依赖
     const libxev = b.dependency("libxev", .{
@@ -779,6 +783,21 @@ pub fn build(b: *std.Build) void {
     const comprehensive_benchmark_cmd = b.addRunArtifact(comprehensive_benchmark);
     const comprehensive_benchmark_step = b.step("benchmark-comprehensive", "运行综合性能基准测试");
     comprehensive_benchmark_step.dependOn(&comprehensive_benchmark_cmd.step);
+
+    // 调试全局数据大小
+    const debug_global_size = b.addExecutable(.{
+        .name = "debug_global_size",
+        .root_source_file = b.path("debug_global_size.zig"),
+        .target = target,
+        .optimize = .Debug,
+    });
+    debug_global_size.root_module.addImport("zokio", lib.root_module);
+    debug_global_size.root_module.addOptions("config", options);
+    debug_global_size.root_module.addImport("libxev", libxev.module("xev"));
+
+    const debug_global_size_cmd = b.addRunArtifact(debug_global_size);
+    const debug_global_size_step = b.step("debug-global-size", "调试全局数据大小问题");
+    debug_global_size_step.dependOn(&debug_global_size_cmd.step);
 
     // 全面测试
     const test_all_step = b.step("test-all", "运行所有测试");
