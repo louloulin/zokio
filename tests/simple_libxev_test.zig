@@ -6,8 +6,8 @@ const zokio = @import("zokio");
 
 test "简单的libxev常量测试" {
     const config = zokio.io.IoConfig{
-        .prefer_libxev = true,
         .events_capacity = 64,
+        .enable_real_io = false,
     };
 
     const DriverType = zokio.io.IoDriver(config);
