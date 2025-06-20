@@ -735,6 +735,51 @@ pub fn build(b: *std.Build) void {
     const simple_runtime_diagnosis_step = b.step("diagnose-simple", "运行简化Runtime诊断");
     simple_runtime_diagnosis_step.dependOn(&simple_runtime_diagnosis_cmd.step);
 
+    // Runtime配置稳定性测试
+    const runtime_stability_test = b.addExecutable(.{
+        .name = "runtime_stability_test",
+        .root_source_file = b.path("tests/runtime_stability_test.zig"),
+        .target = target,
+        .optimize = .ReleaseSafe,
+    });
+    runtime_stability_test.root_module.addImport("zokio", lib.root_module);
+    runtime_stability_test.root_module.addOptions("config", options);
+    runtime_stability_test.root_module.addImport("libxev", libxev.module("xev"));
+
+    const runtime_stability_test_cmd = b.addRunArtifact(runtime_stability_test);
+    const runtime_stability_test_step = b.step("test-runtime-stability", "运行Runtime配置稳定性测试");
+    runtime_stability_test_step.dependOn(&runtime_stability_test_cmd.step);
+
+    // Runtime健壮性测试
+    const runtime_robustness_test = b.addExecutable(.{
+        .name = "runtime_robustness_test",
+        .root_source_file = b.path("tests/runtime_robustness_test.zig"),
+        .target = target,
+        .optimize = .ReleaseSafe,
+    });
+    runtime_robustness_test.root_module.addImport("zokio", lib.root_module);
+    runtime_robustness_test.root_module.addOptions("config", options);
+    runtime_robustness_test.root_module.addImport("libxev", libxev.module("xev"));
+
+    const runtime_robustness_test_cmd = b.addRunArtifact(runtime_robustness_test);
+    const runtime_robustness_test_step = b.step("test-runtime-robustness", "运行Runtime健壮性测试");
+    runtime_robustness_test_step.dependOn(&runtime_robustness_test_cmd.step);
+
+    // 综合性能基准测试
+    const comprehensive_benchmark = b.addExecutable(.{
+        .name = "comprehensive_benchmark",
+        .root_source_file = b.path("tests/comprehensive_benchmark.zig"),
+        .target = target,
+        .optimize = .ReleaseFast, // 使用最高优化级别进行基准测试
+    });
+    comprehensive_benchmark.root_module.addImport("zokio", lib.root_module);
+    comprehensive_benchmark.root_module.addOptions("config", options);
+    comprehensive_benchmark.root_module.addImport("libxev", libxev.module("xev"));
+
+    const comprehensive_benchmark_cmd = b.addRunArtifact(comprehensive_benchmark);
+    const comprehensive_benchmark_step = b.step("benchmark-comprehensive", "运行综合性能基准测试");
+    comprehensive_benchmark_step.dependOn(&comprehensive_benchmark_cmd.step);
+
     // 全面测试
     const test_all_step = b.step("test-all", "运行所有测试");
     test_all_step.dependOn(&run_unit_tests.step);

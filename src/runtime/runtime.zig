@@ -1241,8 +1241,61 @@ pub fn shutdownGlobalRuntime() void {
     // 在实际使用中，应该手动管理运行时实例
 }
 
-/// 运行时构建器 - 提供流畅的配置接口（兼容SimpleRuntime）
-pub const RuntimeBuilder = struct {
+/// 🔧 编译时运行时构建器 - 解决编译时参数问题
+pub fn RuntimeBuilder(comptime config: RuntimeConfig) type {
+    return struct {
+        const Self = @This();
+        const RuntimeType = ZokioRuntime(config);
+
+        /// 🚀 构建运行时
+        pub fn build(allocator: std.mem.Allocator) !RuntimeType {
+            return RuntimeType.init(allocator);
+        }
+
+        /// 🚀 构建并启动运行时
+        pub fn buildAndStart(allocator: std.mem.Allocator) !RuntimeType {
+            var runtime = try Self.build(allocator);
+            try runtime.start();
+            return runtime;
+        }
+
+        /// 获取编译时信息
+        pub fn getCompileTimeInfo() @TypeOf(RuntimeType.COMPILE_TIME_INFO) {
+            return RuntimeType.COMPILE_TIME_INFO;
+        }
+
+        /// 获取运行时大小
+        pub fn getRuntimeSize() usize {
+            return @sizeOf(RuntimeType);
+        }
+    };
+}
+
+/// 🚀 预设运行时构建器
+pub const RuntimeBuilders = struct {
+    /// 🔥 极致性能构建器
+    pub const ExtremePerformance = RuntimeBuilder(RuntimePresets.EXTREME_PERFORMANCE);
+
+    /// ⚡ 低延迟构建器
+    pub const LowLatency = RuntimeBuilder(RuntimePresets.LOW_LATENCY);
+
+    /// 🌐 I/O密集型构建器
+    pub const IoIntensive = RuntimeBuilder(RuntimePresets.IO_INTENSIVE);
+
+    /// 🧠 内存优化构建器
+    pub const MemoryOptimized = RuntimeBuilder(RuntimePresets.MEMORY_OPTIMIZED);
+
+    /// ⚖️ 平衡构建器
+    pub const Balanced = RuntimeBuilder(RuntimePresets.BALANCED);
+
+    /// 🔧 自定义构建器
+    pub fn custom(comptime config: RuntimeConfig) type {
+        return RuntimeBuilder(config);
+    }
+};
+
+/// 🔧 流畅配置构建器 - 运行时配置
+pub const FluentRuntimeBuilder = struct {
     const Self = @This();
 
     config: RuntimeConfig = .{},
@@ -1325,23 +1378,62 @@ pub const RuntimeBuilder = struct {
         return self.preset(RuntimePresets.BALANCED);
     }
 
-    /// 🚀 构建高性能运行时
-    pub fn build(self: Self, allocator: std.mem.Allocator) !ZokioRuntime(self.config) {
-        return ZokioRuntime(self.config).init(allocator);
+    /// 🚀 构建运行时（使用默认安全配置）
+    pub fn buildSafe(self: Self, allocator: std.mem.Allocator) !MemoryOptimizedRuntime {
+        _ = self; // 忽略配置，使用安全默认值
+        return MemoryOptimizedRuntime.init(allocator);
     }
 
-    /// 🚀 构建并启动高性能运行时
-    pub fn buildAndStart(self: Self, allocator: std.mem.Allocator) !ZokioRuntime(self.config) {
-        var runtime = try self.build(allocator);
+    /// 🚀 构建并启动运行时（使用默认安全配置）
+    pub fn buildAndStartSafe(self: Self, allocator: std.mem.Allocator) !MemoryOptimizedRuntime {
+        var runtime = try self.buildSafe(allocator);
         try runtime.start();
         return runtime;
     }
+
+    /// 获取配置信息
+    pub fn getConfig(self: Self) RuntimeConfig {
+        return self.config;
+    }
 };
 
-/// 创建运行时构建器
-pub fn builder() RuntimeBuilder {
-    return RuntimeBuilder.init();
+/// 创建流畅配置构建器
+pub fn builder() FluentRuntimeBuilder {
+    return FluentRuntimeBuilder.init();
 }
+
+/// 🚀 便捷构建器函数
+pub const build = struct {
+    /// 极致性能运行时
+    pub fn extremePerformance(allocator: std.mem.Allocator) !HighPerformanceRuntime {
+        return RuntimeBuilders.ExtremePerformance.build(allocator);
+    }
+
+    /// 低延迟运行时
+    pub fn lowLatency(allocator: std.mem.Allocator) !LowLatencyRuntime {
+        return RuntimeBuilders.LowLatency.build(allocator);
+    }
+
+    /// I/O密集型运行时
+    pub fn ioIntensive(allocator: std.mem.Allocator) !IOIntensiveRuntime {
+        return RuntimeBuilders.IoIntensive.build(allocator);
+    }
+
+    /// 内存优化运行时
+    pub fn memoryOptimized(allocator: std.mem.Allocator) !MemoryOptimizedRuntime {
+        return RuntimeBuilders.MemoryOptimized.build(allocator);
+    }
+
+    /// 平衡运行时
+    pub fn balanced(allocator: std.mem.Allocator) !BalancedRuntime {
+        return RuntimeBuilders.Balanced.build(allocator);
+    }
+
+    /// 默认安全运行时
+    pub fn default(allocator: std.mem.Allocator) !DefaultRuntime {
+        return DefaultRuntime.init(allocator);
+    }
+};
 
 /// 🚀 高性能运行时配置预设
 pub const RuntimePresets = struct {

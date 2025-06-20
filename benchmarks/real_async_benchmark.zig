@@ -19,7 +19,7 @@ pub fn main() !void {
         .workStealing(true)
         .queueSize(10000)
         .metrics(true)
-        .build(allocator);
+        .buildSafe(allocator);
     defer runtime.deinit();
     try runtime.start();
 

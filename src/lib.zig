@@ -72,6 +72,7 @@ pub const DefaultRuntime = runtime.DefaultRuntime;
 
 // 🚀 便捷函数
 pub const builder = runtime.builder;
+pub const build = runtime.build;
 pub const asyncMain = runtime.asyncMain;
 pub const initGlobalRuntime = runtime.initGlobalRuntime;
 pub const shutdownGlobalRuntime = runtime.shutdownGlobalRuntime;
