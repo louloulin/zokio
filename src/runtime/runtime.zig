@@ -586,15 +586,24 @@ pub fn ZokioRuntime(comptime config: RuntimeConfig) type {
         pub fn deinit(self: *Self) void {
             self.running.store(false, .release);
 
-            // 清理libxev事件循环
+            // 🔥 安全清理libxev事件循环
             if (comptime LIBXEV_ENABLED) {
                 if (self.libxev_loop) |*loop| {
-                    loop.deinit();
+                    // 检查loop是否有deinit方法
+                    if (@hasDecl(@TypeOf(loop.*), "deinit")) {
+                        loop.deinit();
+                    }
                 }
             }
 
-            self.io_driver.deinit();
-            self.allocator.deinit();
+            // 🔥 安全清理I/O驱动和分配器
+            if (@hasDecl(@TypeOf(self.io_driver), "deinit")) {
+                self.io_driver.deinit();
+            }
+
+            if (@hasDecl(@TypeOf(self.allocator), "deinit")) {
+                self.allocator.deinit();
+            }
         }
 
         /// 🚀 启动高性能运行时 - 真实工作线程管理
@@ -691,6 +700,17 @@ pub fn ZokioRuntime(comptime config: RuntimeConfig) type {
                 }
             };
 
+            // 🔥 编译时验证Future类型
+            const FutureType = @TypeOf(future_instance);
+            comptime {
+                if (!@hasDecl(FutureType, "poll")) {
+                    @compileError("Type must implement poll method");
+                }
+                if (!@hasDecl(FutureType, "Output")) {
+                    @compileError("Type must have Output associated type");
+                }
+            }
+
             // 高性能实现：智能轮询策略
             var future_obj = future_instance;
             const waker = future.Waker.noop();
@@ -702,13 +722,22 @@ pub fn ZokioRuntime(comptime config: RuntimeConfig) type {
             var consecutive_pending: u32 = 0;
 
             while (true) {
-                switch (future_obj.poll(&ctx)) {
+                // 🔥 安全的poll调用
+                const poll_result = future_obj.poll(&ctx) catch |err| {
+                    std.log.err("Future poll失败: {}", .{err});
+                    return err;
+                };
+
+                switch (poll_result) {
                     .ready => |value| return value,
                     .pending => {
                         consecutive_pending += 1;
 
                         // 🚀 智能I/O轮询策略
-                        const events = try self.io_driver.poll(0); // 非阻塞轮询
+                        const events = self.io_driver.poll(0) catch |err| blk: {
+                            std.log.warn("I/O轮询失败: {}", .{err});
+                            break :blk 0; // 继续执行，假设没有事件
+                        };
 
                         if (events > 0) {
                             // 有I/O事件，重置计数器
@@ -868,14 +897,14 @@ fn selectLibxevLoop(comptime config: RuntimeConfig) type {
 }
 
 /// 🔥 安全的libxev初始化函数 - 支持降级和错误恢复
-fn safeInitLibxev(comptime config: RuntimeConfig, allocator: std.mem.Allocator) ?libxev.Loop {
+fn safeInitLibxev(comptime config: RuntimeConfig, allocator: std.mem.Allocator) if (config.prefer_libxev and libxev != null) ?selectLibxevLoop(config) else void {
     _ = allocator; // 暂时未使用
 
-    if (!config.prefer_libxev or libxev == null) {
-        return null;
+    if (comptime !config.prefer_libxev or libxev == null) {
+        return {};
     }
 
-    return libxev.?.Loop.init(.{}) catch |err| {
+    return selectLibxevLoop(config).init(.{}) catch |err| {
         std.log.warn("libxev初始化失败，将回退到标准I/O: {}", .{err});
         return null;
     };

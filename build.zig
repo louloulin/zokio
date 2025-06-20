@@ -353,6 +353,21 @@ pub fn build(b: *std.Build) void {
     const simple_runtime_test_step = b.step("simple-runtime", "运行简单运行时测试");
     simple_runtime_test_step.dependOn(&simple_runtime_test_cmd.step);
 
+    // 调试运行时测试
+    const debug_runtime_test = b.addExecutable(.{
+        .name = "debug_runtime_test",
+        .root_source_file = b.path("debug_runtime_test.zig"),
+        .target = target,
+        .optimize = .Debug,
+    });
+    debug_runtime_test.root_module.addImport("zokio", lib.root_module);
+    debug_runtime_test.root_module.addOptions("config", options);
+    debug_runtime_test.root_module.addImport("libxev", libxev.module("xev"));
+
+    const debug_runtime_test_cmd = b.addRunArtifact(debug_runtime_test);
+    const debug_runtime_test_step = b.step("debug-runtime", "运行调试运行时测试");
+    debug_runtime_test_step.dependOn(&debug_runtime_test_cmd.step);
+
     // 基础运行时验证测试
     const basic_runtime_verification = b.addExecutable(.{
         .name = "basic_runtime_verification",
