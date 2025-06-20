@@ -86,8 +86,8 @@ pub const Context = struct {
     /// 任务本地存储
     task_locals: ?*TaskLocalStorage = null,
 
-    /// 初始化Context
-    pub fn init(waker: Waker, event_loop: *AsyncEventLoop) Self {
+    /// 完整的初始化Context
+    pub fn initWithEventLoop(waker: Waker, event_loop: *AsyncEventLoop) Self {
         return Self{
             .waker = waker,
             .event_loop = event_loop,
@@ -95,7 +95,7 @@ pub const Context = struct {
     }
 
     /// 简化的初始化（仅包含waker）
-    pub fn initSimple(waker: Waker) Self {
+    pub fn init(waker: Waker) Self {
         return Self{
             .waker = waker,
             .event_loop = &default_event_loop,
@@ -134,6 +134,10 @@ pub const Context = struct {
         };
     }
 
+    /// 全局分配器（用于默认事件循环）
+    var global_gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const global_allocator = global_gpa.allocator();
+
     /// 默认事件循环（用于简化测试）
     var default_event_loop = AsyncEventLoop{
         .libxev_loop = undefined,
@@ -141,7 +145,7 @@ pub const Context = struct {
         .timer_wheel = undefined,
         .running = utils.Atomic.Value(bool).init(false),
         .active_tasks = utils.Atomic.Value(u32).init(0),
-        .allocator = undefined,
+        .allocator = global_allocator,
     };
 };
 

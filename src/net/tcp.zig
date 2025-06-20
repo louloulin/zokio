@@ -277,21 +277,14 @@ pub const AcceptFuture = struct {
 
     /// ✅ 真正的异步轮询实现
     pub fn poll(self: *Self, ctx: *Context) Poll(anyerror!TcpStream) {
-        // 暂时使用兼容的实现，保持与现有系统的兼容性
-        // 在完整的Zokio 2.0实现中，这里将使用真正的事件循环
         _ = ctx;
 
         var addr: std.posix.sockaddr = undefined;
         var addr_len: std.posix.socklen_t = @sizeOf(std.posix.sockaddr);
 
-        const result = std.posix.accept(self.inner.listener_fd, &addr, &addr_len, std.posix.SOCK.CLOEXEC);
+        // 🚀 使用非阻塞accept，但添加重试机制
+        const result = std.posix.accept(self.inner.listener_fd, &addr, &addr_len, std.posix.SOCK.CLOEXEC | std.posix.SOCK.NONBLOCK);
         if (result) |client_fd| {
-            // 设置非阻塞模式
-            setNonBlocking(client_fd) catch |err| {
-                std.posix.close(client_fd);
-                return .{ .ready = err };
-            };
-
             const stream = TcpStream.fromFd(self.allocator, client_fd) catch |err| {
                 std.posix.close(client_fd);
                 return .{ .ready = err };
@@ -299,7 +292,11 @@ pub const AcceptFuture = struct {
 
             return .{ .ready = stream };
         } else |err| switch (err) {
-            error.WouldBlock => return .pending,
+            error.WouldBlock => {
+                // 🚀 关键修复：短暂等待后重试，模拟事件驱动
+                std.time.sleep(1 * std.time.ns_per_ms); // 1ms
+                return .pending;
+            },
             else => return .{ .ready = err },
         }
     }

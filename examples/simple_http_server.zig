@@ -232,52 +232,24 @@ const AsyncConnectionHandler = struct {
         print("✅ 连接 #{} 处理完成\n", .{self.connection_id});
     }
 
-    /// 🚀 异步读取请求（简化版本，展示async_fn结构）
+    /// 🚀 异步读取请求（真正使用await_fn）
     fn asyncReadRequest(self: *Self, stream: *zokio.net.tcp.TcpStream, allocator: std.mem.Allocator) ![]u8 {
         _ = self;
 
         var buffer = try allocator.alloc(u8, 4096);
 
-        // 🚀 简化版本：使用Future轮询模式展示async_fn概念
-        var read_future = stream.read(buffer);
-        while (true) {
-            const waker = zokio.Waker.noop();
-            var ctx = zokio.Context.init(waker);
+        // 🚀 真正使用await_fn进行异步读取
+        const bytes_read = try zokio.await_fn(stream.read(buffer));
 
-            switch (read_future.poll(&ctx)) {
-                .ready => |result| {
-                    const bytes_read = try result;
-                    return buffer[0..bytes_read];
-                },
-                .pending => {
-                    // 简单让出CPU，展示异步概念
-                    std.Thread.yield() catch {};
-                },
-            }
-        }
+        return buffer[0..bytes_read];
     }
 
-    /// 🚀 异步发送响应（简化版本，展示async_fn结构）
+    /// 🚀 异步发送响应（真正使用await_fn）
     fn asyncSendResponse(self: *Self, stream: *zokio.net.tcp.TcpStream, response: []const u8) !void {
         _ = self;
 
-        // 🚀 简化版本：使用Future轮询模式展示async_fn概念
-        var write_future = stream.write(response);
-        while (true) {
-            const waker = zokio.Waker.noop();
-            var ctx = zokio.Context.init(waker);
-
-            switch (write_future.poll(&ctx)) {
-                .ready => |result| {
-                    _ = try result;
-                    return;
-                },
-                .pending => {
-                    // 简单让出CPU，展示异步概念
-                    std.Thread.yield() catch {};
-                },
-            }
-        }
+        // 🚀 真正使用await_fn进行异步写入
+        _ = try zokio.await_fn(stream.write(response));
     }
 };
 
@@ -315,33 +287,21 @@ const SimpleAsyncServer = struct {
     pub fn run(self: *Self) !void {
         print("🚀 Zokio简化异步HTTP服务器启动\n", .{});
         print("📡 监听地址: http://localhost:8080\n", .{});
-        print("⚡ 使用真正的async_fn/await_fn异步处理\n\n", .{});
+        print("⚡ 使用真正的async_fn/await_fn异步处理\n", .{});
+        print("🔄 等待连接...\n\n", .{});
 
         while (true) {
-            // 🚀 简化版本：使用Future轮询模式展示async_fn概念
-            var accept_future = self.listener.accept();
-            var stream: zokio.net.tcp.TcpStream = undefined;
+            print("🔍 准备接受新连接...\n", .{});
 
-            while (true) {
-                const waker = zokio.Waker.noop();
-                var ctx = zokio.Context.init(waker);
+            // 🚀 真正使用await_fn异步接受连接
+            var stream = try zokio.await_fn(self.listener.accept());
 
-                switch (accept_future.poll(&ctx)) {
-                    .ready => |result| {
-                        stream = try result;
-                        break;
-                    },
-                    .pending => {
-                        // 简单让出CPU，展示异步概念
-                        std.Thread.yield() catch {};
-                    },
-                }
-            }
+            print("✅ 接受到新连接!\n", .{});
 
             // 生成连接ID
             const connection_id = self.connection_counter.fetchAdd(1, .monotonic);
 
-            // 🚀 直接处理连接（简化版本，展示async_fn结构）
+            // 🚀 直接处理连接（展示async_fn结构）
             var handler = AsyncConnectionHandler{
                 .allocator = self.allocator,
                 .handler = AsyncHttpHandler{
