@@ -13,7 +13,10 @@ pub fn main() !void {
     std.debug.print("=== Zokio定时器和时间管理演示 ===\n\n", .{});
 
     // 创建运行时
-    var runtime = zokio.SimpleRuntime.init(allocator, .{});
+    var runtime = try zokio.builder()
+        .threads(2)
+        .metrics(true)
+        .build(allocator);
     defer runtime.deinit();
 
     // 启动运行时

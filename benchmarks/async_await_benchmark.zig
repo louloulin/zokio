@@ -13,12 +13,7 @@ pub fn main() !void {
     std.debug.print("=== await_fn和async_fn压力测试 ===\n\n", .{});
 
     // 初始化高性能运行时
-    var runtime = zokio.SimpleRuntime.init(allocator, .{
-        .threads = 8,
-        .work_stealing = true,
-        .queue_size = 10000,
-        .metrics = true,
-    });
+    var runtime = try zokio.SimpleRuntime.init(allocator);
     defer runtime.deinit();
     try runtime.start();
 
@@ -230,23 +225,33 @@ fn benchmarkDeepNestedChain(runtime: *zokio.SimpleRuntime) !void {
 
     // 定义深度嵌套的异步函数链
     const AsyncLevel1 = zokio.future.async_fn_with_params(struct {
-        fn level1(value: u32) u32 { return value + 1; }
+        fn level1(value: u32) u32 {
+            return value + 1;
+        }
     }.level1);
 
     const AsyncLevel2 = zokio.future.async_fn_with_params(struct {
-        fn level2(value: u32) u32 { return value * 2; }
+        fn level2(value: u32) u32 {
+            return value * 2;
+        }
     }.level2);
 
     const AsyncLevel3 = zokio.future.async_fn_with_params(struct {
-        fn level3(value: u32) u32 { return value + 3; }
+        fn level3(value: u32) u32 {
+            return value + 3;
+        }
     }.level3);
 
     const AsyncLevel4 = zokio.future.async_fn_with_params(struct {
-        fn level4(value: u32) u32 { return value * 4; }
+        fn level4(value: u32) u32 {
+            return value * 4;
+        }
     }.level4);
 
     const AsyncLevel5 = zokio.future.async_fn_with_params(struct {
-        fn level5(value: u32) u32 { return value + 5; }
+        fn level5(value: u32) u32 {
+            return value + 5;
+        }
     }.level5);
 
     const iterations = 20000;

@@ -28,13 +28,13 @@ fn basicRuntimeDemo(allocator: std.mem.Allocator) !void {
     std.debug.print("1. 基础运行时创建演示\n", .{});
 
     // 按照plan.md中的API设计创建运行时
-    // 注意：这里使用SimpleRuntime作为ZokioRuntime的简化版本
-    var runtime = zokio.SimpleRuntime.init(allocator, .{
-        .threads = 4,
-        .work_stealing = true,
-        .queue_size = 1024,
-        .metrics = true,
-    });
+    // 使用统一的运行时构建器
+    var runtime = try zokio.builder()
+        .threads(4)
+        .workStealing(true)
+        .queueSize(1024)
+        .metrics(true)
+        .build(allocator);
     defer runtime.deinit();
 
     try runtime.start();
@@ -51,7 +51,7 @@ fn basicRuntimeDemo(allocator: std.mem.Allocator) !void {
 fn asyncFunctionWithParamsDemo(allocator: std.mem.Allocator) !void {
     std.debug.print("\n2. 带参数的异步函数演示\n", .{});
 
-    var runtime = zokio.SimpleRuntime.init(allocator, .{});
+    var runtime = try zokio.builder().build(allocator);
     defer runtime.deinit();
     try runtime.start();
 
@@ -80,7 +80,7 @@ fn asyncFunctionWithParamsDemo(allocator: std.mem.Allocator) !void {
 fn awaitFnDemo(allocator: std.mem.Allocator) !void {
     std.debug.print("\n3. await_fn语法演示\n", .{});
 
-    var runtime = zokio.SimpleRuntime.init(allocator, .{});
+    var runtime = try zokio.builder().build(allocator);
     defer runtime.deinit();
     try runtime.start();
 
@@ -138,7 +138,7 @@ fn simulateAsyncRead(buffer: []u8, offset: u64) zokio.future.ReadyFuture(usize) 
 fn complexAsyncDemo(allocator: std.mem.Allocator) !void {
     std.debug.print("\n4. 复杂异步操作组合演示\n", .{});
 
-    var runtime = zokio.SimpleRuntime.init(allocator, .{});
+    var runtime = try zokio.builder().build(allocator);
     defer runtime.deinit();
     try runtime.start();
 
@@ -167,14 +167,14 @@ fn complexAsyncDemo(allocator: std.mem.Allocator) !void {
 fn runtimeStatsDemo(allocator: std.mem.Allocator) !void {
     std.debug.print("\n5. 运行时统计和监控演示\n", .{});
 
-    var runtime = zokio.SimpleRuntime.init(allocator, .{ .metrics = true });
+    var runtime = try zokio.builder().metrics(true).build(allocator);
     defer runtime.deinit();
     try runtime.start();
 
     // 执行一些任务
     for (0..5) |i| {
         const task_future = zokio.future.ready(u32, @intCast(i));
-        _ = try runtime.spawn(task_future);
+        _ = try runtime.spawnTask(task_future);
     }
 
     // 获取统计信息

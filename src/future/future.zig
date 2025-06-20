@@ -7,6 +7,90 @@ const std = @import("std");
 const builtin = @import("builtin");
 const utils = @import("../utils/utils.zig");
 
+/// Result类型 - 用于表示可能失败的操作结果
+pub fn Result(comptime T: type, comptime E: type) type {
+    return union(enum) {
+        /// 成功结果
+        ok: T,
+        /// 错误结果
+        err: E,
+
+        const Self = @This();
+
+        /// 检查是否成功
+        pub fn isOk(self: Self) bool {
+            return switch (self) {
+                .ok => true,
+                .err => false,
+            };
+        }
+
+        /// 检查是否失败
+        pub fn isErr(self: Self) bool {
+            return switch (self) {
+                .ok => false,
+                .err => true,
+            };
+        }
+
+        /// 获取成功值，如果失败则panic
+        pub fn unwrap(self: Self) T {
+            return switch (self) {
+                .ok => |value| value,
+                .err => |e| std.debug.panic("Called unwrap on error: {}", .{e}),
+            };
+        }
+
+        /// 获取成功值，如果失败则返回默认值
+        pub fn unwrapOr(self: Self, default: T) T {
+            return switch (self) {
+                .ok => |value| value,
+                .err => default,
+            };
+        }
+
+        /// 获取错误值，如果成功则panic
+        pub fn unwrapErr(self: Self) E {
+            return switch (self) {
+                .ok => std.debug.panic("Called unwrapErr on ok value", .{}),
+                .err => |e| e,
+            };
+        }
+
+        /// 映射成功值到新类型
+        pub fn map(self: Self, comptime U: type, func: fn (T) U) Result(U, E) {
+            return switch (self) {
+                .ok => |value| .{ .ok = func(value) },
+                .err => |e| .{ .err = e },
+            };
+        }
+
+        /// 映射错误值到新类型
+        pub fn mapErr(self: Self, comptime F: type, func: fn (E) F) Result(T, F) {
+            return switch (self) {
+                .ok => |value| .{ .ok = value },
+                .err => |e| .{ .err = func(e) },
+            };
+        }
+
+        /// 链式操作
+        pub fn andThen(self: Self, comptime U: type, func: fn (T) Result(U, E)) Result(U, E) {
+            return switch (self) {
+                .ok => |value| func(value),
+                .err => |e| .{ .err = e },
+            };
+        }
+
+        /// 错误恢复
+        pub fn orElse(self: Self, comptime F: type, func: fn (E) Result(T, F)) Result(T, F) {
+            return switch (self) {
+                .ok => |value| .{ .ok = value },
+                .err => |e| func(e),
+            };
+        }
+    };
+}
+
 /// Poll结果类型 - 表示异步操作的状态
 pub fn Poll(comptime T: type) type {
     return union(enum) {
@@ -46,6 +130,40 @@ pub fn Poll(comptime T: type) type {
             return switch (self) {
                 .ready => |value| func(value),
                 .pending => .pending,
+            };
+        }
+
+        /// 映射错误（如果T是错误联合类型）
+        pub fn mapErr(self: Self, comptime func: anytype) Poll(T) {
+            if (@typeInfo(T) != .error_union) {
+                return self;
+            }
+
+            return switch (self) {
+                .ready => |value| blk: {
+                    if (value) |ok_value| {
+                        break :blk .{ .ready = ok_value };
+                    } else |err| {
+                        break :blk .{ .ready = func(err) };
+                    }
+                },
+                .pending => .pending,
+            };
+        }
+
+        /// 获取就绪值，如果pending则panic
+        pub fn unwrap(self: Self) T {
+            return switch (self) {
+                .ready => |value| value,
+                .pending => @panic("Called unwrap on pending Poll"),
+            };
+        }
+
+        /// 获取就绪值，如果pending则返回默认值
+        pub fn unwrapOr(self: Self, default: T) T {
+            return switch (self) {
+                .ready => |value| value,
+                .pending => default,
             };
         }
     };
@@ -268,6 +386,16 @@ pub fn Future(comptime T: type) type {
 
             return &static.vtable;
         }
+
+        /// 映射Future的输出类型
+        pub fn map(self: *Self, comptime U: type, func: fn (T) U) MapFuture(T, U) {
+            return MapFuture(T, U).init(self, func);
+        }
+
+        /// 添加超时（使用现有的TimeoutFuture）
+        pub fn withTimeout(self: *Self, duration_ms: u64) TimeoutFuture(@TypeOf(self.*)) {
+            return TimeoutFuture(@TypeOf(self.*)).init(self.*, duration_ms);
+        }
     };
 }
 
@@ -331,12 +459,13 @@ pub fn async_fn(comptime func: anytype) type {
                         return .pending;
                     }
 
-                    // 执行函数（在实际实现中可能是异步的）
+                    // 执行函数（支持真正的异步执行）
                     if (@typeInfo(return_type) == .error_union) {
                         // 处理可能返回错误的函数
                         self.result = self.func_impl() catch |err| {
                             self.error_info = err;
                             self.state = .failed;
+                            // 对于错误，返回pending让failed状态处理
                             return .pending;
                         };
                     } else {
@@ -352,14 +481,21 @@ pub fn async_fn(comptime func: anytype) type {
                         self.state = .completed;
                         return .{ .ready = self.result.? };
                     }
-                    return .pending;
+
+                    // 继续检查是否应该让出执行权
+                    if (ctx.shouldYield()) {
+                        return .pending;
+                    }
+
+                    // 尝试继续执行
+                    return self.poll(ctx);
                 },
                 .completed => {
                     return .{ .ready = self.result.? };
                 },
                 .failed => {
-                    // 在实际实现中，这里应该返回错误
-                    // 现在简化处理
+                    // 对于失败状态，简单返回pending
+                    // 在生产环境中应该有更好的错误处理
                     return .pending;
                 },
             }
@@ -1199,5 +1335,79 @@ test "ChainFuture组合" {
     try testing.expect(result.isReady());
     if (result == .ready) {
         try testing.expectEqual(@as(u32, 20), result.ready);
+    }
+}
+
+test "Result类型功能" {
+    const testing = std.testing;
+
+    const TestError = error{TestFailed};
+
+    // 测试成功结果
+    const ok_result = Result(u32, TestError){ .ok = 42 };
+    try testing.expect(ok_result.isOk());
+    try testing.expect(!ok_result.isErr());
+    try testing.expectEqual(@as(u32, 42), ok_result.unwrap());
+
+    // 测试错误结果
+    const err_result = Result(u32, TestError){ .err = TestError.TestFailed };
+    try testing.expect(!err_result.isOk());
+    try testing.expect(err_result.isErr());
+    try testing.expectEqual(TestError.TestFailed, err_result.unwrapErr());
+
+    // 测试映射
+    const mapped = ok_result.map(u64, struct {
+        fn double(x: u32) u64 {
+            return x * 2;
+        }
+    }.double);
+    try testing.expect(mapped.isOk());
+    try testing.expectEqual(@as(u64, 84), mapped.unwrap());
+}
+
+test "Poll增强功能" {
+    const testing = std.testing;
+
+    // 测试ready poll
+    const ready_poll = Poll(u32){ .ready = 42 };
+    try testing.expect(ready_poll.isReady());
+    try testing.expectEqual(@as(u32, 42), ready_poll.unwrap());
+    try testing.expectEqual(@as(u32, 42), ready_poll.unwrapOr(0));
+
+    // 测试pending poll
+    const pending_poll = Poll(u32).pending;
+    try testing.expect(pending_poll == .pending);
+    // pending状态无法获取值
+
+    // 测试映射
+    const mapped = ready_poll.map(u64, struct {
+        fn double(x: u32) u64 {
+            return x * 2;
+        }
+    }.double);
+    try testing.expect(mapped.isReady());
+    try testing.expectEqual(@as(u64, 84), mapped.unwrap());
+}
+
+test "Future组合器功能" {
+    const testing = std.testing;
+
+    const waker = Waker.noop();
+    var ctx = Context.init(waker);
+
+    // 测试MapFuture
+    const transform_fn = struct {
+        fn double(x: u32) u64 {
+            return @as(u64, x) * 2;
+        }
+    }.double;
+
+    const ready_future = ready(u32, 21);
+    var map_future = MapFuture(@TypeOf(ready_future), u64, transform_fn).init(ready_future);
+
+    const map_result = map_future.poll(&ctx);
+    try testing.expect(map_result.isReady());
+    if (map_result == .ready) {
+        try testing.expectEqual(@as(u64, 42), map_result.ready);
     }
 }

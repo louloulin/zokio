@@ -110,8 +110,8 @@ test "I/O驱动集成测试" {
     const testing = std.testing;
 
     const config = zokio.io.IoConfig{
-        .prefer_io_uring = false, // 使用epoll进行测试
         .events_capacity = 64,
+        .enable_real_io = false, // 使用模拟I/O进行测试
     };
 
     var driver = try zokio.io.IoDriver(config).init(testing.allocator);

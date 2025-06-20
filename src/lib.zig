@@ -8,6 +8,12 @@ const std = @import("std");
 const builtin = @import("builtin");
 const config = @import("config");
 
+// 条件导入libxev并重新导出，使子模块能够访问
+pub const libxev = if (@import("builtin").is_test)
+    (if (@hasDecl(@import("root"), "libxev")) @import("libxev") else null)
+else
+    (if (@hasDecl(@import("root"), "libxev")) @import("libxev") else null);
+
 // 核心模块导出
 pub const runtime = @import("runtime/runtime.zig");
 pub const future = @import("future/future.zig");
@@ -17,13 +23,15 @@ pub const sync = @import("sync/sync.zig");
 pub const time = @import("time/time.zig");
 pub const timer = @import("time/timer.zig");
 pub const memory = @import("memory/memory.zig");
+pub const net = @import("net/mod.zig");
 pub const metrics = @import("metrics/metrics.zig");
 pub const testing = @import("testing/testing.zig");
 pub const utils = @import("utils/utils.zig");
 
 // 新增的高级功能模块
-pub const fs = @import("fs/async_fs.zig");
+pub const fs = @import("fs/mod.zig");
 pub const tracing = @import("tracing/tracer.zig");
+pub const bench = @import("bench/mod.zig");
 
 // 平台能力检测
 pub const platform = @import("utils/platform.zig");
@@ -38,6 +46,7 @@ pub const Waker = future.Waker;
 // 便捷函数导出
 pub const ZokioRuntime = runtime.ZokioRuntime;
 pub const async_fn = future.async_fn;
+pub const async_fn_with_params = future.async_fn_with_params;
 pub const runtime_spawn = runtime.spawn;
 pub const block_on = runtime.block_on;
 
@@ -48,16 +57,39 @@ pub const delay = future.delay;
 pub const timeout = future.timeout;
 pub const await_future = future.await_future;
 
-// 核心运行时导出
-pub const simple_runtime = @import("runtime/simple_runtime.zig");
-pub const SimpleRuntime = simple_runtime.SimpleRuntime;
-pub const RuntimeBuilder = simple_runtime.RuntimeBuilder;
-pub const builder = simple_runtime.builder;
+// 🚀 高性能运行时导出
+pub const RuntimeBuilder = runtime.RuntimeBuilder;
+pub const RuntimePresets = runtime.RuntimePresets;
+pub const JoinHandle = runtime.JoinHandle;
 
-// 核心async/await API导出
+// 🔥 高性能运行时类型
+pub const HighPerformanceRuntime = runtime.HighPerformanceRuntime;
+pub const LowLatencyRuntime = runtime.LowLatencyRuntime;
+pub const IOIntensiveRuntime = runtime.IOIntensiveRuntime;
+pub const MemoryOptimizedRuntime = runtime.MemoryOptimizedRuntime;
+pub const BalancedRuntime = runtime.BalancedRuntime;
+pub const DefaultRuntime = runtime.DefaultRuntime;
+
+// 🚀 便捷函数
+pub const builder = runtime.builder;
+pub const build = runtime.build;
+pub const asyncMain = runtime.asyncMain;
+pub const initGlobalRuntime = runtime.initGlobalRuntime;
+pub const shutdownGlobalRuntime = runtime.shutdownGlobalRuntime;
+
+// ⚠️ 已弃用：SimpleRuntime (使用DefaultRuntime替代)
+pub const SimpleRuntime = runtime.DefaultRuntime;
+
+// 🚀 核心async/await API导出 - 统一到zokio命名空间
 pub const async_block_api = @import("future/async_block.zig");
 pub const async_block = async_block_api.async_block;
-pub const await_fn = async_block_api.await_macro;
+pub const await_fn = async_block_api.await_fn;
+
+// 🔥 从future模块导出的async/await API
+pub const async_fn_future = future.async_fn;
+pub const async_fn_with_params_future = future.async_fn_with_params;
+pub const async_block_future = future.async_block;
+pub const await_fn_future = future.await_fn;
 
 // 配置类型导出
 pub const RuntimeConfig = runtime.RuntimeConfig;
