@@ -54,9 +54,10 @@ Welcome to the Zokio documentation! This directory contains comprehensive guides
 3. **[Technical Specs](TECHNICAL_SPECS.md)** - Detailed performance specifications
 
 ### 🤝 **For Contributors**
-1. **[Architecture](en/architecture.md)** - Understand the codebase design
-2. **[Examples](en/examples.md)** - Learn testing and development patterns
-3. **[API Reference](en/api-reference.md)** - Follow consistency guidelines
+1. **[Contributing Guide](CONTRIBUTING.md)** - Contribution guidelines and standards
+2. **[Architecture](en/architecture.md)** - Understand the codebase design
+3. **[Examples](en/examples.md)** - Learn testing and development patterns
+4. **[Security Policy](SECURITY.md)** - Security guidelines and vulnerability reporting
 
 ## 🌟 Revolutionary Features
 
@@ -115,3 +116,49 @@ If you need assistance:
 **Experience the future of async programming with Zokio!** 🚀
 
 **Start your journey**: [Getting Started](en/getting-started.md) | [快速开始](zh/getting-started.md)
+
+## 📁 Complete Documentation Structure
+
+```
+docs/
+├── 📋 README.md                    # This documentation index
+├── 📊 PROJECT_OVERVIEW.md          # Complete project vision and achievements
+├── 🛣️ ROADMAP.md                   # Development roadmap and future plans
+├── 🤝 CONTRIBUTING.md              # Contribution guidelines and standards
+├── 🛡️ SECURITY.md                  # Security policy and vulnerability reporting
+│
+├── 🇺🇸 en/                         # English Documentation
+│   ├── 📋 README.md                # English documentation index
+│   ├── 🚀 getting-started.md       # Quick start guide with async_fn/await_fn
+│   ├── 🏗️ architecture.md          # Revolutionary async_fn/await_fn system design
+│   ├── 📖 api-reference.md         # Complete async_fn/await_fn API documentation
+│   ├── 💡 examples.md              # Revolutionary async/await code examples
+│   └── ⚡ performance.md           # 32x performance advantage analysis
+│
+├── 🇨🇳 zh/                         # Chinese Documentation (中文文档)
+│   ├── 📋 README.md                # 中文文档索引
+│   ├── 🚀 getting-started.md       # 快速开始指南，包含 async_fn/await_fn
+│   ├── 🏗️ architecture.md          # 革命性 async_fn/await_fn 系统设计
+│   ├── 📖 api-reference.md         # 完整的 async_fn/await_fn API 文档
+│   ├── 💡 examples.md              # 革命性 async/await 代码示例
+│   ├── ⚡ performance.md           # 32倍性能优势分析
+│   ├── 📊 PROJECT_OVERVIEW.md      # 项目概述和成就（中文版）
+│   └── 🤝 CONTRIBUTING.md          # 贡献指南（中文版）
+│
+└── 📊 Analysis & Reports/           # Performance Analysis Documents
+    ├── benchmark-implementation.md
+    ├── comprehensive-performance-analysis.md
+    ├── final-tokio-vs-zokio-analysis.md
+    ├── memory-allocation-gap-analysis.md
+    ├── tokio-comparison.md
+    └── zokio-vs-tokio-performance-analysis.md
+```
+
+### 📚 Documentation Quality Standards
+
+- **✅ Bilingual Support**: Complete English and Chinese documentation
+- **✅ Revolutionary Focus**: Emphasizes 32x async/await performance advantage
+- **✅ Practical Examples**: All code examples are runnable and tested
+- **✅ Performance Data**: Real benchmark results vs Tokio
+- **✅ Cross-Platform**: Consistent documentation across all platforms
+- **✅ Developer-Friendly**: Clear navigation and progressive learning path

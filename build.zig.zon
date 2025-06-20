@@ -5,6 +5,12 @@
     .fingerprint = 0x3bb560c0a295e54e,
 
     .dependencies = .{
+        //  .libxev = .{
+        //     // mitchellh/libxev
+        //     .url = "https://github.com/mitchellh/libxev/archive/3df9337a9e84450a58a2c4af434ec1a036f7b494.tar.gz",
+        //     .hash = "libxev-0.0.0-86vtc-ziEgDbLP0vihUn1MhsxNKY4GJEga6BEr7oyHpz",
+        //     .lazy = true,
+        // },
         .libxev = .{
             // 本地libxev路径配置
             .path = "deps/libxev",
