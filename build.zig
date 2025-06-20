@@ -146,6 +146,7 @@ pub fn build(b: *std.Build) void {
         "hello_world",
         "tcp_echo_server",
         "http_server",
+        "simple_http_server",
         "file_processor",
         "async_await_demo",
         "async_block_demo",
@@ -188,6 +189,13 @@ pub fn build(b: *std.Build) void {
             const http_demo_run = b.addRunArtifact(example);
             const http_demo_step = b.step("http-demo", "🚀 运行革命性HTTP服务器演示 (32B+ ops/sec)");
             http_demo_step.dependOn(&http_demo_run.step);
+        }
+
+        // 🚀 简化的HTTP服务器演示
+        if (std.mem.eql(u8, example_name, "simple_http_server")) {
+            const simple_http_demo_run = b.addRunArtifact(example);
+            const simple_http_demo_step = b.step("simple-http-demo", "🚀 运行简化异步HTTP服务器演示 (基于async_fn/await_fn)");
+            simple_http_demo_step.dependOn(&simple_http_demo_run.step);
         }
     }
 
