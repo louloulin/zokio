@@ -378,17 +378,12 @@ const CompletionNotifier = struct {
 
     /// 销毁通知器
     pub fn destroy(self: *Self) void {
-        // 🔥 安全清理等待者列表
-        self.waiters_mutex.lock();
+        // 🔥 简化销毁实现，避免条件变量问题
+        // 设置完成状态，确保所有等待者能够退出
+        self.completed.store(true, .release);
 
-        // 通知所有等待者（在清理前）
-        for (self.waiters.items) |condition| {
-            condition.signal();
-        }
-
-        // 清理等待者列表
+        // 🔥 清理等待者列表（简化版本）
         self.waiters.deinit();
-        self.waiters_mutex.unlock();
 
         // 最后释放自身内存
         const allocator = self.allocator;
@@ -401,20 +396,21 @@ const CompletionNotifier = struct {
             return;
         }
 
-        var condition = std.Thread.Condition{};
-        var mutex = std.Thread.Mutex{};
-
-        // 添加到等待者列表
-        self.waiters_mutex.lock();
-        self.waiters.append(&condition) catch return; // 如果失败，直接返回
-        self.waiters_mutex.unlock();
-
-        // 等待完成信号
-        mutex.lock();
-        defer mutex.unlock();
+        // 🔥 简化等待实现，避免条件变量的复杂性
+        // 使用简单的轮询等待，避免条件变量的信号计数问题
+        var spin_count: u32 = 0;
+        const max_spin = 1000;
 
         while (!self.completed.load(.acquire)) {
-            condition.wait(&mutex);
+            if (spin_count < max_spin) {
+                // 短暂自旋
+                spin_count += 1;
+                std.atomic.spinLoopHint();
+            } else {
+                // 休眠一小段时间
+                std.time.sleep(100 * std.time.ns_per_us); // 100μs
+                spin_count = 0;
+            }
         }
     }
 
@@ -422,13 +418,8 @@ const CompletionNotifier = struct {
     pub fn notify(self: *Self) void {
         self.completed.store(true, .release);
 
-        // 通知所有等待者
-        self.waiters_mutex.lock();
-        defer self.waiters_mutex.unlock();
-
-        for (self.waiters.items) |condition| {
-            condition.signal();
-        }
+        // 🔥 简化通知实现，只设置原子标志
+        // 等待者会通过轮询检测到完成状态
     }
 
     /// 检查是否已完成
