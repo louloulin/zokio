@@ -607,11 +607,8 @@ pub fn ZokioRuntime(comptime config: RuntimeConfig) type {
 
             // 🔥 启动工作线程（改进实现）
             if (comptime OptimalScheduler.WORKER_COUNT > 1) {
-                // 预热调度器
-                self.scheduler.warmup();
-
+                // 调度器已在init时准备就绪，无需额外预热
                 // 在真实实现中，这里会启动工作线程
-                // 现在我们至少确保调度器已准备就绪
                 std.log.info("Zokio运行时启动: {} 工作线程", .{OptimalScheduler.WORKER_COUNT});
             }
 
