@@ -896,6 +896,30 @@ pub fn build(b: *std.Build) void {
     const tcp_test_step = b.step("tcp-test", "运行TCP绑定诊断测试");
     tcp_test_step.dependOn(&run_tcp_test.step);
 
+    // Zokio 2.0 异步实现测试
+    const async_impl_test = b.addTest(.{
+        .root_source_file = b.path("test_async_implementation.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    async_impl_test.root_module.addOptions("config", options);
+    async_impl_test.root_module.addImport("libxev", libxev.module("xev"));
+
+    const run_async_impl_test = b.addRunArtifact(async_impl_test);
+    const async_impl_test_step = b.step("test-async-impl", "运行Zokio 2.0异步实现测试");
+    async_impl_test_step.dependOn(&run_async_impl_test.step);
+
+    // Zokio 2.0 简化异步测试
+    const async_simple_test = b.addTest(.{
+        .root_source_file = b.path("test_async_simple.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const run_async_simple_test = b.addRunArtifact(async_simple_test);
+    const async_simple_test_step = b.step("test-async-simple", "运行Zokio 2.0简化异步测试");
+    async_simple_test_step.dependOn(&run_async_simple_test.step);
+
     // 全面测试
     const test_all_step = b.step("test-all", "运行所有测试");
     test_all_step.dependOn(&run_unit_tests.step);
