@@ -162,6 +162,17 @@ pub const AsyncEventLoop = struct {
         self.running.store(false, .release);
     }
 
+    /// 🚀 Zokio 3.0 新增：注册等待任务
+    ///
+    /// 将等待I/O或其他事件的任务注册到事件循环
+    pub fn registerWaitingTask(self: *Self, waker: Waker) void {
+        // 将waker添加到等待队列
+        self.waker_registry.addWaitingWaker(waker);
+
+        // 增加活跃任务计数
+        self.addActiveTask();
+    }
+
     /// libxev读取回调
     fn readCallback(
         userdata: ?*void,
@@ -294,6 +305,20 @@ pub const WakerRegistry = struct {
         while (self.ready_queue.readItem()) |waker| {
             waker.wake();
         }
+    }
+
+    /// 🚀 Zokio 3.0 新增：添加等待的Waker
+    ///
+    /// 将等待事件的Waker添加到就绪队列，等待后续唤醒
+    pub fn addWaitingWaker(self: *Self, waker: Waker) void {
+        self.mutex.lock();
+        defer self.mutex.unlock();
+
+        // 将waker添加到就绪队列，等待事件触发时唤醒
+        self.ready_queue.writeItem(waker) catch {
+            // 如果队列满了，直接唤醒（避免死锁）
+            waker.wake();
+        };
     }
 };
 
