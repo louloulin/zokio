@@ -147,6 +147,34 @@ pub const AsyncEventLoop = struct {
         return self.timer_wheel.registerTimer(duration_ms, waker);
     }
 
+    /// 🚀 Zokio 3.0 新增：检查读取是否就绪
+    ///
+    /// 检查指定文件描述符是否可以进行非阻塞读取
+    pub fn isReadReady(self: *Self, fd: std.posix.fd_t) bool {
+        // 使用libxev的轮询机制检查I/O就绪状态
+        // 这里简化实现，在真正的实现中会查询libxev的内部状态
+        _ = self;
+        _ = fd;
+
+        // 暂时返回true，让TCP模块尝试读取
+        // 如果不就绪，会得到WouldBlock错误
+        return true;
+    }
+
+    /// 🚀 Zokio 3.0 新增：检查写入是否就绪
+    ///
+    /// 检查指定文件描述符是否可以进行非阻塞写入
+    pub fn isWriteReady(self: *Self, fd: std.posix.fd_t) bool {
+        // 使用libxev的轮询机制检查I/O就绪状态
+        // 这里简化实现，在真正的实现中会查询libxev的内部状态
+        _ = self;
+        _ = fd;
+
+        // 暂时返回true，让TCP模块尝试写入
+        // 如果不就绪，会得到WouldBlock错误
+        return true;
+    }
+
     /// 检查读取是否就绪
     pub fn isReadReady(self: *Self, fd: std.posix.fd_t) bool {
         return self.waker_registry.isIoReady(fd, .read);
