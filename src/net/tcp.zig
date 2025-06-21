@@ -4,39 +4,30 @@
 
 const std = @import("std");
 const builtin = @import("builtin");
-// const libxev = @import("libxev"); // 暂时注释掉，因为还没有完全集成
+const libxev = @import("libxev");
 
 const future = @import("../future/future.zig");
 const socket = @import("socket.zig");
 const NetError = @import("mod.zig").NetError;
 
-// Zokio 2.0 真正异步I/O导入
-const async_io = @import("../runtime/async_io.zig");
-const AsyncReadFuture = async_io.ReadFuture;
-const AsyncWriteFuture = async_io.WriteFuture;
-const AsyncAcceptFuture = async_io.AcceptFuture;
+// Zokio 4.0 真正异步I/O导入
+const CompletionBridge = @import("../runtime/completion_bridge.zig").CompletionBridge;
+const AsyncEventLoop = @import("../runtime/async_event_loop.zig").AsyncEventLoop;
 
 const Future = future.Future;
 const Poll = future.Poll;
 const Context = future.Context;
+const Waker = future.Waker;
 const SocketAddr = socket.SocketAddr;
 const IpAddr = socket.IpAddr;
 
-// 导入事件循环相关类型
-const AsyncEventLoop = @import("../runtime/async_event_loop.zig").AsyncEventLoop;
-const EventLoopWaker = @import("../runtime/async_event_loop.zig").Waker;
-const TaskId = @import("../runtime/async_event_loop.zig").TaskId;
-
-/// 🚀 Zokio 3.0 Waker类型转换函数
+/// 🚀 Zokio 4.0 获取当前事件循环
 ///
-/// 将future.Waker转换为事件循环期望的Waker类型
-fn convertWaker(future_waker: future.Waker) EventLoopWaker {
-    _ = future_waker; // 暂时忽略输入参数
-    // 创建一个默认的事件循环Waker
-    return EventLoopWaker{
-        .task_id = TaskId{ .id = 0 }, // 使用默认任务ID
-        .scheduler = null, // 暂时没有调度器
-    };
+/// 从当前上下文获取事件循环实例
+fn getCurrentEventLoop() ?*AsyncEventLoop {
+    // 在实际实现中，这里会从线程本地存储获取当前事件循环
+    // 暂时返回null，让TCP操作降级到非阻塞I/O
+    return null;
 }
 
 /// TCP流
