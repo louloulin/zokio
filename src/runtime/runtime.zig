@@ -433,14 +433,16 @@ const CompletionNotifier = struct {
                 spin_count += 1;
                 std.atomic.spinLoopHint();
             } else {
-                // 🚀 关键改进：让出CPU给事件循环，而不是阻塞sleep
-                // 这允许事件循环继续处理其他任务和I/O事件
-                std.Thread.yield() catch {};
+                // 🚀 Zokio 4.0 关键改进：完全事件驱动的任务调度
+                // 不使用Thread.yield，而是直接运行事件循环
                 spin_count = 0;
 
-                // 🔥 如果有全局事件循环，让它处理一次迭代
+                // 🔥 优先运行事件循环处理I/O事件
                 if (getCurrentEventLoop()) |event_loop| {
                     event_loop.runOnce() catch {};
+                } else {
+                    // 如果没有事件循环，使用最小延迟的非阻塞操作
+                    std.atomic.spinLoopHint();
                 }
             }
         }
@@ -878,13 +880,15 @@ pub fn ZokioRuntime(comptime config: RuntimeConfig) type {
 
                             // � Zokio 3.0 改进：完全事件驱动的延迟策略
                             if (spin_count > max_spin) {
-                                // 🔥 关键改进：不使用sleep，而是让出CPU给事件循环
-                                std.Thread.yield() catch {};
+                                // 🚀 Zokio 4.0 改进：完全事件驱动的延迟策略
                                 spin_count = 0;
 
-                                // 🚀 如果有事件循环，让它处理一次迭代
+                                // 🔥 优先运行事件循环处理I/O事件
                                 if (getCurrentEventLoop()) |event_loop| {
                                     event_loop.runOnce() catch {};
+                                } else {
+                                    // 如果没有事件循环，使用CPU自旋提示
+                                    std.atomic.spinLoopHint();
                                 }
 
                                 // 🔥 自适应自旋策略：根据pending次数调整自旋强度
@@ -923,21 +927,25 @@ pub fn ZokioRuntime(comptime config: RuntimeConfig) type {
 
                     // 🚀 Zokio 3.0 改进：完全事件驱动的空闲策略
                     if (idle_count > max_idle) {
-                        // 🔥 关键改进：不使用sleep，而是让出CPU给其他任务
-                        std.Thread.yield() catch {};
+                        // � Zokio 4.0 改进：完全事件驱动的空闲策略
                         idle_count = 0;
 
-                        // 🚀 自适应自旋策略：根据空闲时间调整自旋强度
-                        const extra_spins = if (idle_count < max_idle * 2)
-                            1000 // 短期空闲 - 更多自旋
-                        else if (idle_count < max_idle * 10)
-                            500 // 中期空闲 - 中等自旋
-                        else
-                            100; // 长期空闲 - 最少自旋
+                        // 🔥 优先运行事件循环处理I/O事件
+                        if (getCurrentEventLoop()) |event_loop| {
+                            event_loop.runOnce() catch {};
+                        } else {
+                            // 🚀 自适应自旋策略：根据空闲时间调整自旋强度
+                            const extra_spins = if (idle_count < max_idle * 2)
+                                1000 // 短期空闲 - 更多自旋
+                            else if (idle_count < max_idle * 10)
+                                500 // 中期空闲 - 中等自旋
+                            else
+                                100; // 长期空闲 - 最少自旋
 
-                        // 执行自旋循环而不是阻塞sleep
-                        for (0..extra_spins) |_| {
-                            std.atomic.spinLoopHint();
+                            // 执行自旋循环而不是阻塞sleep
+                            for (0..extra_spins) |_| {
+                                std.atomic.spinLoopHint();
+                            }
                         }
                     }
                 }
@@ -1309,12 +1317,15 @@ fn executeTaskInBackground(task: *scheduler.Task, handle_ptr: *anyopaque) void {
                 // 🚀 Zokio 3.0 改进：任务未完成时的非阻塞处理
                 // 在真实实现中，这里会由调度器重新调度
 
-                // 🔥 关键改进：不使用sleep，而是让出CPU给事件循环
-                std.Thread.yield() catch {};
+                // � Zokio 4.0 改进：完全事件驱动的任务调度
+                // 不使用Thread.yield，而是直接运行事件循环
 
-                // 🚀 如果有事件循环，让它处理一次迭代
+                // � 优先运行事件循环处理I/O事件
                 if (getCurrentEventLoop()) |event_loop| {
                     event_loop.runOnce() catch {};
+                } else {
+                    // 如果没有事件循环，使用最小延迟的非阻塞操作
+                    std.atomic.spinLoopHint();
                 }
 
                 // 执行少量自旋而不是阻塞等待

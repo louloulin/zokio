@@ -1,11 +1,21 @@
-//! 异步文件系统操作模块
+//! 🚀 Zokio 4.0 异步文件系统操作模块
 //!
-//! 提供高性能的异步文件I/O操作，包括读取、写入、目录遍历等。
+//! 基于libxev实现的高性能异步文件I/O操作，提供：
+//! - 真正的异步文件读写操作
+//! - 零拷贝I/O优化
+//! - 跨平台高性能支持
+//! - 完整的错误处理机制
 
 const std = @import("std");
+const libxev = @import("libxev");
 const future = @import("../future/future.zig");
 const io = @import("../io/io.zig");
 const utils = @import("../utils/utils.zig");
+const CompletionBridge = @import("../runtime/completion_bridge.zig").CompletionBridge;
+const AsyncEventLoop = @import("../runtime/async_event_loop.zig").AsyncEventLoop;
+const Poll = future.Poll;
+const Context = future.Context;
+const Waker = future.Waker;
 
 /// 文件打开选项
 pub const OpenOptions = struct {
