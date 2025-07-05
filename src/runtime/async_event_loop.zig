@@ -175,15 +175,7 @@ pub const AsyncEventLoop = struct {
         return true;
     }
 
-    /// 检查读取是否就绪
-    pub fn isReadReady(self: *Self, fd: std.posix.fd_t) bool {
-        return self.waker_registry.isIoReady(fd, .read);
-    }
 
-    /// 检查写入是否就绪
-    pub fn isWriteReady(self: *Self, fd: std.posix.fd_t) bool {
-        return self.waker_registry.isIoReady(fd, .write);
-    }
 
     /// 停止事件循环
     pub fn stop(self: *Self) void {

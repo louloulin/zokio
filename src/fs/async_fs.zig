@@ -19,9 +19,9 @@ const Waker = future.Waker;
 
 /// 🚀 获取当前事件循环
 fn getCurrentEventLoop() ?*AsyncEventLoop {
-    // 在实际实现中，这里会从线程本地存储获取当前事件循环
-    // 暂时返回null，让文件操作降级到同步I/O
-    return null;
+    // 导入运行时模块以访问全局事件循环管理
+    const runtime = @import("../runtime/runtime.zig");
+    return runtime.getCurrentEventLoop();
 }
 
 /// 文件打开选项

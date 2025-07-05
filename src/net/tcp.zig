@@ -25,9 +25,9 @@ const IpAddr = socket.IpAddr;
 ///
 /// 从当前上下文获取事件循环实例
 fn getCurrentEventLoop() ?*AsyncEventLoop {
-    // 在实际实现中，这里会从线程本地存储获取当前事件循环
-    // 暂时返回null，让TCP操作降级到非阻塞I/O
-    return null;
+    // 导入运行时模块以访问全局事件循环管理
+    const runtime = @import("../runtime/runtime.zig");
+    return runtime.getCurrentEventLoop();
 }
 
 /// TCP流

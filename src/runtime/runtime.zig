@@ -20,10 +20,10 @@ const libxev = if (@hasDecl(@import("root"), "libxev")) @import("libxev") else n
 // 导入异步事件循环
 const AsyncEventLoop = @import("async_event_loop.zig").AsyncEventLoop;
 
-/// 🚀 Zokio 3.0 全局事件循环管理
+/// 🚀 Zokio 4.0 全局事件循环管理
 ///
 /// 获取当前线程的事件循环实例，用于非阻塞任务调度
-fn getCurrentEventLoop() ?*AsyncEventLoop {
+pub fn getCurrentEventLoop() ?*AsyncEventLoop {
     // 线程本地存储的事件循环
     const static = struct {
         threadlocal var current_event_loop: ?*AsyncEventLoop = null;
@@ -33,12 +33,45 @@ fn getCurrentEventLoop() ?*AsyncEventLoop {
 }
 
 /// 设置当前线程的事件循环
-fn setCurrentEventLoop(event_loop: ?*AsyncEventLoop) void {
+pub fn setCurrentEventLoop(event_loop: ?*AsyncEventLoop) void {
     const static = struct {
         threadlocal var current_event_loop: ?*AsyncEventLoop = null;
     };
 
     static.current_event_loop = event_loop;
+}
+
+/// 🚀 Zokio 4.0 全局默认事件循环
+///
+/// 为没有显式事件循环的情况提供默认实例
+var global_default_event_loop: ?*AsyncEventLoop = null;
+var global_event_loop_mutex: std.Thread.Mutex = .{};
+
+/// 获取或创建全局默认事件循环
+pub fn getOrCreateDefaultEventLoop(allocator: std.mem.Allocator) !*AsyncEventLoop {
+    global_event_loop_mutex.lock();
+    defer global_event_loop_mutex.unlock();
+
+    if (global_default_event_loop == null) {
+        // 创建全局默认事件循环
+        const event_loop = try allocator.create(AsyncEventLoop);
+        event_loop.* = try AsyncEventLoop.init(allocator);
+        global_default_event_loop = event_loop;
+    }
+
+    return global_default_event_loop.?;
+}
+
+/// 清理全局默认事件循环
+pub fn cleanupDefaultEventLoop(allocator: std.mem.Allocator) void {
+    global_event_loop_mutex.lock();
+    defer global_event_loop_mutex.unlock();
+
+    if (global_default_event_loop) |event_loop| {
+        event_loop.deinit();
+        allocator.destroy(event_loop);
+        global_default_event_loop = null;
+    }
 }
 
 /// 🚀 TaskState - 任务状态管理（参考Tokio）
@@ -693,7 +726,10 @@ pub fn ZokioRuntime(comptime config: RuntimeConfig) type {
         pub fn deinit(self: *Self) void {
             self.running.store(false, .release);
 
-            // 🔥 安全清理libxev事件循环
+            // � Zokio 4.0 改进：清理全局默认事件循环
+            cleanupDefaultEventLoop(self.base_allocator);
+
+            // �🔥 安全清理libxev事件循环
             if (comptime LIBXEV_ENABLED) {
                 if (self.libxev_loop) |*loop| {
                     // 检查loop是否有deinit方法
@@ -748,6 +784,10 @@ pub fn ZokioRuntime(comptime config: RuntimeConfig) type {
 
             self.running.store(true, .release);
 
+            // 🚀 Zokio 4.0 核心改进：创建并设置默认事件循环
+            const default_event_loop = try getOrCreateDefaultEventLoop(self.base_allocator);
+            setCurrentEventLoop(default_event_loop);
+
             // 🔥 启动工作线程（改进实现）
             if (comptime OptimalScheduler.WORKER_COUNT > 1) {
                 // 调度器已在init时准备就绪，无需额外预热
@@ -763,11 +803,18 @@ pub fn ZokioRuntime(comptime config: RuntimeConfig) type {
                     _ = loop; // 避免未使用警告
                 }
             }
+
+            std.log.info("🚀 Zokio 4.0 运行时启动完成，事件循环已就绪", .{});
         }
 
         /// 停止运行时
         pub fn stop(self: *Self) void {
             self.running.store(false, .release);
+
+            // 🚀 Zokio 4.0 改进：清理当前线程的事件循环
+            setCurrentEventLoop(null);
+
+            std.log.info("🚀 Zokio 4.0 运行时已停止", .{});
         }
 
         /// 🚀 安全的spawn函数 - 真正的异步任务调度

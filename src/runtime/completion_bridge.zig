@@ -249,11 +249,6 @@ pub const CompletionBridge = struct {
     /// 根据期望的返回类型T，从桥接器中提取相应的结果。
     /// 这是类型安全的结果获取机制。
     pub fn getResult(self: *Self, comptime T: type) Poll(T) {
-        // 首先检查超时
-        if (self.checkTimeout()) {
-            return .{ .ready = error.Timeout };
-        }
-
         switch (self.state) {
             .pending => return .pending,
             .timeout => {
@@ -269,69 +264,41 @@ pub const CompletionBridge = struct {
                 return .pending;
             },
             .ready => {
-                return self.extractTypedResult(T);
-            },
-        }
-    }
-
-    /// 🔧 提取类型化结果
-    fn extractTypedResult(self: *Self, comptime T: type) Poll(T) {
-        switch (self.result) {
-            .read => |r| {
-                if (T == anyerror!usize) {
-                    return .{ .ready = r };
-                }
-            },
-            .write => |r| {
-                if (T == anyerror!usize) {
-                    return .{ .ready = r };
-                }
-            },
-            .file_read => |r| {
-                if (T == anyerror!usize) {
-                    return .{ .ready = r };
-                }
-            },
-            .file_write => |r| {
-                if (T == anyerror!usize) {
-                    return .{ .ready = r };
-                }
-            },
-            .connect => |r| {
-                if (T == anyerror!void) {
-                    return .{ .ready = r };
-                }
-            },
-            .timer => |r| {
-                if (T == anyerror!void) {
-                    return .{ .ready = r };
-                }
-            },
-            .close => |r| {
-                if (T == anyerror!void) {
-                    return .{ .ready = r };
-                }
-            },
-            .accept => |r| {
-                // accept结果需要特殊处理，因为返回的是libxev.TCP
-                // 在实际使用中，调用者需要将其转换为TcpStream
-                _ = r;
-                if (T == anyerror!void) {
-                    return .{ .ready = {} };
-                }
-            },
-            .none => {
-                if (T == anyerror!void) {
-                    return .{ .ready = {} };
+                switch (self.result) {
+                    .read => |r| {
+                        if (T == anyerror!usize) {
+                            return .{ .ready = r };
+                        }
+                    },
+                    .write => |r| {
+                        if (T == anyerror!usize) {
+                            return .{ .ready = r };
+                        }
+                    },
+                    .timer => |r| {
+                        if (T == anyerror!void) {
+                            return .{ .ready = r };
+                        }
+                    },
+                    .connect => |r| {
+                        if (T == anyerror!void) {
+                            return .{ .ready = r };
+                        }
+                    },
+                    .accept => |r| {
+                        // accept结果需要特殊处理，转换为TcpStream
+                        _ = r;
+                        // 这里需要在调用方处理具体的转换逻辑
+                        return .pending;
+                    },
+                    else => return .pending,
                 }
             },
         }
-
-        // 类型不匹配，返回pending（这通常表示编程错误）
         return .pending;
     }
 
-    /// 🎯 获取原始libxev.TCP结果（用于accept操作）
+    /// 🎯 获取TCP accept结果
     pub fn getTcpResult(self: *Self) ?libxev.AcceptError!libxev.TCP {
         if (self.state == .ready) {
             switch (self.result) {
