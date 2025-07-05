@@ -156,6 +156,54 @@ pub fn build(b: *std.Build) void {
     const infinite_loop_fix_test_step = b.step("test-loop-fix", "运行 Zokio 7.1 无限循环修复验证测试");
     infinite_loop_fix_test_step.dependOn(&run_infinite_loop_fix_tests.step);
 
+    // Zokio 7.2 全面单元测试
+    const comprehensive_unit_tests = b.addTest(.{
+        .root_source_file = b.path("tests/comprehensive_unit_tests.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    comprehensive_unit_tests.root_module.addOptions("config", options);
+    comprehensive_unit_tests.root_module.addImport("libxev", libxev.module("xev"));
+    comprehensive_unit_tests.root_module.addImport("zokio", lib.root_module);
+
+    const run_comprehensive_unit_tests = b.addRunArtifact(comprehensive_unit_tests);
+    const comprehensive_unit_test_step = b.step("test-unit", "运行 Zokio 7.2 全面单元测试");
+    comprehensive_unit_test_step.dependOn(&run_comprehensive_unit_tests.step);
+
+    // Zokio 7.2 集成测试
+    const comprehensive_integration_tests = b.addTest(.{
+        .root_source_file = b.path("tests/integration_tests.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    comprehensive_integration_tests.root_module.addOptions("config", options);
+    comprehensive_integration_tests.root_module.addImport("libxev", libxev.module("xev"));
+    comprehensive_integration_tests.root_module.addImport("zokio", lib.root_module);
+
+    const run_comprehensive_integration_tests = b.addRunArtifact(comprehensive_integration_tests);
+    const comprehensive_integration_test_step = b.step("test-integration-new", "运行 Zokio 7.2 集成测试");
+    comprehensive_integration_test_step.dependOn(&run_comprehensive_integration_tests.step);
+
+    // Zokio 7.2 性能基准测试
+    const performance_benchmarks = b.addTest(.{
+        .root_source_file = b.path("tests/performance_benchmarks.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    performance_benchmarks.root_module.addOptions("config", options);
+    performance_benchmarks.root_module.addImport("libxev", libxev.module("xev"));
+    performance_benchmarks.root_module.addImport("zokio", lib.root_module);
+
+    const run_performance_benchmarks = b.addRunArtifact(performance_benchmarks);
+    const performance_benchmark_step = b.step("test-performance", "运行 Zokio 7.2 性能基准测试");
+    performance_benchmark_step.dependOn(&run_performance_benchmarks.step);
+
+    // Zokio 7.2 全面测试套件
+    const comprehensive_test_step = b.step("test-comprehensive", "运行 Zokio 7.2 全面测试套件");
+    comprehensive_test_step.dependOn(&run_comprehensive_unit_tests.step);
+    comprehensive_test_step.dependOn(&run_comprehensive_integration_tests.step);
+    comprehensive_test_step.dependOn(&run_performance_benchmarks.step);
+
     // libxev可用性测试
     const libxev_availability_tests = b.addTest(.{
         .root_source_file = b.path("tests/libxev_availability_test.zig"),
@@ -998,8 +1046,8 @@ pub fn build(b: *std.Build) void {
     const async_simple_test_step = b.step("test-async-simple", "运行Zokio 2.0简化异步测试");
     async_simple_test_step.dependOn(&run_async_simple_test.step);
 
-    // 全面测试
-    const test_all_step = b.step("test-all", "运行所有测试");
+    // 全面测试 (旧版本)
+    const test_all_step = b.step("test-legacy", "运行所有旧版测试");
     test_all_step.dependOn(&run_unit_tests.step);
     test_all_step.dependOn(&run_integration_tests.step);
     test_all_step.dependOn(&fmt_check.step);

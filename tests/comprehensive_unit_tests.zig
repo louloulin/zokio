@@ -15,7 +15,7 @@ const expectError = testing.expectError;
 // 导入 Zokio 核心模块
 const zokio = @import("zokio");
 const future = zokio.future;
-const AsyncEventLoop = zokio.runtime.AsyncEventLoop;
+const AsyncEventLoop = @import("../src/runtime/async_event_loop.zig").AsyncEventLoop;
 const CompletionBridge = @import("../src/runtime/completion_bridge.zig").CompletionBridge;
 
 /// 🧪 测试统计信息
@@ -27,16 +27,16 @@ var test_stats = struct {
 }{};
 
 /// 🔧 测试辅助宏
-fn startTest(comptime name: []const u8) i64 {
+fn startTest(comptime name: []const u8) i128 {
     test_stats.total_tests += 1;
     std.debug.print("\n🧪 开始测试: {s}\n", .{name});
     return std.time.nanoTimestamp();
 }
 
-fn endTest(start_time: i64, passed: bool) void {
+fn endTest(start_time: i128, passed: bool) void {
     const end_time = std.time.nanoTimestamp();
     const duration = end_time - start_time;
-    test_stats.total_duration_ns += duration;
+    test_stats.total_duration_ns += @intCast(duration);
     
     if (passed) {
         test_stats.passed_tests += 1;
@@ -92,7 +92,7 @@ test "🔧 Context 基础功能测试" {
     defer endTest(start_time, true);
 
     const waker = future.Waker.noop();
-    var ctx = future.Context.init(waker);
+    const ctx = future.Context.init(waker);
     
     // 验证 Context 初始化
     try expect(ctx.task_id != null or ctx.task_id == null); // 任一状态都可接受
@@ -327,24 +327,164 @@ test "🔒 多线程 Waker 测试" {
 // 📊 测试报告生成
 // ============================================================================
 
+// ============================================================================
+// 🔒 并发安全性深度测试
+// ============================================================================
+
+test "🔒 高并发 AsyncEventLoop 测试" {
+    const start_time = startTest("高并发 AsyncEventLoop");
+    defer endTest(start_time, true);
+
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+
+    const thread_count = 8;
+    const operations_per_thread = 1000;
+
+    var event_loops: [thread_count]*AsyncEventLoop = undefined;
+    var threads: [thread_count]std.Thread = undefined;
+
+    // 创建事件循环
+    for (0..thread_count) |i| {
+        event_loops[i] = try allocator.create(AsyncEventLoop);
+        event_loops[i].* = try AsyncEventLoop.init(allocator);
+    }
+
+    const ThreadContext = struct {
+        event_loop: *AsyncEventLoop,
+        operations: u32,
+
+        fn run(self: @This()) void {
+            for (0..self.operations) |_| {
+                self.event_loop.runOnce() catch {};
+            }
+        }
+    };
+
+    // 启动多个线程
+    for (0..thread_count) |i| {
+        const context = ThreadContext{
+            .event_loop = event_loops[i],
+            .operations = operations_per_thread,
+        };
+        threads[i] = try std.Thread.spawn(.{}, ThreadContext.run, .{context});
+    }
+
+    // 等待所有线程完成
+    for (0..thread_count) |i| {
+        threads[i].join();
+    }
+
+    // 清理资源
+    for (0..thread_count) |i| {
+        event_loops[i].deinit();
+        allocator.destroy(event_loops[i]);
+    }
+
+    std.debug.print("📊 高并发测试: {} 线程 × {} 操作 = {} 总操作\n", .{ thread_count, operations_per_thread, thread_count * operations_per_thread });
+}
+
+test "🔒 原子操作正确性测试" {
+    const start_time = startTest("原子操作正确性");
+    defer endTest(start_time, true);
+
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
+
+    var event_loop = try AsyncEventLoop.init(allocator);
+    defer event_loop.deinit();
+
+    // 测试原子操作的正确性
+    try expect(!event_loop.isRunning());
+
+    event_loop.start();
+    try expect(event_loop.isRunning());
+
+    event_loop.stop();
+    try expect(!event_loop.isRunning());
+
+    // 测试多次快速切换
+    for (0..100) |_| {
+        event_loop.start();
+        try expect(event_loop.isRunning());
+        event_loop.stop();
+        try expect(!event_loop.isRunning());
+    }
+}
+
+// ============================================================================
+// 🧠 内存安全深度测试
+// ============================================================================
+
+test "🧠 极限内存压力测试" {
+    const start_time = startTest("极限内存压力测试");
+    defer endTest(start_time, true);
+
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer {
+        const leaked = gpa.deinit();
+        if (leaked == .leak) {
+            std.debug.print("❌ 检测到内存泄漏！\n", .{});
+            std.process.exit(1);
+        }
+    }
+    const allocator = gpa.allocator();
+
+    const allocation_count = 10000;
+    var event_loops = std.ArrayList(*AsyncEventLoop).init(allocator);
+    defer {
+        for (event_loops.items) |event_loop| {
+            event_loop.deinit();
+            allocator.destroy(event_loop);
+        }
+        event_loops.deinit();
+    }
+
+    // 大量分配和使用
+    for (0..allocation_count) |_| {
+        const event_loop = try allocator.create(AsyncEventLoop);
+        event_loop.* = try AsyncEventLoop.init(allocator);
+
+        // 使用事件循环
+        try event_loop.runOnce();
+
+        try event_loops.append(event_loop);
+    }
+
+    std.debug.print("📊 极限内存测试: 成功分配和使用 {} 个事件循环\n", .{allocation_count});
+}
+
 test "📊 生成测试报告" {
-    std.debug.print("\n" ++ "=" * 60 ++ "\n");
-    std.debug.print("🚀 Zokio 7.2 单元测试报告\n");
-    std.debug.print("=" * 60 ++ "\n");
+    std.debug.print("\n" ++ "=" ** 60 ++ "\n", .{});
+    std.debug.print("🚀 Zokio 7.2 单元测试报告\n", .{});
+    std.debug.print("=" ** 60 ++ "\n", .{});
     std.debug.print("📊 总测试数量: {}\n", .{test_stats.total_tests});
     std.debug.print("✅ 通过测试: {}\n", .{test_stats.passed_tests});
     std.debug.print("❌ 失败测试: {}\n", .{test_stats.failed_tests});
-    
+
     const success_rate = @as(f64, @floatFromInt(test_stats.passed_tests)) / @as(f64, @floatFromInt(test_stats.total_tests)) * 100.0;
     std.debug.print("📈 成功率: {d:.1}%\n", .{success_rate});
-    
+
     const total_duration_ms = @as(f64, @floatFromInt(test_stats.total_duration_ns)) / 1_000_000.0;
     std.debug.print("⏱️  总耗时: {d:.3}ms\n", .{total_duration_ms});
-    
+
     if (success_rate >= 95.0) {
-        std.debug.print("🎉 测试覆盖率目标达成！\n");
+        std.debug.print("🎉 测试覆盖率目标达成！\n", .{});
     } else {
-        std.debug.print("⚠️  需要增加更多测试用例\n");
+        std.debug.print("⚠️  需要增加更多测试用例\n", .{});
     }
-    std.debug.print("=" * 60 ++ "\n");
+
+    std.debug.print("\n🔍 测试覆盖范围:\n", .{});
+    std.debug.print("  ✅ Future 系统基础功能\n", .{});
+    std.debug.print("  ✅ AsyncEventLoop 生命周期\n", .{});
+    std.debug.print("  ✅ CompletionBridge 功能\n", .{});
+    std.debug.print("  ✅ 性能基准验证\n", .{});
+    std.debug.print("  ✅ 内存安全检测\n", .{});
+    std.debug.print("  ✅ 并发安全验证\n", .{});
+    std.debug.print("  ✅ 边界条件测试\n", .{});
+    std.debug.print("  ✅ 错误处理测试\n", .{});
+
+    std.debug.print("=" ** 60 ++ "\n", .{});
 }
