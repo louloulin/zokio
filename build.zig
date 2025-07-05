@@ -86,6 +86,34 @@ pub fn build(b: *std.Build) void {
     const libxev_test_step = b.step("test-libxev", "运行libxev集成测试");
     libxev_test_step.dependOn(&run_libxev_tests.step);
 
+    // 真实性验证测试
+    const real_impl_tests = b.addTest(.{
+        .root_source_file = b.path("test_real_implementation.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    real_impl_tests.root_module.addOptions("config", options);
+    real_impl_tests.root_module.addImport("libxev", libxev.module("xev"));
+    real_impl_tests.root_module.addImport("zokio", lib.root_module);
+
+    const run_real_impl_tests = b.addRunArtifact(real_impl_tests);
+    const real_impl_test_step = b.step("test-real", "运行真实性验证测试");
+    real_impl_test_step.dependOn(&run_real_impl_tests.step);
+
+    // 核心修复验证测试
+    const core_fixes_tests = b.addTest(.{
+        .root_source_file = b.path("test_core_fixes.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    core_fixes_tests.root_module.addOptions("config", options);
+    core_fixes_tests.root_module.addImport("libxev", libxev.module("xev"));
+    core_fixes_tests.root_module.addImport("zokio", lib.root_module);
+
+    const run_core_fixes_tests = b.addRunArtifact(core_fixes_tests);
+    const core_fixes_test_step = b.step("test-fixes", "运行核心修复验证测试");
+    core_fixes_test_step.dependOn(&run_core_fixes_tests.step);
+
     // libxev可用性测试
     const libxev_availability_tests = b.addTest(.{
         .root_source_file = b.path("tests/libxev_availability_test.zig"),

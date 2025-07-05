@@ -6,6 +6,10 @@
 const std = @import("std");
 const libxev = @import("libxev");
 const utils = @import("../utils/utils.zig");
+const future = @import("../future/future.zig");
+
+// 🚀 Zokio 5.0 改进：统一 Waker 类型
+const Waker = future.Waker;
 
 /// 任务ID类型
 pub const TaskId = struct {
@@ -413,13 +417,4 @@ pub const TaskScheduler = struct {
     }
 };
 
-/// 前向声明
-pub const Waker = struct {
-    task_id: TaskId,
-    scheduler: ?*TaskScheduler = null,
-
-    pub fn wake(self: *const @This()) void {
-        // 简化实现，实际应该唤醒对应的任务
-        _ = self;
-    }
-};
+// Waker 类型已从 future.zig 导入，无需重复定义
