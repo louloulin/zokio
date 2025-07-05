@@ -142,6 +142,20 @@ pub fn build(b: *std.Build) void {
     const event_driven_core_test_step = b.step("test-event-driven", "运行 Zokio 7.0 事件驱动核心测试");
     event_driven_core_test_step.dependOn(&run_event_driven_core_tests.step);
 
+    // Zokio 7.1 无限循环修复验证测试
+    const infinite_loop_fix_tests = b.addTest(.{
+        .root_source_file = b.path("test_infinite_loop_fix.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    infinite_loop_fix_tests.root_module.addOptions("config", options);
+    infinite_loop_fix_tests.root_module.addImport("libxev", libxev.module("xev"));
+    infinite_loop_fix_tests.root_module.addImport("zokio", lib.root_module);
+
+    const run_infinite_loop_fix_tests = b.addRunArtifact(infinite_loop_fix_tests);
+    const infinite_loop_fix_test_step = b.step("test-loop-fix", "运行 Zokio 7.1 无限循环修复验证测试");
+    infinite_loop_fix_test_step.dependOn(&run_infinite_loop_fix_tests.step);
+
     // libxev可用性测试
     const libxev_availability_tests = b.addTest(.{
         .root_source_file = b.path("tests/libxev_availability_test.zig"),

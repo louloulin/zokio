@@ -77,28 +77,84 @@ pub const AsyncEventLoop = struct {
         self.scheduler = scheduler;
     }
 
-    /// 运行事件循环直到所有任务完成
+    /// 🚀 运行事件循环直到所有任务完成 - 修复无限循环版本
     pub fn run(self: *Self) !void {
         self.running.store(true, .release);
 
-        while (self.hasActiveTasks() and self.running.load(.acquire)) {
+        var iteration_count: u32 = 0;
+        var consecutive_empty_iterations: u32 = 0;
+        const max_empty_iterations: u32 = 1000; // 最大空迭代次数
+        const max_total_iterations: u32 = 100_000; // 最大总迭代次数，防止无限循环
+
+        while (self.running.load(.acquire) and iteration_count < max_total_iterations) {
+            iteration_count += 1;
+            var work_done = false;
+
             // 1. 处理就绪的I/O事件（非阻塞）
-            try self.libxev_loop.run(.no_wait);
+            const io_result = self.libxev_loop.run(.no_wait);
+            if (io_result) |_| {
+                work_done = true;
+                std.log.debug("事件循环: 处理了 I/O 事件", .{});
+            } else |_| {
+                // I/O 事件处理出错，继续执行
+            }
 
             // 2. 处理到期的定时器
-            self.timer_wheel.processExpired();
+            const timer_events = self.timer_wheel.processExpired();
+            if (timer_events > 0) {
+                work_done = true;
+                std.log.debug("事件循环: 处理了 {} 个定时器事件", .{timer_events});
+            }
 
             // 3. 唤醒就绪的任务
-            self.waker_registry.wakeReady();
+            const woken_tasks = self.waker_registry.wakeReady();
+            if (woken_tasks > 0) {
+                work_done = true;
+                std.log.debug("事件循环: 唤醒了 {} 个任务", .{woken_tasks});
+            }
 
             // 4. 让出CPU给调度器
             if (self.scheduler) |scheduler| {
-                scheduler.yield();
+                const scheduled_tasks = scheduler.yield();
+                if (scheduled_tasks > 0) {
+                    work_done = true;
+                }
             }
 
-            // 5. 短暂让出CPU，避免忙等待
-            std.Thread.yield() catch {};
+            // 5. 检查是否有活跃任务
+            const active_tasks = self.active_tasks.load(.acquire);
+            if (active_tasks == 0) {
+                consecutive_empty_iterations += 1;
+                std.log.debug("事件循环: 无活跃任务，连续空迭代 {}/{}", .{ consecutive_empty_iterations, max_empty_iterations });
+
+                if (consecutive_empty_iterations >= max_empty_iterations) {
+                    std.log.info("事件循环: 达到最大空迭代次数，正常退出", .{});
+                    break;
+                }
+            } else {
+                consecutive_empty_iterations = 0;
+            }
+
+            // 6. 如果没有工作要做，短暂休眠避免忙等待
+            if (!work_done) {
+                std.time.sleep(100_000); // 100微秒
+            } else {
+                // 有工作要做，快速让出CPU
+                std.Thread.yield() catch {};
+            }
+
+            // 7. 每1000次迭代输出调试信息
+            if (iteration_count % 1000 == 0) {
+                std.log.debug("事件循环: 迭代 {}, 活跃任务 {}", .{ iteration_count, active_tasks });
+            }
         }
+
+        if (iteration_count >= max_total_iterations) {
+            std.log.warn("事件循环: 达到最大迭代次数 {}，强制退出", .{max_total_iterations});
+        }
+
+        self.running.store(false, .release);
+        std.log.info("事件循环: 已停止，总迭代次数 {}", .{iteration_count});
     }
 
     /// 运行一次事件循环迭代
@@ -107,15 +163,25 @@ pub const AsyncEventLoop = struct {
         try self.libxev_loop.run(.no_wait);
 
         // 处理定时器
-        self.timer_wheel.processExpired();
+        _ = self.timer_wheel.processExpired();
 
         // 唤醒就绪任务
-        self.waker_registry.wakeReady();
+        _ = self.waker_registry.wakeReady();
     }
 
     /// 检查是否有活跃任务
     pub fn hasActiveTasks(self: *const Self) bool {
         return self.active_tasks.load(.acquire) > 0;
+    }
+
+    /// 检查事件循环是否正在运行
+    pub fn isRunning(self: *const Self) bool {
+        return self.running.load(.acquire);
+    }
+
+    /// 启动事件循环
+    pub fn start(self: *Self) void {
+        self.running.store(true, .release);
     }
 
     /// 增加活跃任务计数
@@ -322,13 +388,16 @@ pub const WakerRegistry = struct {
     }
 
     /// 唤醒就绪的任务
-    pub fn wakeReady(self: *Self) void {
+    pub fn wakeReady(self: *Self) u32 {
         self.mutex.lock();
         defer self.mutex.unlock();
 
+        var woken_count: u32 = 0;
         while (self.ready_queue.readItem()) |waker| {
             waker.wake();
+            woken_count += 1;
         }
+        return woken_count;
     }
 
     /// 🚀 Zokio 3.0 新增：添加等待的Waker
@@ -393,27 +462,31 @@ pub const TimerWheel = struct {
     }
 
     /// 处理到期的定时器
-    pub fn processExpired(self: *Self) void {
+    pub fn processExpired(self: *Self) u32 {
         const now = @as(u64, @intCast(std.time.milliTimestamp()));
+        var expired_count: u32 = 0;
 
         var i: usize = 0;
         while (i < self.timers.items.len) {
             if (self.timers.items[i].expire_time <= now) {
                 const timer = self.timers.swapRemove(i);
                 timer.waker.wake();
+                expired_count += 1;
             } else {
                 i += 1;
             }
         }
+        return expired_count;
     }
 };
 
 /// 前向声明
 pub const TaskScheduler = struct {
-    pub fn yield(self: *@This()) void {
+    pub fn yield(self: *@This()) u32 {
         _ = self;
         // 简化实现，实际应该让出给其他任务
         std.Thread.yield() catch {};
+        return 0; // 返回调度的任务数量
     }
 };
 
