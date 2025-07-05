@@ -55,6 +55,7 @@ test "Zokio 4.0 await_fn非阻塞测试" {
     };
 
     var simple_future = SimpleFuture{ .value = 42 };
+    _ = &simple_future; // 避免未使用警告
 
     // 测试await_fn是否能正确处理
     const start_time = std.time.nanoTimestamp();

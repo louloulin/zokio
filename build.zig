@@ -114,6 +114,34 @@ pub fn build(b: *std.Build) void {
     const core_fixes_test_step = b.step("test-fixes", "运行核心修复验证测试");
     core_fixes_test_step.dependOn(&run_core_fixes_tests.step);
 
+    // libxev 集成测试
+    const libxev_integration_tests = b.addTest(.{
+        .root_source_file = b.path("tests/libxev_integration_test.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    libxev_integration_tests.root_module.addOptions("config", options);
+    libxev_integration_tests.root_module.addImport("libxev", libxev.module("xev"));
+    libxev_integration_tests.root_module.addImport("zokio", lib.root_module);
+
+    const run_libxev_integration_tests = b.addRunArtifact(libxev_integration_tests);
+    const libxev_integration_test_step = b.step("test-libxev-integration", "运行 libxev 集成测试");
+    libxev_integration_test_step.dependOn(&run_libxev_integration_tests.step);
+
+    // Zokio 7.0 事件驱动核心测试
+    const event_driven_core_tests = b.addTest(.{
+        .root_source_file = b.path("test_event_driven_core.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    event_driven_core_tests.root_module.addOptions("config", options);
+    event_driven_core_tests.root_module.addImport("libxev", libxev.module("xev"));
+    event_driven_core_tests.root_module.addImport("zokio", lib.root_module);
+
+    const run_event_driven_core_tests = b.addRunArtifact(event_driven_core_tests);
+    const event_driven_core_test_step = b.step("test-event-driven", "运行 Zokio 7.0 事件驱动核心测试");
+    event_driven_core_test_step.dependOn(&run_event_driven_core_tests.step);
+
     // libxev可用性测试
     const libxev_availability_tests = b.addTest(.{
         .root_source_file = b.path("tests/libxev_availability_test.zig"),
