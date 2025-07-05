@@ -35,10 +35,10 @@ pub const AsyncFile = struct {
         flags: std.fs.File.OpenFlags,
     ) !Self {
         const file = try std.fs.cwd().openFile(path, flags);
-        
+
         // 复制路径字符串
         const owned_path = try allocator.dupe(u8, path);
-        
+
         return Self{
             .fd = file,
             .loop = loop,
@@ -86,6 +86,8 @@ pub const AsyncReadFuture = struct {
     bridge: CompletionBridge,
     /// 读取的字节数
     bytes_read: usize = 0,
+    /// 是否已提交异步操作
+    operation_submitted: bool = false,
 
     const Self = @This();
     pub const Output = usize;
@@ -97,32 +99,53 @@ pub const AsyncReadFuture = struct {
             .buffer = buffer,
             .offset = offset,
             .bridge = CompletionBridge.init(),
+            .operation_submitted = false,
         };
     }
 
-    /// 🔄 轮询读取操作
+    /// 🔄 轮询读取操作 - 真实异步实现
     pub fn poll(self: *Self, ctx: *future.Context) future.Poll(usize) {
-        _ = ctx;
+        // 检查是否已提交异步操作
+        if (!self.operation_submitted) {
+            // 设置 Waker 以便回调函数能够唤醒 Future
+            if (ctx.waker) |waker| {
+                self.bridge.setWaker(waker);
+            }
 
-        // 检查是否已完成
-        if (self.bridge.isCompleted()) {
-            return .{ .ready = self.bytes_read };
+            // 提交真实的异步读取操作
+            self.bridge.submitRead(self.file.loop, self.file.fd.handle, self.buffer, self.offset) catch |err| {
+                std.log.err("提交异步读取操作失败: {}", .{err});
+                return .{ .ready = 0 };
+            };
+
+            self.operation_submitted = true;
+            return .pending;
         }
 
         // 检查超时
         if (self.bridge.checkTimeout()) {
+            std.log.warn("文件读取操作超时");
             return .{ .ready = 0 }; // 超时返回 0 字节
         }
 
-        // 执行实际的文件读取（简化实现）
-        const result = self.file.fd.preadAll(self.buffer, self.offset) catch |err| {
-            std.log.err("文件读取失败: {}", .{err});
-            return .{ .ready = 0 };
-        };
+        // 检查操作是否完成
+        if (self.bridge.isCompleted()) {
+            // 从桥接器获取结果
+            switch (self.bridge.getResult(anyerror!usize)) {
+                .ready => |result| {
+                    switch (result) {
+                        .ok => |bytes| return .{ .ready = bytes },
+                        .err => |err| {
+                            std.log.err("异步文件读取失败: {}", .{err});
+                            return .{ .ready = 0 };
+                        },
+                    }
+                },
+                .pending => return .pending,
+            }
+        }
 
-        self.bytes_read = result;
-        self.bridge.complete();
-        return .{ .ready = result };
+        return .pending;
     }
 };
 
@@ -138,6 +161,8 @@ pub const AsyncWriteFuture = struct {
     bridge: CompletionBridge,
     /// 写入的字节数
     bytes_written: usize = 0,
+    /// 是否已提交异步操作
+    operation_submitted: bool = false,
 
     const Self = @This();
     pub const Output = usize;
@@ -149,32 +174,53 @@ pub const AsyncWriteFuture = struct {
             .data = data,
             .offset = offset,
             .bridge = CompletionBridge.init(),
+            .operation_submitted = false,
         };
     }
 
-    /// 🔄 轮询写入操作
+    /// 🔄 轮询写入操作 - 真实异步实现
     pub fn poll(self: *Self, ctx: *future.Context) future.Poll(usize) {
-        _ = ctx;
+        // 检查是否已提交异步操作
+        if (!self.operation_submitted) {
+            // 设置 Waker 以便回调函数能够唤醒 Future
+            if (ctx.waker) |waker| {
+                self.bridge.setWaker(waker);
+            }
 
-        // 检查是否已完成
-        if (self.bridge.isCompleted()) {
-            return .{ .ready = self.bytes_written };
+            // 提交真实的异步写入操作
+            self.bridge.submitWrite(self.file.loop, self.file.fd.handle, self.data, self.offset) catch |err| {
+                std.log.err("提交异步写入操作失败: {}", .{err});
+                return .{ .ready = 0 };
+            };
+
+            self.operation_submitted = true;
+            return .pending;
         }
 
         // 检查超时
         if (self.bridge.checkTimeout()) {
+            std.log.warn("文件写入操作超时");
             return .{ .ready = 0 }; // 超时返回 0 字节
         }
 
-        // 执行实际的文件写入（简化实现）
-        const result = self.file.fd.pwriteAll(self.data, self.offset) catch |err| {
-            std.log.err("文件写入失败: {}", .{err});
-            return .{ .ready = 0 };
-        };
+        // 检查操作是否完成
+        if (self.bridge.isCompleted()) {
+            // 从桥接器获取结果
+            switch (self.bridge.getResult(anyerror!usize)) {
+                .ready => |result| {
+                    switch (result) {
+                        .ok => |bytes| return .{ .ready = bytes },
+                        .err => |err| {
+                            std.log.err("异步文件写入失败: {}", .{err});
+                            return .{ .ready = 0 };
+                        },
+                    }
+                },
+                .pending => return .pending,
+            }
+        }
 
-        self.bytes_written = self.data.len;
-        self.bridge.complete();
-        return .{ .ready = self.data.len };
+        return .pending;
     }
 };
 
@@ -217,7 +263,7 @@ pub const AsyncStatFuture = struct {
                 .atime = 0,
                 .mtime = 0,
                 .ctime = 0,
-            }};
+            } };
         }
 
         // 执行实际的文件统计
@@ -231,7 +277,7 @@ pub const AsyncStatFuture = struct {
                 .atime = 0,
                 .mtime = 0,
                 .ctime = 0,
-            }};
+            } };
         };
 
         self.bridge.complete();
@@ -287,12 +333,12 @@ pub const testing = struct {
     pub fn createTempFile(allocator: std.mem.Allocator, content: []const u8) ![]const u8 {
         const temp_dir = std.testing.tmpDir(.{});
         const temp_path = try std.fmt.allocPrint(allocator, "zokio_test_{d}.txt", .{std.time.milliTimestamp()});
-        
+
         const file = try temp_dir.dir.createFile(temp_path, .{});
         defer file.close();
-        
+
         try file.writeAll(content);
-        
+
         return temp_path;
     }
 

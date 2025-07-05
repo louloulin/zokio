@@ -72,10 +72,19 @@ pub const CompletionBridge = struct {
         close: libxev.CloseError!void,
     };
 
-    /// 🔧 初始化CompletionBridge
+    /// 🔧 初始化CompletionBridge - 修复版本
+    ///
+    /// 修复问题：
+    /// - 正确初始化 libxev.Completion 结构体
+    /// - 设置合适的默认值和回调函数
+    /// - 确保内存安全和类型安全
     pub fn init() Self {
         return Self{
-            .completion = libxev.Completion{},
+            .completion = libxev.Completion{
+                .op = .{ .nop = {} }, // 初始化为无操作状态
+                .userdata = null, // 用户数据指针，稍后设置
+                .callback = null, // 回调函数，稍后设置
+            },
             .state = .pending,
             .result = .none,
             .waker = null,
@@ -91,15 +100,128 @@ pub const CompletionBridge = struct {
         return bridge;
     }
 
-    /// 🚀 通用回调函数 - 处理读取完成
-    pub fn readCallback(
-        bridge: *Self,
+    /// 🚀 提交异步读取操作 - 真实 libxev 集成
+    ///
+    /// 这是真正的异步操作提交，替代之前的同步包装
+    ///
+    /// 参数：
+    /// - loop: libxev 事件循环
+    /// - fd: 文件描述符
+    /// - buffer: 读取缓冲区
+    /// - offset: 读取偏移量（用于文件操作）
+    pub fn submitRead(self: *Self, loop: *libxev.Loop, fd: std.posix.fd_t, buffer: []u8, offset: ?u64) !void {
+        // 设置用户数据指针，用于回调函数中识别桥接器
+        self.completion.userdata = @ptrCast(self);
+
+        // 配置读取操作
+        if (offset) |off| {
+            // 文件读取操作（带偏移量）
+            self.completion.op = .{ .read = .{
+                .fd = fd,
+                .buffer = buffer,
+                .offset = off,
+            } };
+        } else {
+            // 网络读取操作（无偏移量）
+            self.completion.op = .{ .recv = .{
+                .fd = fd,
+                .buffer = buffer,
+            } };
+        }
+
+        // 设置回调函数
+        self.completion.callback = readCompletionCallback;
+
+        // 重置状态
+        self.state = .pending;
+        self.result = .none;
+        self.start_time = std.time.nanoTimestamp();
+
+        // 提交到 libxev 事件循环
+        try loop.add(&self.completion);
+    }
+
+    /// 🚀 提交异步写入操作 - 真实 libxev 集成
+    ///
+    /// 参数：
+    /// - loop: libxev 事件循环
+    /// - fd: 文件描述符
+    /// - data: 写入数据
+    /// - offset: 写入偏移量（用于文件操作）
+    pub fn submitWrite(self: *Self, loop: *libxev.Loop, fd: std.posix.fd_t, data: []const u8, offset: ?u64) !void {
+        // 设置用户数据指针
+        self.completion.userdata = @ptrCast(self);
+
+        // 配置写入操作
+        if (offset) |off| {
+            // 文件写入操作（带偏移量）
+            self.completion.op = .{ .write = .{
+                .fd = fd,
+                .buffer = data,
+                .offset = off,
+            } };
+        } else {
+            // 网络写入操作（无偏移量）
+            self.completion.op = .{ .send = .{
+                .fd = fd,
+                .buffer = data,
+            } };
+        }
+
+        // 设置回调函数
+        self.completion.callback = writeCompletionCallback;
+
+        // 重置状态
+        self.state = .pending;
+        self.result = .none;
+        self.start_time = std.time.nanoTimestamp();
+
+        // 提交到 libxev 事件循环
+        try loop.add(&self.completion);
+    }
+
+    /// 🚀 提交异步连接操作 - 真实 libxev 集成
+    ///
+    /// 参数：
+    /// - loop: libxev 事件循环
+    /// - fd: 套接字文件描述符
+    /// - address: 目标地址
+    pub fn submitConnect(self: *Self, loop: *libxev.Loop, fd: std.posix.fd_t, address: std.net.Address) !void {
+        // 设置用户数据指针
+        self.completion.userdata = @ptrCast(self);
+
+        // 配置连接操作
+        self.completion.op = .{ .connect = .{
+            .fd = fd,
+            .addr = address.any,
+        } };
+
+        // 设置回调函数
+        self.completion.callback = connectCompletionCallback;
+
+        // 重置状态
+        self.state = .pending;
+        self.result = .none;
+        self.start_time = std.time.nanoTimestamp();
+
+        // 提交到 libxev 事件循环
+        try loop.add(&self.completion);
+    }
+
+    /// 🚀 libxev 回调函数 - 处理读取完成
+    ///
+    /// 这是真正的 libxev 回调函数，符合 libxev API 规范
+    pub fn readCompletionCallback(
+        userdata: ?*anyopaque,
         loop: *libxev.Loop,
         completion: *libxev.Completion,
         result: libxev.ReadError!usize,
     ) libxev.CallbackAction {
         _ = loop;
         _ = completion;
+
+        // 从用户数据中恢复桥接器指针
+        const bridge: *Self = @ptrCast(@alignCast(userdata.?));
 
         // 保存读取结果
         bridge.result = .{ .read = result };
@@ -113,15 +235,20 @@ pub const CompletionBridge = struct {
         return .disarm;
     }
 
-    /// 🚀 通用回调函数 - 处理写入完成
-    pub fn writeCallback(
-        bridge: *Self,
+    /// 🚀 libxev 回调函数 - 处理写入完成
+    ///
+    /// 这是真正的 libxev 回调函数，符合 libxev API 规范
+    pub fn writeCompletionCallback(
+        userdata: ?*anyopaque,
         loop: *libxev.Loop,
         completion: *libxev.Completion,
         result: libxev.WriteError!usize,
     ) libxev.CallbackAction {
         _ = loop;
         _ = completion;
+
+        // 从用户数据中恢复桥接器指针
+        const bridge: *Self = @ptrCast(@alignCast(userdata.?));
 
         // 保存写入结果
         bridge.result = .{ .write = result };
@@ -135,15 +262,20 @@ pub const CompletionBridge = struct {
         return .disarm;
     }
 
-    /// 🚀 通用回调函数 - 处理accept完成
-    pub fn acceptCallback(
-        bridge: *Self,
+    /// 🚀 libxev 回调函数 - 处理accept完成
+    ///
+    /// 这是真正的 libxev 回调函数，符合 libxev API 规范
+    pub fn acceptCompletionCallback(
+        userdata: ?*anyopaque,
         loop: *libxev.Loop,
         completion: *libxev.Completion,
         result: libxev.AcceptError!libxev.TCP,
     ) libxev.CallbackAction {
         _ = loop;
         _ = completion;
+
+        // 从用户数据中恢复桥接器指针
+        const bridge: *Self = @ptrCast(@alignCast(userdata.?));
 
         // 保存accept结果
         bridge.result = .{ .accept = result };
@@ -157,15 +289,20 @@ pub const CompletionBridge = struct {
         return .disarm;
     }
 
-    /// 🚀 通用回调函数 - 处理连接完成
-    pub fn connectCallback(
-        bridge: *Self,
+    /// 🚀 libxev 回调函数 - 处理连接完成
+    ///
+    /// 这是真正的 libxev 回调函数，符合 libxev API 规范
+    pub fn connectCompletionCallback(
+        userdata: ?*anyopaque,
         loop: *libxev.Loop,
         completion: *libxev.Completion,
         result: libxev.ConnectError!void,
     ) libxev.CallbackAction {
         _ = loop;
         _ = completion;
+
+        // 从用户数据中恢复桥接器指针
+        const bridge: *Self = @ptrCast(@alignCast(userdata.?));
 
         // 保存连接结果
         bridge.result = .{ .connect = result };
@@ -179,15 +316,20 @@ pub const CompletionBridge = struct {
         return .disarm;
     }
 
-    /// 🚀 通用回调函数 - 处理定时器完成
-    pub fn timerCallback(
-        bridge: *Self,
+    /// 🚀 libxev 回调函数 - 处理定时器完成
+    ///
+    /// 这是真正的 libxev 回调函数，符合 libxev API 规范
+    pub fn timerCompletionCallback(
+        userdata: ?*anyopaque,
         loop: *libxev.Loop,
         completion: *libxev.Completion,
         result: libxev.Timer.RunError!void,
     ) libxev.CallbackAction {
         _ = loop;
         _ = completion;
+
+        // 从用户数据中恢复桥接器指针
+        const bridge: *Self = @ptrCast(@alignCast(userdata.?));
 
         // 保存定时器结果
         bridge.result = .{ .timer = result };
@@ -227,6 +369,13 @@ pub const CompletionBridge = struct {
     /// 🎯 设置Waker
     pub fn setWaker(self: *Self, waker: Waker) void {
         self.waker = waker;
+    }
+
+    /// 🔧 手动完成操作（用于同步包装）
+    ///
+    /// 注意：这个方法主要用于向后兼容，真正的异步操作应该通过回调函数完成
+    pub fn complete(self: *Self) void {
+        self.state = .ready;
     }
 
     /// 📊 获取操作状态
