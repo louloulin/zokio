@@ -1,8 +1,19 @@
-//! 综合性能基准测试
-//! 建立全面的性能基准，对比不同配置的性能表现
+//! 🚀 Zokio 4.0 综合性能基准测试
+//!
+//! 这是Zokio 4.0的核心性能验证，测试各个组件的性能指标：
+//! - 任务调度性能：目标 >1M ops/sec
+//! - 网络I/O性能：目标 >10K ops/sec
+//! - 文件I/O性能：目标 >50K ops/sec
+//! - 内存分配性能：目标零泄漏
+//! - 并发安全性：目标100%通过
+//! - libxev集成性能：目标零拷贝I/O
+//! - CompletionBridge性能：目标纳秒级延迟
 
 const std = @import("std");
 const zokio = @import("zokio");
+const testing = std.testing;
+const print = std.debug.print;
+const CompletionBridge = @import("../src/runtime/completion_bridge.zig").CompletionBridge;
 
 const BenchmarkResult = struct {
     name: []const u8,
@@ -294,4 +305,93 @@ fn generateReport(results: []const BenchmarkResult) !void {
         const ratio = @as(f64, @floatFromInt(result.ops_per_second)) / @as(f64, @floatFromInt(tokio_baseline));
         std.debug.print("{s}: {d:.2}x Tokio性能\n", .{ result.name, ratio });
     }
+}
+
+/// 🚀 Zokio 4.0 CompletionBridge性能基准测试
+///
+/// 测试CompletionBridge的桥接性能，目标：纳秒级延迟
+fn benchmarkCompletionBridge(allocator: std.mem.Allocator) !BenchmarkResult {
+    _ = allocator;
+    print("🔥 开始CompletionBridge性能基准测试...\n");
+
+    const start_time = std.time.nanoTimestamp();
+    const iterations = 1_000_000; // 100万次操作
+
+    var total_latency_ns: u64 = 0;
+    var success_count: u32 = 0;
+
+    const bench_start = std.time.nanoTimestamp();
+
+    // 执行CompletionBridge基准测试
+    for (0..iterations) |_| {
+        const op_start = std.time.nanoTimestamp();
+
+        // 创建并初始化CompletionBridge
+        var bridge = CompletionBridge.init();
+
+        // 模拟状态转换
+        bridge.state = .ready;
+        bridge.result = .{ .read = 1024 };
+
+        // 检查状态
+        const is_completed = bridge.isCompleted();
+        const is_success = bridge.isSuccess();
+
+        // 获取结果
+        const result = bridge.getResult(anyerror!usize);
+
+        const op_end = std.time.nanoTimestamp();
+
+        if (is_completed and is_success and result == .ready) {
+            success_count += 1;
+            total_latency_ns += @intCast(op_end - op_start);
+        }
+    }
+
+    const bench_end = std.time.nanoTimestamp();
+
+    const duration_ns = bench_end - bench_start;
+    const ops_per_second = if (duration_ns > 0)
+        @as(u64, @intCast(iterations)) * 1_000_000_000 / @as(u64, @intCast(duration_ns))
+    else
+        0;
+
+    const avg_latency_ns = if (success_count > 0) total_latency_ns / success_count else 0;
+    const success = ops_per_second >= 10_000_000 and avg_latency_ns < 1000; // 目标：10M ops/sec，<1μs延迟
+
+    print("📊 CompletionBridge基准测试结果:\n");
+    print("   - 总操作数: {}\n", .{iterations});
+    print("   - 成功操作数: {}\n", .{success_count});
+    print("   - 执行时间: {d:.2}ms\n", .{@as(f64, @floatFromInt(duration_ns)) / 1_000_000.0});
+    print("   - 操作速度: {} ops/sec\n", .{ops_per_second});
+    print("   - 平均延迟: {}ns\n", .{avg_latency_ns});
+    print("   - 目标达成: {s}\n", .{if (success) "✅ 是" else "❌ 否"});
+
+    return BenchmarkResult{
+        .name = "CompletionBridge基准测试",
+        .runtime_size = @sizeOf(CompletionBridge),
+        .init_time_ns = 0,
+        .start_time_ns = @intCast(bench_start),
+        .stop_time_ns = @intCast(bench_end),
+        .ops_per_second = ops_per_second,
+        .memory_usage = @sizeOf(CompletionBridge) * iterations,
+        .thread_count = 1,
+        .success = success,
+        .error_msg = if (success) null else "性能未达标",
+    };
+}
+
+/// 🚀 Zokio 4.0 综合基准测试入口
+test "Zokio 4.0 CompletionBridge性能基准测试" {
+    const allocator = testing.allocator;
+
+    print("\n🚀 === Zokio 4.0 CompletionBridge性能基准测试 ===\n");
+
+    const result = try benchmarkCompletionBridge(allocator);
+
+    // 验证性能目标
+    try testing.expect(result.success);
+    try testing.expect(result.ops_per_second >= 10_000_000); // 至少10M ops/sec
+
+    print("✅ CompletionBridge性能测试通过！\n");
 }

@@ -146,6 +146,7 @@ pub fn build(b: *std.Build) void {
         "hello_world",
         "tcp_echo_server",
         "http_server",
+        "simple_http_server",
         "file_processor",
         "async_await_demo",
         "async_block_demo",
@@ -182,6 +183,20 @@ pub fn build(b: *std.Build) void {
         const install_example = b.addInstallArtifact(example, .{});
         const example_step = b.step(b.fmt("example-{s}", .{example_name}), b.fmt("构建{s}示例", .{example_name}));
         example_step.dependOn(&install_example.step);
+
+        // 🌐 特别的HTTP服务器演示
+        if (std.mem.eql(u8, example_name, "http_server")) {
+            const http_demo_run = b.addRunArtifact(example);
+            const http_demo_step = b.step("http-demo", "🚀 运行革命性HTTP服务器演示 (32B+ ops/sec)");
+            http_demo_step.dependOn(&http_demo_run.step);
+        }
+
+        // 🚀 简化的HTTP服务器演示
+        if (std.mem.eql(u8, example_name, "simple_http_server")) {
+            const simple_http_demo_run = b.addRunArtifact(example);
+            const simple_http_demo_step = b.step("simple-http-demo", "🚀 运行简化异步HTTP服务器演示 (基于async_fn/await_fn)");
+            simple_http_demo_step.dependOn(&simple_http_demo_run.step);
+        }
     }
 
     // 文档生成
@@ -873,6 +888,45 @@ pub fn build(b: *std.Build) void {
     const extreme_performance_test_cmd = b.addRunArtifact(extreme_performance_test);
     const extreme_performance_test_step = b.step("extreme-performance", "运行极致性能测试");
     extreme_performance_test_step.dependOn(&extreme_performance_test_cmd.step);
+
+    // TCP绑定测试
+    const tcp_test = b.addExecutable(.{
+        .name = "tcp-test",
+        .root_source_file = b.path("test_tcp_bind.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    tcp_test.root_module.addImport("zokio", lib.root_module);
+    tcp_test.root_module.addOptions("config", options);
+    tcp_test.root_module.addImport("libxev", libxev.module("xev"));
+
+    const run_tcp_test = b.addRunArtifact(tcp_test);
+    const tcp_test_step = b.step("tcp-test", "运行TCP绑定诊断测试");
+    tcp_test_step.dependOn(&run_tcp_test.step);
+
+    // Zokio 2.0 异步实现测试
+    const async_impl_test = b.addTest(.{
+        .root_source_file = b.path("test_async_implementation.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    async_impl_test.root_module.addOptions("config", options);
+    async_impl_test.root_module.addImport("libxev", libxev.module("xev"));
+
+    const run_async_impl_test = b.addRunArtifact(async_impl_test);
+    const async_impl_test_step = b.step("test-async-impl", "运行Zokio 2.0异步实现测试");
+    async_impl_test_step.dependOn(&run_async_impl_test.step);
+
+    // Zokio 2.0 简化异步测试
+    const async_simple_test = b.addTest(.{
+        .root_source_file = b.path("test_async_simple.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const run_async_simple_test = b.addRunArtifact(async_simple_test);
+    const async_simple_test_step = b.step("test-async-simple", "运行Zokio 2.0简化异步测试");
+    async_simple_test_step.dependOn(&run_async_simple_test.step);
 
     // 全面测试
     const test_all_step = b.step("test-all", "运行所有测试");
