@@ -81,7 +81,7 @@ pub const CompletionBridge = struct {
     pub fn init() Self {
         return Self{
             .completion = libxev.Completion{
-                .op = .{ .nop = {} }, // 初始化为无操作状态
+                .op = undefined, // 稍后在具体操作中设置
                 .userdata = null, // 用户数据指针，稍后设置
                 .callback = null, // 回调函数，稍后设置
             },
