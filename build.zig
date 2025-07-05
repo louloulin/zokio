@@ -198,11 +198,32 @@ pub fn build(b: *std.Build) void {
     const performance_benchmark_step = b.step("test-performance", "运行 Zokio 7.2 性能基准测试");
     performance_benchmark_step.dependOn(&run_performance_benchmarks.step);
 
+    // Zokio 7.3 I/O 性能基准测试
+    const io_performance_tests = b.addTest(.{
+        .root_source_file = b.path("tests/io_performance_tests.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    io_performance_tests.root_module.addOptions("config", options);
+    io_performance_tests.root_module.addImport("libxev", libxev.module("xev"));
+    io_performance_tests.root_module.addImport("zokio", lib.root_module);
+
+    const run_io_performance_tests = b.addRunArtifact(io_performance_tests);
+    const io_performance_test_step = b.step("test-io-performance", "运行 Zokio 7.3 I/O 性能基准测试");
+    io_performance_test_step.dependOn(&run_io_performance_tests.step);
+
     // Zokio 7.2 全面测试套件
     const comprehensive_test_step = b.step("test-comprehensive", "运行 Zokio 7.2 全面测试套件");
     comprehensive_test_step.dependOn(&run_comprehensive_unit_tests.step);
     comprehensive_test_step.dependOn(&run_comprehensive_integration_tests.step);
     comprehensive_test_step.dependOn(&run_performance_benchmarks.step);
+
+    // Zokio 7.3 完整测试套件（包含 I/O 性能测试）
+    const complete_test_step = b.step("test-complete", "运行 Zokio 7.3 完整测试套件");
+    complete_test_step.dependOn(&run_comprehensive_unit_tests.step);
+    complete_test_step.dependOn(&run_comprehensive_integration_tests.step);
+    complete_test_step.dependOn(&run_performance_benchmarks.step);
+    complete_test_step.dependOn(&run_io_performance_tests.step);
 
     // libxev可用性测试
     const libxev_availability_tests = b.addTest(.{
@@ -757,8 +778,8 @@ pub fn build(b: *std.Build) void {
     io_performance_test.root_module.addImport("libxev", libxev.module("xev"));
 
     const io_performance_test_cmd = b.addRunArtifact(io_performance_test);
-    const io_performance_test_step = b.step("io-perf", "运行I/O系统性能测试");
-    io_performance_test_step.dependOn(&io_performance_test_cmd.step);
+    const legacy_io_performance_test_step = b.step("io-perf", "运行I/O系统性能测试");
+    legacy_io_performance_test_step.dependOn(&io_performance_test_cmd.step);
 
     // 真实I/O测试
     const real_io_test = b.addExecutable(.{
