@@ -169,6 +169,87 @@ pub fn build(b: *std.Build) void {
     const real_io_performance_test_step = b.step("test-real-io-perf", "运行真实I/O性能测试");
     real_io_performance_test_step.dependOn(&run_real_io_performance_tests.step);
 
+    // HTTP压测工具
+    const http_benchmark = b.addExecutable(.{
+        .name = "http_benchmark",
+        .root_source_file = b.path("tools/http_benchmark.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    http_benchmark.root_module.addOptions("config", options);
+    http_benchmark.root_module.addImport("libxev", libxev.module("xev"));
+    http_benchmark.root_module.addImport("zokio", lib.root_module);
+
+    const run_http_benchmark = b.addRunArtifact(http_benchmark);
+    const http_benchmark_step = b.step("http-benchmark", "🚀 运行HTTP服务器压测工具");
+    http_benchmark_step.dependOn(&run_http_benchmark.step);
+
+    // 简化HTTP测试服务器
+    const simple_test_server = b.addExecutable(.{
+        .name = "simple_test_server",
+        .root_source_file = b.path("tools/simple_test_server.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const run_simple_test_server = b.addRunArtifact(simple_test_server);
+    const simple_test_server_step = b.step("test-server", "🚀 运行简化HTTP测试服务器");
+    simple_test_server_step.dependOn(&run_simple_test_server.step);
+
+    // 简化HTTP压测工具
+    const simple_benchmark = b.addExecutable(.{
+        .name = "simple_benchmark",
+        .root_source_file = b.path("tools/simple_benchmark.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const run_simple_benchmark = b.addRunArtifact(simple_benchmark);
+    const simple_benchmark_step = b.step("http-perf-analysis", "🔍 运行HTTP性能分析和压测");
+    simple_benchmark_step.dependOn(&run_simple_benchmark.step);
+
+    // 并发HTTP服务器
+    const concurrent_http_server = b.addExecutable(.{
+        .name = "concurrent_http_server",
+        .root_source_file = b.path("examples/concurrent_http_server.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    concurrent_http_server.root_module.addOptions("config", options);
+    concurrent_http_server.root_module.addImport("libxev", libxev.module("xev"));
+    concurrent_http_server.root_module.addImport("zokio", lib.root_module);
+
+    const run_concurrent_http_server = b.addRunArtifact(concurrent_http_server);
+    const concurrent_http_server_step = b.step("concurrent-http-server", "🚀 运行并发HTTP服务器 (阶段1优化)");
+    concurrent_http_server_step.dependOn(&run_concurrent_http_server.step);
+
+    // 阶段1并发服务器
+    const stage1_server = b.addExecutable(.{
+        .name = "stage1_concurrent_server",
+        .root_source_file = b.path("examples/stage1_concurrent_server.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const run_stage1_server = b.addRunArtifact(stage1_server);
+    const stage1_server_step = b.step("stage1-server", "🚀 运行阶段1并发HTTP服务器性能测试");
+    stage1_server_step.dependOn(&run_stage1_server.step);
+
+    // 阶段2异步I/O服务器
+    const stage2_server = b.addExecutable(.{
+        .name = "stage2_async_io_server",
+        .root_source_file = b.path("examples/stage2_async_io_server.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    stage2_server.root_module.addOptions("config", options);
+    stage2_server.root_module.addImport("libxev", libxev.module("xev"));
+    stage2_server.root_module.addImport("zokio", lib.root_module);
+
+    const run_stage2_server = b.addRunArtifact(stage2_server);
+    const stage2_server_step = b.step("stage2-server", "🚀 运行阶段2异步I/O HTTP服务器");
+    stage2_server_step.dependOn(&run_stage2_server.step);
+
     real_impl_test_step.dependOn(&run_real_impl_tests.step);
 
     // 核心修复验证测试
