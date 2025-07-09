@@ -919,6 +919,48 @@ const HttpServer = struct {
         print("=" ** 30 ++ "\n\n", .{});
     }
 
+    /// 🚀 智能端口绑定：自动寻找可用端口
+    fn bindToAvailablePort(self: *Self) !zokio.net.tcp.TcpListener {
+        // 首先尝试原始端口
+        const original_port = self.address.port();
+
+        if (zokio.net.tcp.TcpListener.bind(self.allocator, self.address)) |listener| {
+            print("🎯 成功绑定到首选端口 {}\n", .{original_port});
+            return listener;
+        } else |err| {
+            if (err == error.AddressInUse) {
+                print("⚠️  端口 {} 已被占用，尝试寻找其他可用端口...\n", .{original_port});
+
+                // 尝试一系列端口
+                const port_candidates = [_]u16{ 9091, 9092, 9093, 9094, 9095, 8080, 8081, 8082, 8083, 8084 };
+
+                for (port_candidates) |port| {
+                    const test_addr = try zokio.net.SocketAddr.parse(try std.fmt.allocPrint(self.allocator, "127.0.0.1:{}", .{port}));
+
+                    if (zokio.net.tcp.TcpListener.bind(self.allocator, test_addr)) |listener| {
+                        print("✅ 找到可用端口 {}\n", .{port});
+                        self.address = test_addr; // 更新地址
+                        return listener;
+                    } else |bind_err| {
+                        if (bind_err == error.AddressInUse) {
+                            print("   端口 {} 也被占用，继续尝试...\n", .{port});
+                            continue;
+                        } else {
+                            print("   端口 {} 绑定失败: {}\n", .{ port, bind_err });
+                            continue;
+                        }
+                    }
+                }
+
+                print("❌ 所有候选端口都不可用\n", .{});
+                return error.NoAvailablePort;
+            } else {
+                print("❌ 端口绑定失败: {}\n", .{err});
+                return err;
+            }
+        }
+    }
+
     /// 清理服务器资源
     pub fn deinit(self: *Self) void {
         if (self.listener) |*listener| {
@@ -941,7 +983,11 @@ const HttpServer = struct {
     fn runRealAsyncServer(self: *Self) !void {
         // 只初始化一次监听器
         if (self.listener == null) {
-            self.listener = try zokio.net.tcp.TcpListener.bind(self.allocator, self.address);
+            // 尝试绑定到指定端口，如果失败则尝试其他端口
+            self.listener = self.bindToAvailablePort() catch |err| {
+                print("❌ 无法绑定到任何可用端口: {}\n", .{err});
+                return err;
+            };
             print("✅ 异步服务器启动成功，监听端口 {}\n", .{self.address.port()});
             print("🌐 可以使用 curl http://localhost:{}/hello 测试\n\n", .{self.address.port()});
             print("🔄 开始异步接受HTTP连接...\n", .{});
@@ -952,8 +998,20 @@ const HttpServer = struct {
             // 🚀 异步接受连接
             const accept_future = self.listener.?.accept();
             const stream = zokio.await_fn_future(accept_future) catch |err| {
-                print("❌ 异步接受连接失败: {}\n", .{err});
-                continue;
+                switch (err) {
+                    error.Timeout => {
+                        print("⏰ 等待连接超时，继续监听...\n", .{});
+                        // 短暂休眠后继续
+                        std.time.sleep(100 * std.time.ns_per_ms);
+                        continue;
+                    },
+                    else => {
+                        print("❌ 异步接受连接失败: {}\n", .{err});
+                        // 异步等待1秒后重试
+                        std.time.sleep(1000 * std.time.ns_per_ms);
+                        continue;
+                    },
+                }
             };
 
             const connection_id = self.connection_counter.fetchAdd(1, .monotonic);
