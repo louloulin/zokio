@@ -91,6 +91,10 @@ pub const async_fn_with_params_future = future.async_fn_with_params;
 pub const async_block_future = future.async_block;
 pub const await_fn_future = future.await_fn;
 
+// I/O类型导出
+pub const AsyncFile = @import("io/async_file.zig").AsyncFile;
+pub const CompletionBridge = @import("runtime/completion_bridge.zig").CompletionBridge;
+
 // 配置类型导出
 pub const RuntimeConfig = runtime.RuntimeConfig;
 pub const IoConfig = io.IoConfig;

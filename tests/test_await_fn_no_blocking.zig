@@ -239,7 +239,8 @@ test "await_fn错误处理" {
     // 测试成功情况
     const success_future = ErrorFuture.init(false);
     const success_result = zokio.await_fn(success_future);
-    try testing.expect(success_result == 42);
+    const success_value = try success_result;
+    try testing.expect(success_value == 42);
 
     // 测试错误情况
     const error_future = ErrorFuture.init(true);

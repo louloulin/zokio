@@ -114,23 +114,23 @@ pub const CompletionBridge = struct {
         self.completion.userdata = @ptrCast(self);
 
         // 配置读取操作
-        if (offset) |off| {
+        if (offset) |_| {
             // 文件读取操作（带偏移量）
+            // 注意：kqueue后端不直接支持offset，使用普通read
             self.completion.op = .{ .read = .{
                 .fd = fd,
-                .buffer = buffer,
-                .offset = off,
+                .buffer = .{ .slice = buffer },
             } };
         } else {
             // 网络读取操作（无偏移量）
             self.completion.op = .{ .recv = .{
                 .fd = fd,
-                .buffer = buffer,
+                .buffer = .{ .slice = buffer },
             } };
         }
 
         // 设置回调函数
-        self.completion.callback = readCompletionCallback;
+        self.completion.callback = genericCompletionCallback;
 
         // 重置状态
         self.state = .pending;
@@ -138,7 +138,7 @@ pub const CompletionBridge = struct {
         self.start_time = std.time.nanoTimestamp();
 
         // 提交到 libxev 事件循环
-        try loop.add(&self.completion);
+        loop.add(&self.completion);
     }
 
     /// 🚀 提交异步写入操作 - 真实 libxev 集成
@@ -153,23 +153,23 @@ pub const CompletionBridge = struct {
         self.completion.userdata = @ptrCast(self);
 
         // 配置写入操作
-        if (offset) |off| {
+        if (offset) |_| {
             // 文件写入操作（带偏移量）
+            // 注意：kqueue后端不直接支持offset，使用普通write
             self.completion.op = .{ .write = .{
                 .fd = fd,
-                .buffer = data,
-                .offset = off,
+                .buffer = .{ .slice = data },
             } };
         } else {
             // 网络写入操作（无偏移量）
             self.completion.op = .{ .send = .{
                 .fd = fd,
-                .buffer = data,
+                .buffer = .{ .slice = data },
             } };
         }
 
         // 设置回调函数
-        self.completion.callback = writeCompletionCallback;
+        self.completion.callback = genericCompletionCallback;
 
         // 重置状态
         self.state = .pending;
@@ -177,7 +177,7 @@ pub const CompletionBridge = struct {
         self.start_time = std.time.nanoTimestamp();
 
         // 提交到 libxev 事件循环
-        try loop.add(&self.completion);
+        loop.add(&self.completion);
     }
 
     /// 🚀 提交异步连接操作 - 真实 libxev 集成
@@ -239,6 +239,53 @@ pub const CompletionBridge = struct {
 
         bridge.result = .{ .read = read_result };
         bridge.state = .ready;
+
+        // 唤醒等待的Future
+        if (bridge.waker) |waker| {
+            waker.wake();
+        }
+
+        return .disarm;
+    }
+
+    /// 🚀 libxev 通用回调函数 - 处理所有操作完成
+    ///
+    /// 这是符合 libxev API 规范的通用回调函数
+    pub fn genericCompletionCallback(
+        userdata: ?*anyopaque,
+        loop: *libxev.Loop,
+        completion: *libxev.Completion,
+        result: libxev.Result,
+    ) libxev.CallbackAction {
+        _ = loop;
+        _ = completion;
+
+        // 从用户数据中恢复桥接器指针
+        const bridge: *Self = @ptrCast(@alignCast(userdata.?));
+
+        // 根据操作类型保存结果
+        switch (result) {
+            .read => |read_result| {
+                bridge.result = .{ .read = read_result };
+                bridge.state = if (read_result) |_| .ready else |_| .error_occurred;
+            },
+            .write => |write_result| {
+                bridge.result = .{ .write = write_result };
+                bridge.state = if (write_result) |_| .ready else |_| .error_occurred;
+            },
+            .accept => |accept_result| {
+                bridge.result = .{ .accept = accept_result };
+                bridge.state = if (accept_result) |_| .ready else |_| .error_occurred;
+            },
+            .connect => |connect_result| {
+                bridge.result = .{ .connect = connect_result };
+                bridge.state = if (connect_result) |_| .ready else |_| .error_occurred;
+            },
+            else => {
+                // 其他操作类型
+                bridge.state = .ready;
+            },
+        }
 
         // 唤醒等待的Future
         if (bridge.waker) |waker| {
@@ -392,18 +439,33 @@ pub const CompletionBridge = struct {
         return false;
     }
 
-    /// 🔄 重置桥接器状态
+    /// 🔄 重置桥接器状态 - 修复版本
+    ///
+    /// 修复问题：
+    /// - 正确重置 libxev.Completion 结构体
+    /// - 避免空初始化导致的未定义行为
     pub fn reset(self: *Self) void {
         self.state = .pending;
         self.result = .none;
         self.waker = null;
-        self.completion = libxev.Completion{};
+
+        // ✅ 正确重置 completion 结构体
+        self.completion = libxev.Completion{
+            .op = .{ .noop = {} },
+            .userdata = null,
+            .callback = libxev.noopCallback,
+        };
         self.start_time = std.time.nanoTimestamp();
     }
 
     /// 🎯 设置Waker
     pub fn setWaker(self: *Self, waker: Waker) void {
         self.waker = waker;
+    }
+
+    /// 🔧 设置桥接器状态
+    pub fn setState(self: *Self, state: BridgeState) void {
+        self.state = state;
     }
 
     /// 🔧 手动完成操作（用于同步包装）
