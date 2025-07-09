@@ -98,6 +98,20 @@ pub fn build(b: *std.Build) void {
 
     const run_real_impl_tests = b.addRunArtifact(real_impl_tests);
     const real_impl_test_step = b.step("test-real", "运行真实性验证测试");
+
+    // await_fn非阻塞测试
+    const await_fn_tests = b.addTest(.{
+        .root_source_file = b.path("tests/test_await_fn_no_blocking.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    await_fn_tests.root_module.addOptions("config", options);
+    await_fn_tests.root_module.addImport("libxev", libxev.module("xev"));
+    await_fn_tests.root_module.addImport("zokio", lib.root_module);
+
+    const run_await_fn_tests = b.addRunArtifact(await_fn_tests);
+    const await_fn_test_step = b.step("test-await-fn", "运行await_fn非阻塞测试");
+    await_fn_test_step.dependOn(&run_await_fn_tests.step);
     real_impl_test_step.dependOn(&run_real_impl_tests.step);
 
     // 核心修复验证测试
@@ -286,6 +300,9 @@ pub fn build(b: *std.Build) void {
         "tcp_echo_server",
         "http_server",
         "simple_http_server",
+        "simple_http_test",
+        "http_demo_test",
+        "simple_http_verify",
         "file_processor",
         "async_await_demo",
         "async_block_demo",
@@ -335,6 +352,27 @@ pub fn build(b: *std.Build) void {
             const simple_http_demo_run = b.addRunArtifact(example);
             const simple_http_demo_step = b.step("simple-http-demo", "🚀 运行简化异步HTTP服务器演示 (基于async_fn/await_fn)");
             simple_http_demo_step.dependOn(&simple_http_demo_run.step);
+        }
+
+        // 🧪 HTTP服务器测试
+        if (std.mem.eql(u8, example_name, "simple_http_test")) {
+            const http_test_run = b.addRunArtifact(example);
+            const http_test_step = b.step("http-test", "🧪 运行HTTP服务器基础功能测试");
+            http_test_step.dependOn(&http_test_run.step);
+        }
+
+        // 🎯 HTTP服务器演示测试
+        if (std.mem.eql(u8, example_name, "http_demo_test")) {
+            const http_demo_test_run = b.addRunArtifact(example);
+            const http_demo_test_step = b.step("http-demo-test", "🎯 运行HTTP服务器完整演示测试");
+            http_demo_test_step.dependOn(&http_demo_test_run.step);
+        }
+
+        // 🔍 HTTP服务器简化验证
+        if (std.mem.eql(u8, example_name, "simple_http_verify")) {
+            const http_verify_run = b.addRunArtifact(example);
+            const http_verify_step = b.step("http-verify", "🔍 运行HTTP服务器简化验证");
+            http_verify_step.dependOn(&http_verify_run.step);
         }
     }
 

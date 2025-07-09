@@ -209,7 +209,7 @@ pub const ReadFuture = struct {
 
             if (self.event_loop) |event_loop| {
                 // 尝试从文件描述符创建libxev TCP连接
-                self.xev_tcp = libxev.TCP.initFd(self.fd) catch null;
+                self.xev_tcp = libxev.TCP.initFd(self.fd);
 
                 if (self.xev_tcp) |*tcp| {
                     // 🚀 使用libxev进行真正的异步读取
@@ -239,18 +239,18 @@ pub const ReadFuture = struct {
 
     /// 🚀 提交libxev异步读取操作
     fn submitLibxevRead(self: *Self, tcp: *libxev.TCP, loop: *libxev.Loop, waker: Waker) Poll(anyerror!usize) {
-        if (self.bridge.getState() == .pending and self.bridge.completion.state == .dead) {
+        if (self.bridge.getState() == .pending) {
             // 设置Waker
             self.bridge.setWaker(waker);
 
-            // 提交读取操作到libxev
+            // 提交读取操作到libxev - 使用正确的API
             tcp.read(
                 loop,
                 &self.bridge.completion,
                 .{ .slice = self.buffer },
-                *CompletionBridge,
+                CompletionBridge,
                 &self.bridge,
-                CompletionBridge.readCallback,
+                CompletionBridge.readCompletionCallback,
             );
         }
 
@@ -321,7 +321,7 @@ pub const WriteFuture = struct {
 
             if (self.event_loop) |event_loop| {
                 // 尝试从文件描述符创建libxev TCP连接
-                self.xev_tcp = libxev.TCP.initFd(self.fd) catch null;
+                self.xev_tcp = libxev.TCP.initFd(self.fd);
 
                 if (self.xev_tcp) |*tcp| {
                     // 🚀 使用libxev进行真正的异步写入
@@ -369,21 +369,21 @@ pub const WriteFuture = struct {
 
     /// 🚀 提交libxev异步写入操作
     fn submitLibxevWrite(self: *Self, tcp: *libxev.TCP, loop: *libxev.Loop, waker: Waker) Poll(anyerror!usize) {
-        if (self.bridge.getState() == .pending and self.bridge.completion.state == .dead) {
+        if (self.bridge.getState() == .pending) {
             // 设置Waker
             self.bridge.setWaker(waker);
 
             // 获取剩余要写入的数据
             const remaining_data = self.data[self.bytes_written..];
 
-            // 提交写入操作到libxev
+            // 提交写入操作到libxev - 使用正确的API
             tcp.write(
                 loop,
                 &self.bridge.completion,
                 .{ .slice = remaining_data },
-                *CompletionBridge,
+                CompletionBridge,
                 &self.bridge,
-                CompletionBridge.writeCallback,
+                CompletionBridge.writeCompletionCallback,
             );
         }
 
@@ -458,7 +458,7 @@ pub const AcceptFuture = struct {
 
             if (self.event_loop) |event_loop| {
                 // 尝试从文件描述符创建libxev TCP监听器
-                self.xev_tcp = libxev.TCP.initFd(self.listener_fd) catch null;
+                self.xev_tcp = libxev.TCP.initFd(self.listener_fd);
 
                 if (self.xev_tcp) |*tcp| {
                     // 🚀 使用libxev进行真正的异步accept
@@ -503,17 +503,17 @@ pub const AcceptFuture = struct {
 
     /// 🚀 提交libxev异步accept操作
     fn submitLibxevAccept(self: *Self, tcp: *libxev.TCP, loop: *libxev.Loop, waker: Waker) Poll(anyerror!TcpStream) {
-        if (self.bridge.getState() == .pending and self.bridge.completion.state == .dead) {
+        if (self.bridge.getState() == .pending) {
             // 设置Waker
             self.bridge.setWaker(waker);
 
-            // 提交accept操作到libxev
+            // 提交accept操作到libxev - 使用正确的API
             tcp.accept(
                 loop,
                 &self.bridge.completion,
-                *CompletionBridge,
+                CompletionBridge,
                 &self.bridge,
-                CompletionBridge.acceptCallback,
+                CompletionBridge.acceptCompletionCallback,
             );
         }
 

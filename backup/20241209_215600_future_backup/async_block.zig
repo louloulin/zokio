@@ -16,54 +16,23 @@
 const std = @import("std");
 const future = @import("future.zig");
 
-// 导入事件循环相关模块
-const AsyncEventLoop = @import("../runtime/async_event_loop.zig").AsyncEventLoop;
-
 pub const Context = future.Context;
 pub const Poll = future.Poll;
 pub const Waker = future.Waker;
 pub const Budget = future.Budget;
 
-/// 🚀 Zokio 8.0 真正的异步await函数 - 完全事件驱动实现
-///
-/// 核心改进：
-/// - 完全移除Thread.yield()调用
-/// - 基于AsyncEventLoop的真正事件驱动
-/// - 支持任务暂停和恢复机制
-/// - 集成Waker系统进行任务唤醒
+/// 🚀 真正的异步await函数 - 基于协程的非阻塞实现
 pub fn await_fn(future_arg: anytype) @TypeOf(future_arg).Output {
-    // 编译时验证Future类型
-    comptime {
-        if (!@hasDecl(@TypeOf(future_arg), "poll")) {
-            @compileError("await_fn() 需要实现 poll() 方法的 Future 类型");
-        }
-        if (!@hasDecl(@TypeOf(future_arg), "Output")) {
-            @compileError("await_fn() 需要定义 Output 类型的 Future 类型");
-        }
-    }
-
-    // 创建异步任务状态机
+    // 创建一个异步任务来处理这个Future
     const AsyncTask = struct {
         future: @TypeOf(future_arg),
-        state: TaskState,
+        state: enum { polling, suspended, completed },
         result: ?@TypeOf(future_arg).Output = null,
-        waker: ?Waker = null,
 
         const Self = @This();
 
-        const TaskState = enum {
-            initial, // 初始状态
-            polling, // 正在轮询
-            suspended, // 已暂停，等待事件
-            completed, // 已完成
-        };
-
         pub fn poll(self: *Self, ctx: *Context) Poll(@TypeOf(future_arg).Output) {
             switch (self.state) {
-                .initial => {
-                    self.state = .polling;
-                    return self.poll(ctx);
-                },
                 .polling => {
                     switch (self.future.poll(ctx)) {
                         .ready => |result| {
@@ -72,15 +41,14 @@ pub fn await_fn(future_arg: anytype) @TypeOf(future_arg).Output {
                             return .{ .ready = result };
                         },
                         .pending => {
-                            // 🚀 真正的异步：暂停任务并注册到事件循环
+                            // 真正的异步：暂停任务，不阻塞
                             self.state = .suspended;
-                            self.waker = ctx.waker;
                             return .pending;
                         },
                     }
                 },
                 .suspended => {
-                    // 任务被事件循环唤醒，继续轮询
+                    // 任务被唤醒，继续轮询
                     self.state = .polling;
                     return self.poll(ctx);
                 },
@@ -93,42 +61,26 @@ pub fn await_fn(future_arg: anytype) @TypeOf(future_arg).Output {
 
     var task = AsyncTask{
         .future = future_arg,
-        .state = .initial,
+        .state = .polling,
     };
 
-    // 获取当前异步执行上下文
     const ctx = getCurrentAsyncContext();
 
-    // 🚀 事件驱动的轮询循环 - 完全非阻塞实现
+    // 🚀 事件驱动的轮询循环
     while (true) {
         switch (task.poll(ctx)) {
-            .ready => |result| {
-                // 任务完成，从事件循环移除
-                if (getCurrentEventLoop()) |event_loop| {
-                    event_loop.removeActiveTask();
-                }
-                return result;
-            },
+            .ready => |result| return result,
             .pending => {
-                // 🚀 Zokio 8.0 核心改进：真正的事件驱动暂停
-                if (getCurrentEventLoop()) |event_loop| {
-                    // 将任务注册到事件循环的等待队列
-                    if (task.waker) |waker| {
-                        event_loop.registerWaitingTask(waker);
-                    }
+                // ✅ 真正的异步：让出控制权，不阻塞
+                // 在真实的实现中，这里会将任务加入到事件循环的等待队列
+                // 当I/O事件就绪时，事件循环会重新调度这个任务
 
-                    // 运行一次事件循环，处理其他就绪任务
-                    event_loop.runOnce() catch {};
+                // 当前简化实现：非阻塞让出CPU
+                std.Thread.yield() catch {};
 
-                    // 检查任务是否被唤醒
-                    if (task.state == .suspended) {
-                        // 任务仍在等待，继续事件循环
-                        continue;
-                    }
-                } else {
-                    // 降级处理：如果没有事件循环，使用最小延迟
-                    // 这是为了向后兼容，但不推荐在生产环境使用
-                    std.atomic.spinLoopHint();
+                // 模拟事件循环的唤醒机制
+                if (task.state == .suspended) {
+                    task.state = .polling; // 重新激活任务
                 }
             },
         }
@@ -137,19 +89,6 @@ pub fn await_fn(future_arg: anytype) @TypeOf(future_arg).Output {
 
 /// 线程本地的异步上下文
 threadlocal var current_async_context: ?*Context = null;
-
-/// 线程本地的事件循环引用
-threadlocal var current_event_loop: ?*AsyncEventLoop = null;
-
-/// 获取当前事件循环
-pub fn getCurrentEventLoop() ?*AsyncEventLoop {
-    return current_event_loop;
-}
-
-/// 设置当前事件循环
-pub fn setCurrentEventLoop(event_loop: ?*AsyncEventLoop) void {
-    current_event_loop = event_loop;
-}
 
 /// 获取当前异步上下文
 fn getCurrentAsyncContext() *Context {
