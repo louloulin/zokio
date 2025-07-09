@@ -250,6 +250,21 @@ pub fn build(b: *std.Build) void {
     const stage2_server_step = b.step("stage2-server", "🚀 运行阶段2异步I/O HTTP服务器");
     stage2_server_step.dependOn(&run_stage2_server.step);
 
+    // 阶段2性能测试
+    const stage2_perf_test = b.addExecutable(.{
+        .name = "stage2_performance_test",
+        .root_source_file = b.path("tools/stage2_performance_test.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    stage2_perf_test.root_module.addOptions("config", options);
+    stage2_perf_test.root_module.addImport("libxev", libxev.module("xev"));
+    stage2_perf_test.root_module.addImport("zokio", lib.root_module);
+
+    const run_stage2_perf_test = b.addRunArtifact(stage2_perf_test);
+    const stage2_perf_test_step = b.step("stage2-test", "🚀 运行阶段2异步I/O性能测试");
+    stage2_perf_test_step.dependOn(&run_stage2_perf_test.step);
+
     real_impl_test_step.dependOn(&run_real_impl_tests.step);
 
     // 核心修复验证测试
