@@ -1104,6 +1104,20 @@ pub fn build(b: *std.Build) void {
     const minimal_fix_test_step = b.step("test-minimal-fix", "运行最小化修复验证测试");
     minimal_fix_test_step.dependOn(&minimal_fix_test_cmd.step);
 
+    // 精确隔离测试
+    const precise_isolation_tests = b.addTest(.{
+        .root_source_file = b.path("tests/test_precise_isolation.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    precise_isolation_tests.root_module.addImport("zokio", lib.root_module);
+    precise_isolation_tests.root_module.addImport("libxev", libxev.module("xev"));
+    precise_isolation_tests.root_module.addOptions("config", options);
+
+    const precise_isolation_test_cmd = b.addRunArtifact(precise_isolation_tests);
+    const precise_isolation_test_step = b.step("test-precise-isolation", "运行精确隔离测试");
+    precise_isolation_test_step.dependOn(&precise_isolation_test_cmd.step);
+
     // libxev初始化测试
     const libxev_init_test = b.addTest(.{
         .root_source_file = b.path("tests/test_libxev_init.zig"),
@@ -1173,6 +1187,48 @@ pub fn build(b: *std.Build) void {
     const final_verification_test_cmd = b.addRunArtifact(final_verification_test);
     const final_verification_test_step = b.step("test-final-verification", "运行最终验证测试");
     final_verification_test_step.dependOn(&final_verification_test_cmd.step);
+
+    // start()隔离测试
+    const start_isolation_test = b.addTest(.{
+        .root_source_file = b.path("tests/test_start_isolation.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    start_isolation_test.root_module.addImport("zokio", lib.root_module);
+    start_isolation_test.root_module.addImport("libxev", libxev.module("xev"));
+    start_isolation_test.root_module.addOptions("config", options);
+
+    const start_isolation_test_cmd = b.addRunArtifact(start_isolation_test);
+    const start_isolation_test_step = b.step("test-start-isolation", "运行start()隔离测试");
+    start_isolation_test_step.dependOn(&start_isolation_test_cmd.step);
+
+    // libxev上下文测试
+    const libxev_context_test = b.addTest(.{
+        .root_source_file = b.path("tests/test_libxev_context.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    libxev_context_test.root_module.addImport("zokio", lib.root_module);
+    libxev_context_test.root_module.addImport("libxev", libxev.module("xev"));
+    libxev_context_test.root_module.addOptions("config", options);
+
+    const libxev_context_test_cmd = b.addRunArtifact(libxev_context_test);
+    const libxev_context_test_step = b.step("test-libxev-context", "运行libxev上下文测试");
+    libxev_context_test_step.dependOn(&libxev_context_test_cmd.step);
+
+    // 运行时上下文测试
+    const runtime_context_test = b.addTest(.{
+        .root_source_file = b.path("tests/test_runtime_context.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    runtime_context_test.root_module.addImport("zokio", lib.root_module);
+    runtime_context_test.root_module.addImport("libxev", libxev.module("xev"));
+    runtime_context_test.root_module.addOptions("config", options);
+
+    const runtime_context_test_cmd = b.addRunArtifact(runtime_context_test);
+    const runtime_context_test_step = b.step("test-runtime-context", "运行运行时上下文测试");
+    runtime_context_test_step.dependOn(&runtime_context_test_cmd.step);
 
     // 内存分配性能专项测试
     const memory_perf_test = b.addExecutable(.{
