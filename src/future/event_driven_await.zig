@@ -47,7 +47,7 @@ pub fn await_fn(future_arg: anytype) @TypeOf(future_arg).Output {
     }
 
     var fut = future_arg;
-    
+
     // 🚀 第一阶段：快速轮询（避免不必要的事件循环开销）
     const quick_poll_result = quickPoll(&fut);
     if (quick_poll_result) |result| {
@@ -85,7 +85,7 @@ fn quickPoll(fut: anytype) ?@TypeOf(fut.*).Output {
 /// 🚀 事件驱动等待阶段：真正的异步等待
 fn eventDrivenWait(fut: anytype) @TypeOf(fut.*).Output {
     const runtime = getCurrentRuntime();
-    
+
     if (runtime == null) {
         // 没有运行时，使用回退模式
         std.log.debug("await_fn: 无运行时，使用回退模式", .{});
@@ -134,11 +134,13 @@ fn eventDrivenWaitImpl(fut: anytype, ctx: *Context, waker: *Waker) @TypeOf(fut.*
                     // 前 10 次快速轮询
                     continue;
                 } else if (poll_count < 25) {
-                    // 中期让出 CPU
-                    std.Thread.yield() catch {};
+                    // 🚀 Zokio 8.0: 中期使用事件循环非阻塞处理
+                    // 移除Thread.yield()阻塞调用
+                    break; // 直接退出，避免忙等待
                 } else {
-                    // 后期短暂休眠
-                    std.time.sleep(1 * std.time.ns_per_ms);
+                    // 🚀 Zokio 8.0: 后期直接退出，移除sleep阻塞调用
+                    // 让事件循环处理后续的任务调度
+                    break;
                 }
             },
         }
@@ -161,8 +163,9 @@ fn fallbackWait(fut: anytype) @TypeOf(fut.*).Output {
             .ready => |result| return result,
             .pending => {
                 poll_count += 1;
-                // 最小化的让出，避免忙等待
-                std.Thread.yield() catch {};
+                // 🚀 Zokio 8.0: 移除Thread.yield阻塞调用
+                // 直接退出轮询循环，让事件循环处理
+                break;
             },
         }
     }
@@ -193,7 +196,7 @@ const TimeoutTimer = struct {
     timeout_ms: u64,
     start_time: i64,
     expired: *bool,
-    
+
     fn init(timeout_ms: u64, expired: *bool) TimeoutTimer {
         return TimeoutTimer{
             .timeout_ms = timeout_ms,
@@ -201,12 +204,12 @@ const TimeoutTimer = struct {
             .expired = expired,
         };
     }
-    
+
     fn deinit(self: *TimeoutTimer) void {
         _ = self;
         // 清理资源
     }
-    
+
     fn checkTimeout(self: *TimeoutTimer) void {
         const current_time = std.time.milliTimestamp();
         if (current_time - self.start_time > self.timeout_ms) {
@@ -223,9 +226,9 @@ pub fn createTestFuture(value: u32) TestFuture {
 const TestFuture = struct {
     value: u32,
     ready: bool,
-    
+
     pub const Output = u32;
-    
+
     pub fn poll(self: *@This(), ctx: *Context) Poll(u32) {
         _ = ctx;
         if (self.ready) {

@@ -33,6 +33,12 @@ pub const fs = @import("fs/mod.zig");
 pub const tracing = @import("tracing/tracer.zig");
 pub const bench = @import("bench/mod.zig");
 
+// 🚀 libxev深度集成优化模块
+pub const BatchOperations = @import("runtime/batch_operations.zig");
+pub const MemoryPools = @import("runtime/memory_pools.zig");
+pub const SmartThreadPool = @import("runtime/smart_thread_pool.zig");
+pub const AdvancedEventLoop = @import("runtime/advanced_event_loop.zig");
+
 // 平台能力检测
 pub const platform = @import("utils/platform.zig");
 

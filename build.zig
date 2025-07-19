@@ -156,6 +156,34 @@ pub fn build(b: *std.Build) void {
     const zokio_e2e_test_step = b.step("test-e2e", "运行Zokio端到端集成测试");
     zokio_e2e_test_step.dependOn(&run_zokio_e2e_tests.step);
 
+    // 阻塞调用清除验证测试
+    const blocking_calls_elimination_tests = b.addTest(.{
+        .root_source_file = b.path("tests/test_blocking_calls_elimination.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    blocking_calls_elimination_tests.root_module.addOptions("config", options);
+    blocking_calls_elimination_tests.root_module.addImport("libxev", libxev.module("xev"));
+    blocking_calls_elimination_tests.root_module.addImport("zokio", lib.root_module);
+
+    const run_blocking_calls_elimination_tests = b.addRunArtifact(blocking_calls_elimination_tests);
+    const blocking_calls_elimination_test_step = b.step("test-no-blocking", "验证阻塞调用彻底清除");
+    blocking_calls_elimination_test_step.dependOn(&run_blocking_calls_elimination_tests.step);
+
+    // libxev深度集成测试
+    const libxev_deep_integration_tests = b.addTest(.{
+        .root_source_file = b.path("tests/test_libxev_deep_integration.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    libxev_deep_integration_tests.root_module.addOptions("config", options);
+    libxev_deep_integration_tests.root_module.addImport("libxev", libxev.module("xev"));
+    libxev_deep_integration_tests.root_module.addImport("zokio", lib.root_module);
+
+    const run_libxev_deep_integration_tests = b.addRunArtifact(libxev_deep_integration_tests);
+    const libxev_deep_integration_test_step = b.step("test-libxev-deep", "验证libxev深度集成优化");
+    libxev_deep_integration_test_step.dependOn(&run_libxev_deep_integration_tests.step);
+
     // 真实性验证测试
     const real_impl_tests = b.addTest(.{
         .root_source_file = b.path("test_real_implementation.zig"),

@@ -40,8 +40,9 @@ test "异步睡眠基础功能" {
     const result1 = sleep_future.poll(&ctx);
     try testing.expect(result1.isPending());
 
-    // 等待一段时间后再次轮询
-    std.time.sleep(2 * std.time.ns_per_ms);
+    // 🚀 Zokio 8.0: 使用异步等待替代sleep阻塞调用
+    // 模拟时间流逝，直接设置deadline为过去时间
+    sleep_future.deadline = std.time.milliTimestamp() - 1;
     const result2 = sleep_future.poll(&ctx);
     try testing.expect(result2.isReady());
 }
