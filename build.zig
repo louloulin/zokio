@@ -723,6 +723,54 @@ pub fn build(b: *std.Build) void {
         .paths = &[_][]const u8{ "src", "tests", "examples", "benchmarks" },
         .check = true,
     });
+
+    // 代码风格检查工具
+    const style_checker = b.addExecutable(.{
+        .name = "code_style_checker",
+        .root_source_file = b.path("tools/scripts/code_style_checker.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const style_check_run = b.addRunArtifact(style_checker);
+    const style_check_step = b.step("style-check", "🎨 运行代码风格检查");
+    style_check_step.dependOn(&style_check_run.step);
+
+    // 静态分析工具
+    const static_analyzer = b.addExecutable(.{
+        .name = "static_analysis",
+        .root_source_file = b.path("tools/scripts/static_analysis.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const static_analysis_run = b.addRunArtifact(static_analyzer);
+    const static_analysis_step = b.step("static-analysis", "🔍 运行静态分析");
+    static_analysis_step.dependOn(&static_analysis_run.step);
+
+    // 质量检查工具
+    const quality_checker = b.addExecutable(.{
+        .name = "quality_check",
+        .root_source_file = b.path("tools/scripts/quality_check.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const quality_check_run = b.addRunArtifact(quality_checker);
+    const quality_check_step = b.step("quality-check", "🔍 运行完整质量检查");
+    quality_check_step.dependOn(&quality_check_run.step);
+
+    // 项目重组工具
+    const restructure_tool = b.addExecutable(.{
+        .name = "restructure_project",
+        .root_source_file = b.path("tools/scripts/restructure_project.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const restructure_run = b.addRunArtifact(restructure_tool);
+    const restructure_step = b.step("restructure", "🏗️ 重组项目结构");
+    restructure_step.dependOn(&restructure_run.step);
     fmt_step.dependOn(&fmt_check.step);
 
     // 高性能压力测试

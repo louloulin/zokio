@@ -7,7 +7,6 @@
 //! - 📊 统一配置和监控系统
 
 const std = @import("std");
-const utils = @import("../utils/utils.zig");
 
 /// 缓存行大小（64字节，适用于大多数现代CPU）
 const CACHE_LINE_SIZE = 64;
@@ -361,15 +360,15 @@ fn TieredPoolAllocator(comptime config: MemoryConfig) type {
         };
 
         const GCState = struct {
-            total_allocated: utils.Atomic.Value(usize),
-            total_capacity: utils.Atomic.Value(usize),
-            last_gc_time: utils.Atomic.Value(u64),
+            total_allocated: std.atomic.Value(usize),
+            total_capacity: std.atomic.Value(usize),
+            last_gc_time: std.atomic.Value(u64),
 
             pub fn init() GCState {
                 return GCState{
-                    .total_allocated = utils.Atomic.Value(usize).init(0),
-                    .total_capacity = utils.Atomic.Value(usize).init(0),
-                    .last_gc_time = utils.Atomic.Value(u64).init(0),
+                    .total_allocated = std.atomic.Value(usize).init(0),
+                    .total_capacity = std.atomic.Value(usize).init(0),
+                    .last_gc_time = std.atomic.Value(u64).init(0),
                 };
             }
 
@@ -620,31 +619,31 @@ pub const ZokioMemory = struct {
     /// 统一统计信息
     pub const UnifiedStats = struct {
         /// 总体统计
-        total_allocations: utils.Atomic.Value(u64),
-        total_deallocations: utils.Atomic.Value(u64),
-        current_memory_usage: utils.Atomic.Value(usize),
-        peak_memory_usage: utils.Atomic.Value(usize),
+        total_allocations: std.atomic.Value(u64),
+        total_deallocations: std.atomic.Value(u64),
+        current_memory_usage: std.atomic.Value(usize),
+        peak_memory_usage: std.atomic.Value(usize),
 
         /// 分配器使用统计
-        smart_allocations: utils.Atomic.Value(u64),
-        extended_allocations: utils.Atomic.Value(u64),
-        optimized_allocations: utils.Atomic.Value(u64),
+        smart_allocations: std.atomic.Value(u64),
+        extended_allocations: std.atomic.Value(u64),
+        optimized_allocations: std.atomic.Value(u64),
 
         /// 性能统计
-        average_allocation_time: utils.Atomic.Value(u64), // 纳秒
-        cache_hit_rate: utils.Atomic.Value(u32), // 百分比 * 100
+        average_allocation_time: std.atomic.Value(u64), // 纳秒
+        cache_hit_rate: std.atomic.Value(u32), // 百分比 * 100
 
         pub fn init() UnifiedStats {
             return UnifiedStats{
-                .total_allocations = utils.Atomic.Value(u64).init(0),
-                .total_deallocations = utils.Atomic.Value(u64).init(0),
-                .current_memory_usage = utils.Atomic.Value(usize).init(0),
-                .peak_memory_usage = utils.Atomic.Value(usize).init(0),
-                .smart_allocations = utils.Atomic.Value(u64).init(0),
-                .extended_allocations = utils.Atomic.Value(u64).init(0),
-                .optimized_allocations = utils.Atomic.Value(u64).init(0),
-                .average_allocation_time = utils.Atomic.Value(u64).init(0),
-                .cache_hit_rate = utils.Atomic.Value(u32).init(9500), // 95%
+                .total_allocations = std.atomic.Value(u64).init(0),
+                .total_deallocations = std.atomic.Value(u64).init(0),
+                .current_memory_usage = std.atomic.Value(usize).init(0),
+                .peak_memory_usage = std.atomic.Value(usize).init(0),
+                .smart_allocations = std.atomic.Value(u64).init(0),
+                .extended_allocations = std.atomic.Value(u64).init(0),
+                .optimized_allocations = std.atomic.Value(u64).init(0),
+                .average_allocation_time = std.atomic.Value(u64).init(0),
+                .cache_hit_rate = std.atomic.Value(u32).init(9500), // 95%
             };
         }
 
@@ -1144,8 +1143,8 @@ pub fn ObjectPool(comptime T: type, comptime pool_size: usize) type {
 
         // 编译时对齐的内存池
         pool: [POOL_BYTES]u8 align(OBJECT_ALIGN),
-        free_list: utils.Atomic.Value(?*FreeNode),
-        allocated_count: utils.Atomic.Value(usize),
+        free_list: std.atomic.Value(?*FreeNode),
+        allocated_count: std.atomic.Value(usize),
 
         const FreeNode = extern struct {
             next: ?*FreeNode,
@@ -1154,8 +1153,8 @@ pub fn ObjectPool(comptime T: type, comptime pool_size: usize) type {
         pub fn init() Self {
             var self = Self{
                 .pool = undefined,
-                .free_list = utils.Atomic.Value(?*FreeNode).init(null),
-                .allocated_count = utils.Atomic.Value(usize).init(0),
+                .free_list = std.atomic.Value(?*FreeNode).init(null),
+                .allocated_count = std.atomic.Value(usize).init(0),
             };
 
             // 初始化空闲列表
@@ -1287,37 +1286,37 @@ pub const PoolStats = struct {
 
 /// 高性能分配指标
 const AllocationMetrics = struct {
-    total_allocated: utils.Atomic.Value(usize),
-    total_deallocated: utils.Atomic.Value(usize),
-    current_usage: utils.Atomic.Value(usize),
-    peak_usage: utils.Atomic.Value(usize),
-    allocation_count: utils.Atomic.Value(usize),
-    deallocation_count: utils.Atomic.Value(usize),
+    total_allocated: std.atomic.Value(usize),
+    total_deallocated: std.atomic.Value(usize),
+    current_usage: std.atomic.Value(usize),
+    peak_usage: std.atomic.Value(usize),
+    allocation_count: std.atomic.Value(usize),
+    deallocation_count: std.atomic.Value(usize),
 
     // 分层统计
-    small_allocations: utils.Atomic.Value(usize),
-    medium_allocations: utils.Atomic.Value(usize),
-    large_allocations: utils.Atomic.Value(usize),
+    small_allocations: std.atomic.Value(usize),
+    medium_allocations: std.atomic.Value(usize),
+    large_allocations: std.atomic.Value(usize),
 
     // 性能统计
-    cache_misses: utils.Atomic.Value(usize),
-    gc_cycles: utils.Atomic.Value(usize),
-    delayed_frees: utils.Atomic.Value(usize),
+    cache_misses: std.atomic.Value(usize),
+    gc_cycles: std.atomic.Value(usize),
+    delayed_frees: std.atomic.Value(usize),
 
     pub fn init() AllocationMetrics {
         return AllocationMetrics{
-            .total_allocated = utils.Atomic.Value(usize).init(0),
-            .total_deallocated = utils.Atomic.Value(usize).init(0),
-            .current_usage = utils.Atomic.Value(usize).init(0),
-            .peak_usage = utils.Atomic.Value(usize).init(0),
-            .allocation_count = utils.Atomic.Value(usize).init(0),
-            .deallocation_count = utils.Atomic.Value(usize).init(0),
-            .small_allocations = utils.Atomic.Value(usize).init(0),
-            .medium_allocations = utils.Atomic.Value(usize).init(0),
-            .large_allocations = utils.Atomic.Value(usize).init(0),
-            .cache_misses = utils.Atomic.Value(usize).init(0),
-            .gc_cycles = utils.Atomic.Value(usize).init(0),
-            .delayed_frees = utils.Atomic.Value(usize).init(0),
+            .total_allocated = std.atomic.Value(usize).init(0),
+            .total_deallocated = std.atomic.Value(usize).init(0),
+            .current_usage = std.atomic.Value(usize).init(0),
+            .peak_usage = std.atomic.Value(usize).init(0),
+            .allocation_count = std.atomic.Value(usize).init(0),
+            .deallocation_count = std.atomic.Value(usize).init(0),
+            .small_allocations = std.atomic.Value(usize).init(0),
+            .medium_allocations = std.atomic.Value(usize).init(0),
+            .large_allocations = std.atomic.Value(usize).init(0),
+            .cache_misses = std.atomic.Value(usize).init(0),
+            .gc_cycles = std.atomic.Value(usize).init(0),
+            .delayed_frees = std.atomic.Value(usize).init(0),
         };
     }
 

@@ -14,29 +14,40 @@ pub const libxev = if (@import("builtin").is_test)
 else
     (if (@hasDecl(@import("root"), "libxev")) @import("libxev") else null);
 
-// 核心模块导出
-pub const runtime = @import("runtime/runtime.zig");
-pub const future = @import("future/future.zig");
-pub const scheduler = @import("scheduler/scheduler.zig");
-pub const io = @import("io/io.zig");
-pub const sync = @import("sync/sync.zig");
-pub const time = @import("time/time.zig");
-pub const timer = @import("time/timer.zig");
-pub const memory = @import("memory/memory.zig");
-pub const net = @import("net/mod.zig");
-pub const metrics = @import("metrics/metrics.zig");
-pub const testing = @import("testing/testing.zig");
-pub const utils = @import("utils/utils.zig");
+// 🏗️ 分层架构模块导出
 
-// 高级特性模块导出
+// Core Layer (核心层) - 基础异步运行时组件
+pub const core = @import("core/mod.zig");
+pub const runtime = core.runtime; // 向后兼容
+pub const future = core.future; // 向后兼容
+pub const scheduler = core.scheduler; // 向后兼容
+
+// I/O Layer (I/O层) - 异步I/O操作
+pub const io = @import("io/io.zig");
+pub const net = @import("net/mod.zig");
+pub const fs = @import("fs/mod.zig");
+
+// Utility Layer (工具层) - 通用工具和同步原语
+pub const utils = @import("utils/utils.zig");
+pub const sync = @import("sync/sync.zig"); // 待移动到utils
+pub const time = @import("time/time.zig"); // 待移动到utils
+pub const timer = @import("time/timer.zig"); // 待移动到utils
+pub const memory = @import("memory/memory.zig"); // 待移动到utils
+
+// Extension Layer (扩展层) - 高级功能和工具
+pub const ext = @import("ext/mod.zig");
+pub const metrics = ext.metrics; // 向后兼容
+pub const testing = ext.testing; // 向后兼容
+pub const tracing = ext.tracing; // 向后兼容
+pub const bench = ext.bench; // 向后兼容
+
+// Error System (错误处理系统)
+pub const error_system = @import("error/mod.zig");
+
+// 高级特性模块导出 (向后兼容)
 pub const zero_copy = @import("io/zero_copy.zig");
 pub const advanced_timer = @import("runtime/advanced_timer.zig");
 pub const batch_io = @import("net/batch_io.zig");
-
-// 新增的高级功能模块
-pub const fs = @import("fs/mod.zig");
-pub const tracing = @import("tracing/tracer.zig");
-pub const bench = @import("bench/mod.zig");
 
 // 🚀 libxev深度集成优化模块
 pub const BatchOperations = @import("runtime/batch_operations.zig");
