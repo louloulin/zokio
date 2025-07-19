@@ -138,17 +138,16 @@ pub fn await_fn(future_arg: anytype) @TypeOf(future_arg).Output {
 /// 线程本地的异步上下文
 threadlocal var current_async_context: ?*Context = null;
 
-/// 线程本地的事件循环引用
-threadlocal var current_event_loop: ?*AsyncEventLoop = null;
-
-/// 获取当前事件循环
+/// 获取当前事件循环 - 使用runtime模块的统一实现
 pub fn getCurrentEventLoop() ?*AsyncEventLoop {
-    return current_event_loop;
+    const runtime = @import("../runtime/runtime.zig");
+    return runtime.getCurrentEventLoop();
 }
 
-/// 设置当前事件循环
+/// 设置当前事件循环 - 使用runtime模块的统一实现
 pub fn setCurrentEventLoop(event_loop: ?*AsyncEventLoop) void {
-    current_event_loop = event_loop;
+    const runtime = @import("../runtime/runtime.zig");
+    runtime.setCurrentEventLoop(event_loop);
 }
 
 /// 获取当前异步上下文

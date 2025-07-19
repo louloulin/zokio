@@ -783,6 +783,9 @@ pub fn await_fn(future: anytype) @TypeOf(future).Output {
         return fallbackSyncAwait(future);
     };
 
+    // 🎉 关键修复：现在有事件循环了！
+    std.log.info("await_fn: ✅ 事件循环已设置，使用异步模式", .{});
+
     // 🔥 创建任务完成通知器
     var completion_notifier = TaskCompletionNotifier.init();
     defer completion_notifier.deinit();

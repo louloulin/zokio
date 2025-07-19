@@ -1062,6 +1062,118 @@ pub fn build(b: *std.Build) void {
     const async_diagnosis_test_step = b.step("test-async-diagnosis", "运行异步机制诊断测试");
     async_diagnosis_test_step.dependOn(&async_diagnosis_test_cmd.step);
 
+    // 事件循环修复验证测试
+    const event_loop_fix_test = b.addTest(.{
+        .root_source_file = b.path("tests/test_event_loop_fix.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    event_loop_fix_test.root_module.addImport("zokio", lib.root_module);
+    event_loop_fix_test.root_module.addImport("libxev", libxev.module("xev"));
+    event_loop_fix_test.root_module.addOptions("config", options);
+
+    const event_loop_fix_test_cmd = b.addRunArtifact(event_loop_fix_test);
+    const event_loop_fix_test_step = b.step("test-event-loop-fix", "运行事件循环修复验证测试");
+    event_loop_fix_test_step.dependOn(&event_loop_fix_test_cmd.step);
+
+    // 简单修复验证测试
+    const simple_fix_test = b.addTest(.{
+        .root_source_file = b.path("tests/test_simple_fix.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    simple_fix_test.root_module.addImport("zokio", lib.root_module);
+    simple_fix_test.root_module.addImport("libxev", libxev.module("xev"));
+    simple_fix_test.root_module.addOptions("config", options);
+
+    const simple_fix_test_cmd = b.addRunArtifact(simple_fix_test);
+    const simple_fix_test_step = b.step("test-simple-fix", "运行简单修复验证测试");
+    simple_fix_test_step.dependOn(&simple_fix_test_cmd.step);
+
+    // 最小化修复验证测试
+    const minimal_fix_test = b.addTest(.{
+        .root_source_file = b.path("tests/test_minimal_fix.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    minimal_fix_test.root_module.addImport("zokio", lib.root_module);
+    minimal_fix_test.root_module.addImport("libxev", libxev.module("xev"));
+    minimal_fix_test.root_module.addOptions("config", options);
+
+    const minimal_fix_test_cmd = b.addRunArtifact(minimal_fix_test);
+    const minimal_fix_test_step = b.step("test-minimal-fix", "运行最小化修复验证测试");
+    minimal_fix_test_step.dependOn(&minimal_fix_test_cmd.step);
+
+    // libxev初始化测试
+    const libxev_init_test = b.addTest(.{
+        .root_source_file = b.path("tests/test_libxev_init.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    libxev_init_test.root_module.addImport("zokio", lib.root_module);
+    libxev_init_test.root_module.addImport("libxev", libxev.module("xev"));
+    libxev_init_test.root_module.addOptions("config", options);
+
+    const libxev_init_test_cmd = b.addRunArtifact(libxev_init_test);
+    const libxev_init_test_step = b.step("test-libxev-init", "运行libxev初始化测试");
+    libxev_init_test_step.dependOn(&libxev_init_test_cmd.step);
+
+    // 运行时启动调试测试
+    const runtime_start_debug_test = b.addTest(.{
+        .root_source_file = b.path("tests/test_runtime_start_debug.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    runtime_start_debug_test.root_module.addImport("zokio", lib.root_module);
+    runtime_start_debug_test.root_module.addImport("libxev", libxev.module("xev"));
+    runtime_start_debug_test.root_module.addOptions("config", options);
+
+    const runtime_start_debug_test_cmd = b.addRunArtifact(runtime_start_debug_test);
+    const runtime_start_debug_test_step = b.step("test-runtime-start-debug", "运行运行时启动调试测试");
+    runtime_start_debug_test_step.dependOn(&runtime_start_debug_test_cmd.step);
+
+    // 逐步排除问题测试
+    const step_by_step_debug_test = b.addTest(.{
+        .root_source_file = b.path("tests/test_step_by_step.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    step_by_step_debug_test.root_module.addImport("zokio", lib.root_module);
+    step_by_step_debug_test.root_module.addImport("libxev", libxev.module("xev"));
+    step_by_step_debug_test.root_module.addOptions("config", options);
+
+    const step_by_step_debug_test_cmd = b.addRunArtifact(step_by_step_debug_test);
+    const step_by_step_debug_test_step = b.step("test-step-by-step-debug", "运行逐步排除问题测试");
+    step_by_step_debug_test_step.dependOn(&step_by_step_debug_test_cmd.step);
+
+    // threadlocal变量修复验证测试
+    const threadlocal_fix_test = b.addTest(.{
+        .root_source_file = b.path("tests/test_threadlocal_fix.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    threadlocal_fix_test.root_module.addImport("zokio", lib.root_module);
+    threadlocal_fix_test.root_module.addImport("libxev", libxev.module("xev"));
+    threadlocal_fix_test.root_module.addOptions("config", options);
+
+    const threadlocal_fix_test_cmd = b.addRunArtifact(threadlocal_fix_test);
+    const threadlocal_fix_test_step = b.step("test-threadlocal-fix", "运行threadlocal变量修复验证测试");
+    threadlocal_fix_test_step.dependOn(&threadlocal_fix_test_cmd.step);
+
+    // 最终验证测试
+    const final_verification_test = b.addTest(.{
+        .root_source_file = b.path("tests/test_final_verification.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    final_verification_test.root_module.addImport("zokio", lib.root_module);
+    final_verification_test.root_module.addImport("libxev", libxev.module("xev"));
+    final_verification_test.root_module.addOptions("config", options);
+
+    const final_verification_test_cmd = b.addRunArtifact(final_verification_test);
+    const final_verification_test_step = b.step("test-final-verification", "运行最终验证测试");
+    final_verification_test_step.dependOn(&final_verification_test_cmd.step);
+
     // 内存分配性能专项测试
     const memory_perf_test = b.addExecutable(.{
         .name = "memory_performance_test",

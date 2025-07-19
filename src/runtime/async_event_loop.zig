@@ -138,10 +138,8 @@ pub const AsyncEventLoop = struct {
             // 6. 如果没有工作要做，使用事件循环的非阻塞轮询
             if (!work_done) {
                 // 🚀 Zokio 8.0: 使用libxev的非阻塞轮询替代sleep
-                if (self.libxev_loop) |loop| {
-                    // 非阻塞轮询，立即返回
-                    _ = loop.run(.no_wait) catch {};
-                }
+                // libxev_loop不是可选类型，直接使用
+                _ = self.libxev_loop.run(.no_wait) catch {};
                 // 注意：完全移除了sleep调用，实现真正的非阻塞事件循环
             }
 

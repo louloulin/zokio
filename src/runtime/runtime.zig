@@ -786,6 +786,8 @@ pub fn ZokioRuntime(comptime config: RuntimeConfig) type {
             const default_event_loop = try getOrCreateDefaultEventLoop(self.base_allocator);
             setCurrentEventLoop(default_event_loop);
 
+            std.log.info("🔥 事件循环已设置", .{});
+
             // 🔥 启动工作线程（改进实现）
             if (comptime OptimalScheduler.WORKER_COUNT > 1) {
                 // 调度器已在init时准备就绪，无需额外预热
@@ -805,11 +807,18 @@ pub fn ZokioRuntime(comptime config: RuntimeConfig) type {
             std.log.info("🚀 Zokio 4.0 运行时启动完成，事件循环已就绪", .{});
         }
 
-        /// 停止运行时
+        /// 🛑 停止运行时
         pub fn stop(self: *Self) void {
             self.running.store(false, .release);
 
-            // 🚀 Zokio 4.0 改进：清理当前线程的事件循环
+            // 🚀 Zokio 4.0 改进：停止事件循环
+            const active_event_loop = getCurrentEventLoop();
+            if (active_event_loop) |event_loop| {
+                event_loop.running.store(false, .release);
+                std.log.info("🔥 事件循环已停止", .{});
+            }
+
+            // 清理当前线程的事件循环
             setCurrentEventLoop(null);
 
             std.log.info("🚀 Zokio 4.0 运行时已停止", .{});
