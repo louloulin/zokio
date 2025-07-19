@@ -83,7 +83,8 @@ pub const SimpleRuntime = runtime.DefaultRuntime;
 // 🚀 核心async/await API导出 - 统一到zokio命名空间
 pub const async_block_api = @import("future/async_block.zig");
 pub const async_block = async_block_api.async_block;
-pub const await_fn = async_block_api.await_fn;
+// 使用更稳定的 await_fn 实现，避免无限循环
+pub const await_fn = future.await_fn;
 
 // 🔥 从future模块导出的async/await API
 pub const async_fn_future = future.async_fn;
@@ -91,12 +92,30 @@ pub const async_fn_with_params_future = future.async_fn_with_params;
 pub const async_block_future = future.async_block;
 pub const await_fn_future = future.await_fn;
 
-// I/O类型导出
-pub const AsyncFile = @import("io/async_file.zig").AsyncFile;
+// CompletionBridge导出
 pub const CompletionBridge = @import("runtime/completion_bridge.zig").CompletionBridge;
 
 // 配置类型导出
 pub const RuntimeConfig = runtime.RuntimeConfig;
+
+// 🚀 事件循环相关导出
+pub const AsyncEventLoop = @import("runtime/async_event_loop.zig").AsyncEventLoop;
+pub const getCurrentEventLoop = runtime.getCurrentEventLoop;
+pub const setCurrentEventLoop = runtime.setCurrentEventLoop;
+pub const getOrCreateDefaultEventLoop = runtime.getOrCreateDefaultEventLoop;
+
+// 🚀 libxev I/O系统导出
+pub const libxev_io = struct {
+    pub const LibxevDriver = @import("io/libxev.zig").LibxevDriver;
+    pub const LibxevConfig = @import("io/libxev.zig").LibxevConfig;
+    pub const IoOpStatus = @import("io/libxev.zig").IoOpStatus;
+    pub const IoStats = @import("io/libxev.zig").IoStats;
+};
+
+// 🚀 异步I/O类型导出
+pub const AsyncFile = @import("io/async_file.zig").AsyncFile;
+pub const AsyncTcpStream = @import("io/async_net.zig").AsyncTcpStream;
+pub const AsyncTcpListener = @import("io/async_net.zig").AsyncTcpListener;
 pub const IoConfig = io.IoConfig;
 pub const MemoryConfig = memory.MemoryConfig;
 

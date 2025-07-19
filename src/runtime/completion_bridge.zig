@@ -58,8 +58,8 @@ pub const CompletionBridge = struct {
         read: libxev.ReadError!usize,
         /// 写入操作结果
         write: libxev.WriteError!usize,
-        /// 接受连接结果
-        accept: libxev.AcceptError!libxev.TCP,
+        /// 接受连接结果 - 使用通用的socket类型
+        accept: libxev.AcceptError!std.posix.socket_t,
         /// 连接操作结果
         connect: libxev.ConnectError!void,
         /// 定时器操作结果
@@ -342,7 +342,7 @@ pub const CompletionBridge = struct {
         userdata: ?*Self,
         loop: *libxev.Loop,
         completion: *libxev.Completion,
-        result: libxev.AcceptError!libxev.TCP,
+        result: libxev.AcceptError!std.posix.socket_t,
     ) libxev.CallbackAction {
         _ = loop;
         _ = completion;

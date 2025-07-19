@@ -102,7 +102,7 @@ pub const AsyncConnectFuture = struct {
                     .loop = self.loop,
                     .allocator = self.allocator,
                     .remote_addr = self.address,
-                }};
+                } };
             };
 
             self.stream = AsyncTcpStream{
@@ -219,7 +219,7 @@ pub const AsyncNetWriteFuture = struct {
         }
 
         // 执行实际的网络写入（简化实现）
-        const result = self.stream.socket.writeAll(self.data) catch |err| {
+        _ = self.stream.socket.writeAll(self.data) catch |err| {
             std.log.err("网络写入失败: {}", .{err});
             return .{ .ready = 0 };
         };
@@ -311,7 +311,7 @@ pub const AsyncAcceptFuture = struct {
                 .loop = self.listener.loop,
                 .allocator = self.listener.allocator,
                 .remote_addr = self.listener.bind_addr,
-            }};
+            } };
         }
 
         // 尝试接受连接（简化实现）
