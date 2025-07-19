@@ -1048,6 +1048,20 @@ pub fn build(b: *std.Build) void {
     const libxev_advanced_test_step = b.step("test-libxev-advanced", "运行libxev高级特性测试");
     libxev_advanced_test_step.dependOn(&libxev_advanced_test_cmd.step);
 
+    // 异步机制诊断测试
+    const async_diagnosis_test = b.addTest(.{
+        .root_source_file = b.path("tests/test_async_diagnosis.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    async_diagnosis_test.root_module.addImport("zokio", lib.root_module);
+    async_diagnosis_test.root_module.addImport("libxev", libxev.module("xev"));
+    async_diagnosis_test.root_module.addOptions("config", options);
+
+    const async_diagnosis_test_cmd = b.addRunArtifact(async_diagnosis_test);
+    const async_diagnosis_test_step = b.step("test-async-diagnosis", "运行异步机制诊断测试");
+    async_diagnosis_test_step.dependOn(&async_diagnosis_test_cmd.step);
+
     // 内存分配性能专项测试
     const memory_perf_test = b.addExecutable(.{
         .name = "memory_performance_test",
