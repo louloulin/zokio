@@ -20,25 +20,23 @@ const libxev = if (@hasDecl(@import("root"), "libxev")) @import("libxev") else n
 // 导入异步事件循环
 const AsyncEventLoop = @import("async_event_loop.zig").AsyncEventLoop;
 
+// 导入并导出CompletionBridge
+pub const completion_bridge = @import("completion_bridge.zig");
+
 /// 🚀 Zokio 4.0 全局事件循环管理
 ///
+/// 线程本地存储的事件循环 - 修复版本
+/// 使用共享的threadlocal变量确保get和set操作同一个变量
+threadlocal var current_event_loop: ?*AsyncEventLoop = null;
+
 /// 获取当前线程的事件循环实例，用于非阻塞任务调度
 pub fn getCurrentEventLoop() ?*AsyncEventLoop {
-    // 线程本地存储的事件循环
-    const static = struct {
-        threadlocal var current_event_loop: ?*AsyncEventLoop = null;
-    };
-
-    return static.current_event_loop;
+    return current_event_loop;
 }
 
 /// 设置当前线程的事件循环
 pub fn setCurrentEventLoop(event_loop: ?*AsyncEventLoop) void {
-    const static = struct {
-        threadlocal var current_event_loop: ?*AsyncEventLoop = null;
-    };
-
-    static.current_event_loop = event_loop;
+    current_event_loop = event_loop;
 }
 
 /// 🚀 Zokio 4.0 全局默认事件循环

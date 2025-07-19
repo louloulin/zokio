@@ -25,6 +25,30 @@ pub const BridgeState = enum {
     timeout,
 };
 
+/// 🚀 批量操作描述符
+pub const BatchOperation = struct {
+    /// 操作类型
+    op_type: enum { read, write, accept, connect },
+    /// 文件描述符
+    fd: std.posix.fd_t,
+    /// 缓冲区
+    buffer: []u8,
+    /// 偏移量（文件操作）
+    offset: ?u64 = null,
+    /// 操作优先级（0-255，255最高）
+    priority: u8 = 128,
+};
+
+/// 🚀 批量操作结果
+pub const BatchResult = struct {
+    /// 操作索引
+    index: usize,
+    /// 操作结果（使用CompletionBridge的OperationResult）
+    result: CompletionBridge.OperationResult,
+    /// 完成时间
+    completion_time: i128,
+};
+
 /// 🚀 libxev Completion到Zokio Future的桥接器
 ///
 /// 这是Zokio 4.0的核心组件，负责将libxev的基于回调的异步模式
@@ -569,6 +593,98 @@ pub const CompletionBridge = struct {
             .is_timeout = elapsed_ns > self.timeout_ns,
         };
     }
+
+    /// 🚀 批量操作提交 - libxev深度优化
+    ///
+    /// 利用libxev的批量提交能力，一次性提交多个操作，
+    /// 减少系统调用开销，提升I/O性能
+    ///
+    /// 参数：
+    /// - allocator: 内存分配器
+    /// - loop: libxev事件循环
+    /// - operations: 批量操作数组
+    ///
+    /// 返回：批量操作的CompletionBridge数组
+    pub fn submitBatch(
+        allocator: std.mem.Allocator,
+        loop: *libxev.Loop,
+        operations: []const BatchOperation,
+    ) ![]CompletionBridge {
+        if (operations.len == 0) return &[_]CompletionBridge{};
+
+        // 分配CompletionBridge数组
+        const bridges = try allocator.alloc(CompletionBridge, operations.len);
+        errdefer allocator.free(bridges);
+
+        // 初始化每个桥接器
+        for (bridges, operations) |*bridge, op| {
+            bridge.* = init();
+            bridge.completion.userdata = @ptrCast(bridge);
+            bridge.completion.callback = batchCompletionCallback;
+
+            // 根据操作类型配置completion
+            switch (op.op_type) {
+                .read => {
+                    if (op.offset) |_| {
+                        bridge.completion.op = .{ .read = .{
+                            .fd = op.fd,
+                            .buffer = .{ .slice = op.buffer },
+                        } };
+                    } else {
+                        bridge.completion.op = .{ .recv = .{
+                            .fd = op.fd,
+                            .buffer = .{ .slice = op.buffer },
+                        } };
+                    }
+                },
+                .write => {
+                    if (op.offset) |_| {
+                        bridge.completion.op = .{ .write = .{
+                            .fd = op.fd,
+                            .buffer = .{ .slice = op.buffer },
+                        } };
+                    } else {
+                        bridge.completion.op = .{ .send = .{
+                            .fd = op.fd,
+                            .buffer = .{ .slice = op.buffer },
+                        } };
+                    }
+                },
+                .accept => {
+                    bridge.completion.op = .{ .accept = .{
+                        .socket = op.fd,
+                    } };
+                },
+                .connect => {
+                    // 连接操作需要地址信息，这里简化处理
+                    bridge.completion.op = .{
+                        .connect = .{
+                            .socket = op.fd,
+                            .addr = undefined, // 需要从外部提供
+                        },
+                    };
+                },
+            }
+
+            // 设置优先级（如果libxev支持）
+            // 注意：当前libxev可能不直接支持优先级，这里为未来扩展预留
+            _ = op.priority;
+
+            // 标记操作索引（用于结果匹配）
+            bridge.start_time = std.time.nanoTimestamp();
+            bridge.state = .pending;
+            bridge.result = .none;
+        }
+
+        // 批量提交到libxev
+        // 注意：libxev的add方法是单个提交，这里循环调用
+        // 未来可以考虑使用libxev的批量API（如果有的话）
+        for (bridges) |*bridge| {
+            loop.add(&bridge.completion);
+        }
+
+        return bridges;
+    }
 };
 
 /// 📊 桥接器统计信息
@@ -580,3 +696,60 @@ pub const BridgeStats = struct {
     /// 是否超时
     is_timeout: bool,
 };
+
+/// 🚀 批量操作完成回调函数
+///
+/// 专门用于批量操作的回调，提供更好的性能和错误处理
+fn batchCompletionCallback(
+    userdata: ?*anyopaque,
+    loop: *libxev.Loop,
+    completion: *libxev.Completion,
+    result: libxev.Result,
+) libxev.CallbackAction {
+    _ = loop; // 未使用的参数
+
+    // 获取CompletionBridge实例
+    const bridge: *CompletionBridge = @ptrCast(@alignCast(userdata.?));
+
+    // 处理操作结果
+    switch (completion.op) {
+        .read => {
+            bridge.result = .{ .read = result.read };
+        },
+        .recv => {
+            bridge.result = .{ .read = result.recv };
+        },
+        .write => {
+            bridge.result = .{ .write = result.write };
+        },
+        .send => {
+            bridge.result = .{ .write = result.send };
+        },
+        .accept => {
+            bridge.result = .{ .accept = result.accept };
+        },
+        .connect => {
+            bridge.result = .{ .connect = result.connect };
+        },
+        else => {
+            // 其他操作类型的处理
+            bridge.result = .{ .read = libxev.ReadError.Unexpected };
+        },
+    }
+
+    // 更新状态 - 简化错误处理
+    bridge.state = switch (bridge.result) {
+        .read => |r| if (r) |_| .ready else |_| .error_occurred,
+        .write => |r| if (r) |_| .ready else |_| .error_occurred,
+        .accept => |r| if (r) |_| .ready else |_| .error_occurred,
+        .connect => |r| if (r) .ready else |_| .error_occurred,
+        else => .ready,
+    };
+
+    // 唤醒等待的任务
+    if (bridge.waker) |waker| {
+        waker.wake();
+    }
+
+    return .disarm;
+}

@@ -28,6 +28,11 @@ pub const metrics = @import("metrics/metrics.zig");
 pub const testing = @import("testing/testing.zig");
 pub const utils = @import("utils/utils.zig");
 
+// 高级特性模块导出
+pub const zero_copy = @import("io/zero_copy.zig");
+pub const advanced_timer = @import("runtime/advanced_timer.zig");
+pub const batch_io = @import("net/batch_io.zig");
+
 // 新增的高级功能模块
 pub const fs = @import("fs/mod.zig");
 pub const tracing = @import("tracing/tracer.zig");
@@ -38,6 +43,11 @@ pub const BatchOperations = @import("runtime/batch_operations.zig");
 pub const MemoryPools = @import("runtime/memory_pools.zig");
 pub const SmartThreadPool = @import("runtime/smart_thread_pool.zig");
 pub const AdvancedEventLoop = @import("runtime/advanced_event_loop.zig");
+
+// 🚀 Zokio 9.0 高级特性模块
+pub const LibxevAdvancedFeatures = @import("runtime/libxev_advanced_features.zig");
+pub const ErrorHandling = @import("runtime/error_handling.zig");
+pub const PerformanceMonitor = @import("runtime/performance_monitor.zig");
 
 // 平台能力检测
 pub const platform = @import("utils/platform.zig");
