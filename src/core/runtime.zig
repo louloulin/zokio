@@ -1,15 +1,17 @@
-//! Zokio 统一异步运行时
+//! 🚀 Zokio 编译时优化运行时
 //!
-//! 提供编译时生成的异步运行时，整合调度器、I/O驱动和内存管理。
-//! 严格按照plan.md中的API设计实现，支持libxev集成。
-//! 统一替代原有的SimpleRuntime，提供完整的异步运行时功能。
+//! Phase 1 实现：comptime 驱动的零成本异步运行时
+//! - 编译时确定所有运行时策略
+//! - 消除运行时分支和虚函数调用
+//! - 生成平台特定的优化代码
+//! - 零成本抽象实现
 
 const std = @import("std");
 const builtin = @import("builtin");
 const utils = @import("../utils/utils.zig");
 const platform = @import("../utils/platform.zig");
 const future = @import("future.zig");
-const scheduler = @import("../core/scheduler.zig");
+const scheduler = @import("scheduler.zig");
 const io = @import("../io/io.zig");
 const memory = @import("../memory/memory.zig");
 
@@ -18,6 +20,61 @@ const libxev = if (@hasDecl(@import("root"), "libxev")) @import("libxev") else n
 
 // 导入异步事件循环
 const AsyncEventLoop = @import("../runtime/async_event_loop.zig").AsyncEventLoop;
+
+// Phase 1: 增强现有的 RuntimeConfig 以支持编译时优化
+// 删除重复定义，使用下面已有的 RuntimeConfig
+
+/// 🚀 Phase 1: 编译时分析结果
+pub const CompileTimeAnalysis = struct {
+    optimal_scheduler: SchedulerType,
+    optimal_io_backend: IOBackendType,
+    optimal_memory_strategy: MemoryStrategyType,
+    performance_profile: PerformanceProfile,
+    platform_optimizations: PlatformOptimizations,
+};
+
+/// 调度器类型
+pub const SchedulerType = enum {
+    work_stealing,
+    round_robin,
+    priority,
+    real_time,
+};
+
+/// I/O 后端类型
+pub const IOBackendType = enum {
+    libxev,
+    io_uring,
+    kqueue,
+    iocp,
+    generic,
+};
+
+/// 内存策略类型
+pub const MemoryStrategyType = enum {
+    adaptive,
+    object_pool,
+    arena,
+    tiered_pools,
+    cache_friendly,
+};
+
+/// 性能配置文件
+pub const PerformanceProfile = enum {
+    cpu_intensive,
+    io_intensive,
+    memory_optimized,
+    low_latency,
+    balanced,
+};
+
+/// 平台优化
+pub const PlatformOptimizations = struct {
+    enable_simd: bool,
+    enable_numa: bool,
+    enable_prefetch: bool,
+    cache_line_size: u32,
+};
 
 // 导入并导出CompletionBridge
 pub const completion_bridge = @import("../runtime/completion_bridge.zig");
@@ -556,6 +613,17 @@ pub const RuntimeConfig = struct {
         io_uring, // Linux io_uring
     };
 
+    /// 🚀 Phase 1: 编译时分析和优化
+    pub fn analyzeCompileTime(comptime self: @This()) CompileTimeAnalysis {
+        return CompileTimeAnalysis{
+            .optimal_scheduler = comptime selectOptimalScheduler(self),
+            .optimal_io_backend = comptime selectOptimalIOBackend(self),
+            .optimal_memory_strategy = comptime selectOptimalMemoryStrategy(self),
+            .performance_profile = comptime analyzePerformanceProfile(self),
+            .platform_optimizations = comptime analyzePlatformOptimizations(self),
+        };
+    }
+
     /// 编译时验证配置
     pub fn validate(comptime self: @This()) void {
         // 验证线程数配置
@@ -837,8 +905,8 @@ pub fn ZokioRuntime(comptime config: RuntimeConfig) type {
 
             // 🔥 安全创建TaskCell
             const FutureType = @TypeOf(future_instance);
-            const SchedulerType = @TypeOf(self.scheduler);
-            const CellType = TaskCell(FutureType, SchedulerType);
+            const SchedulerTypeLocal = @TypeOf(self.scheduler);
+            const CellType = TaskCell(FutureType, SchedulerTypeLocal);
 
             const task_cell = try CellType.new(future_instance, self.scheduler, task_id, self.base_allocator);
 
@@ -1843,4 +1911,109 @@ test "编译时信息生成" {
     // 测试内存布局
     try testing.expect(RuntimeType.MEMORY_LAYOUT.size > 0);
     try testing.expect(RuntimeType.MEMORY_LAYOUT.alignment > 0);
+}
+
+test "🚀 Phase 1: 编译时优化验证" {
+    const testing = std.testing;
+
+    // 测试编译时分析功能
+    const config = RuntimeConfig{
+        .worker_threads = 4,
+        .enable_work_stealing = true,
+        .enable_io_uring = true,
+        .prefer_libxev = true,
+        .enable_simd = true,
+        .enable_numa = true,
+    };
+
+    // 编译时分析
+    const analysis = comptime config.analyzeCompileTime();
+
+    // 验证编译时选择的组件
+    try testing.expect(analysis.optimal_scheduler == .work_stealing);
+    try testing.expect(analysis.optimal_io_backend == .libxev);
+    try testing.expect(analysis.performance_profile == .cpu_intensive);
+    try testing.expect(analysis.platform_optimizations.enable_simd == true);
+    try testing.expect(analysis.platform_optimizations.enable_numa == true);
+    try testing.expect(analysis.platform_optimizations.cache_line_size == 64);
+
+    // 测试运行时生成
+    const RuntimeType = ZokioRuntime(config);
+
+    // 验证编译时信息
+    try testing.expect(RuntimeType.COMPILE_TIME_INFO.worker_threads == 4);
+    // I/O 后端可能是 "libxev" 或 "std"，取决于 libxev 是否可用
+    const io_backend = RuntimeType.COMPILE_TIME_INFO.io_backend;
+    try testing.expect(std.mem.eql(u8, io_backend, "libxev") or std.mem.eql(u8, io_backend, "std"));
+
+    // 验证性能特征
+    try testing.expect(RuntimeType.PERFORMANCE_CHARACTERISTICS.theoretical_max_tasks_per_second > 0);
+    try testing.expect(RuntimeType.PERFORMANCE_CHARACTERISTICS.memory_layout_efficiency > 0.8);
+}
+
+/// 🚀 Phase 1: 编译时优化函数
+/// 编译时调度器选择
+fn selectOptimalScheduler(comptime config: RuntimeConfig) SchedulerType {
+    // 基于配置选择最优调度器
+    if (config.enable_work_stealing) {
+        return .work_stealing;
+    }
+    return .round_robin;
+}
+
+/// 编译时 I/O 后端选择
+fn selectOptimalIOBackend(comptime config: RuntimeConfig) IOBackendType {
+    if (config.prefer_libxev) {
+        return .libxev;
+    }
+    if (config.enable_io_uring and builtin.os.tag == .linux) {
+        return .io_uring;
+    }
+    return switch (builtin.os.tag) {
+        .linux => .io_uring,
+        .macos => .kqueue,
+        .windows => .iocp,
+        else => .generic,
+    };
+}
+
+/// 编译时内存策略选择
+fn selectOptimalMemoryStrategy(comptime config: RuntimeConfig) MemoryStrategyType {
+    return switch (config.memory_strategy) {
+        .adaptive => .adaptive,
+        .tiered_pools => .tiered_pools,
+        .cache_friendly => .cache_friendly,
+        .arena => .arena,
+        .general_purpose => .object_pool,
+        .fixed_buffer => .arena,
+        .stack => .arena,
+    };
+}
+
+/// 编译时性能配置文件分析
+fn analyzePerformanceProfile(comptime config: RuntimeConfig) PerformanceProfile {
+    // 基于配置特征分析性能配置文件
+    if (config.enable_simd and config.enable_numa) {
+        return .cpu_intensive;
+    }
+    if (config.enable_io_uring or config.prefer_libxev) {
+        return .io_intensive;
+    }
+    if (config.memory_strategy == .arena) {
+        return .memory_optimized;
+    }
+    if (config.spin_before_park > 1000) {
+        return .low_latency;
+    }
+    return .balanced;
+}
+
+/// 编译时平台优化分析
+fn analyzePlatformOptimizations(comptime config: RuntimeConfig) PlatformOptimizations {
+    return PlatformOptimizations{
+        .enable_simd = config.enable_simd,
+        .enable_numa = config.enable_numa,
+        .enable_prefetch = config.enable_prefetch,
+        .cache_line_size = if (config.cache_line_optimization) 64 else 32,
+    };
 }

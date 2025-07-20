@@ -1,14 +1,126 @@
-//! Zokio: 基于Zig特性的下一代异步运行时
+//! 📚 Zokio Phase 4: 分层 API 设计
 //!
-//! Zokio是一个充分发挥Zig语言独特优势的原生异步运行时系统，
-//! 通过编译时元编程、零成本抽象、显式内存管理等特性，
-//! 创造一个真正体现"Zig哲学"的高性能异步运行时。
+//! Phase 4 实现：分层 API 架构和接口优化
+//! - 🚀 简化 API：90% 用户的核心需求
+//! - 🔧 高级 API：专业用户的深度定制
+//! - 🧪 实验性 API：早期采用者的前沿功能
+//! - 🛡️ 统一错误处理：类型安全的错误管理
 
 const std = @import("std");
 const builtin = @import("builtin");
 
-// 🚀 核心 API - 主要用户接口（高内聚，低耦合）
+/// 🛡️ Phase 4: 统一错误处理系统
+pub const ZokioError = union(enum) {
+    runtime: RuntimeError,
+    io: IOError,
+    memory: MemoryError,
+    timeout: TimeoutError,
+    future: FutureError,
+
+    /// 获取错误上下文
+    pub fn context(self: @This()) ErrorContext {
+        return switch (self) {
+            .runtime => |e| e.context,
+            .io => |e| e.context,
+            .memory => |e| e.context,
+            .timeout => |e| e.context,
+            .future => |e| e.context,
+        };
+    }
+
+    /// 获取错误描述
+    pub fn description(self: @This()) []const u8 {
+        return switch (self) {
+            .runtime => |e| e.description,
+            .io => |e| e.description,
+            .memory => |e| e.description,
+            .timeout => |e| e.description,
+            .future => |e| e.description,
+        };
+    }
+};
+
+/// 运行时错误
+pub const RuntimeError = struct {
+    code: RuntimeErrorCode,
+    context: ErrorContext,
+    description: []const u8,
+};
+
+/// I/O 错误
+pub const IOError = struct {
+    code: IOErrorCode,
+    context: ErrorContext,
+    description: []const u8,
+};
+
+/// 内存错误
+pub const MemoryError = struct {
+    code: MemoryErrorCode,
+    context: ErrorContext,
+    description: []const u8,
+};
+
+/// 超时错误
+pub const TimeoutError = struct {
+    code: TimeoutErrorCode,
+    context: ErrorContext,
+    description: []const u8,
+};
+
+/// Future 错误
+pub const FutureError = struct {
+    code: FutureErrorCode,
+    context: ErrorContext,
+    description: []const u8,
+};
+
+/// 错误上下文
+pub const ErrorContext = struct {
+    file: []const u8,
+    line: u32,
+    function: []const u8,
+    timestamp: i64,
+};
+
+/// 错误代码枚举
+pub const RuntimeErrorCode = enum { initialization_failed, shutdown_failed, worker_panic };
+pub const IOErrorCode = enum { read_failed, write_failed, connection_lost, timeout };
+pub const MemoryErrorCode = enum { out_of_memory, allocation_failed, corruption };
+pub const TimeoutErrorCode = enum { operation_timeout, deadline_exceeded };
+pub const FutureErrorCode = enum { poll_failed, waker_failed, state_invalid };
+
+// 🚀 Phase 4: 简化 API - 90% 用户的核心需求
 pub usingnamespace @import("core_api.zig");
+
+/// 📚 Phase 4: 分层 API 设计
+///
+/// 简化 API：最常用的功能，零学习成本
+pub const zokio = struct {
+    // 核心运行时
+    pub const Runtime = @import("core/runtime.zig").ZokioRuntime;
+    pub const RuntimeConfig = @import("core/runtime.zig").RuntimeConfig;
+
+    // 基础 Future 系统
+    pub const Future = @import("core/future.zig").Future;
+    pub const Poll = @import("core/future.zig").Poll;
+    pub const Context = @import("core/future.zig").Context;
+
+    // 简化的异步操作
+    pub const spawn = @import("core_api.zig").spawn;
+    pub const await_fn = @import("core/future.zig").await_fn;
+    pub const async_fn = @import("core/future.zig").async_fn;
+    pub const async_block = @import("core/future.zig").async_block;
+
+    // 常用工具
+    pub const ready = @import("core/future.zig").ready;
+    pub const pending = @import("core/future.zig").pending;
+    pub const delay = @import("core/future.zig").delay;
+    pub const timeout = @import("core/future.zig").timeout;
+
+    // 简化的错误类型
+    pub const Error = ZokioError;
+};
 
 // 🔧 高级接口 - 需要时才导入（按需加载）
 pub const advanced = struct {
@@ -40,6 +152,70 @@ pub const advanced = struct {
     pub const testing = ext.testing;
     pub const tracing = ext.tracing;
     pub const bench = ext.bench;
+};
+
+/// 🧪 Phase 4: 实验性 API - 早期采用者的前沿功能
+pub const experimental = struct {
+    // 编译时优化实验
+    pub const comptime_runtime = struct {
+        /// 编译时运行时生成器
+        pub fn generateRuntime(comptime config: anytype) type {
+            return @import("core/runtime.zig").ZokioRuntime(config);
+        }
+
+        /// 编译时性能分析
+        pub fn analyzePerformance(comptime config: anytype) type {
+            return struct {
+                pub const analysis = config.analyzeCompileTime();
+            };
+        }
+    };
+
+    // 零成本抽象实验
+    pub const zero_cost = struct {
+        /// 零成本 Future 组合
+        pub fn FutureChain(comptime futures: []const type) type {
+            return @import("core/future.zig").generateOptimalChain(futures);
+        }
+
+        /// 零成本内存管理
+        pub fn OptimalAllocator(comptime pattern: anytype) type {
+            return @import("memory/memory.zig").OptimalAllocator(pattern);
+        }
+    };
+
+    // 平台特定优化
+    pub const platform_specific = struct {
+        /// SIMD 优化操作
+        pub const simd_ops = if (builtin.cpu.arch.endian() == .little)
+            @import("experimental/simd.zig")
+        else
+            struct {};
+
+        /// GPU 计算支持
+        pub const gpu_compute = if (@hasDecl(@import("root"), "gpu_support"))
+            @import("experimental/gpu.zig")
+        else
+            struct {};
+
+        /// NUMA 感知优化
+        pub const numa_aware = if (builtin.os.tag == .linux)
+            @import("experimental/numa.zig")
+        else
+            struct {};
+    };
+
+    // 高级调试和分析
+    pub const debugging = struct {
+        /// 编译时调试信息
+        pub const compile_time_debug = @import("experimental/debug.zig");
+
+        /// 性能分析器
+        pub const profiler = @import("experimental/profiler.zig");
+
+        /// 内存泄漏检测
+        pub const leak_detector = @import("experimental/leak_detector.zig");
+    };
 };
 
 // 🔧 向后兼容性支持（逐步废弃）
@@ -116,6 +292,53 @@ test "Zokio库基础功能" {
 
     // 测试版本信息
     try testing_lib.expect(std.mem.eql(u8, version, "0.1.0"));
+}
+
+test "📚 Phase 4: 分层 API 设计验证" {
+    const testing = std.testing;
+
+    // 测试简化 API
+    try testing.expect(@hasDecl(zokio, "Runtime"));
+    try testing.expect(@hasDecl(zokio, "Future"));
+    try testing.expect(@hasDecl(zokio, "spawn"));
+    try testing.expect(@hasDecl(zokio, "await_fn"));
+    try testing.expect(@hasDecl(zokio, "ready"));
+    try testing.expect(@hasDecl(zokio, "Error"));
+
+    // 测试高级 API
+    try testing.expect(@hasDecl(advanced, "runtime"));
+    try testing.expect(@hasDecl(advanced, "scheduler"));
+    try testing.expect(@hasDecl(advanced, "io"));
+    try testing.expect(@hasDecl(advanced, "memory"));
+    try testing.expect(@hasDecl(advanced, "ext"));
+
+    // 测试实验性 API
+    try testing.expect(@hasDecl(experimental, "comptime_runtime"));
+    try testing.expect(@hasDecl(experimental, "zero_cost"));
+    try testing.expect(@hasDecl(experimental, "platform_specific"));
+    try testing.expect(@hasDecl(experimental, "debugging"));
+
+    // 测试错误处理系统
+    const runtime_error = RuntimeError{
+        .code = .initialization_failed,
+        .context = ErrorContext{
+            .file = "test.zig",
+            .line = 42,
+            .function = "test_function",
+            .timestamp = std.time.timestamp(),
+        },
+        .description = "Test error",
+    };
+
+    const zokio_error = ZokioError{ .runtime = runtime_error };
+    try testing.expectEqualStrings("Test error", zokio_error.description());
+    try testing.expectEqualStrings("test.zig", zokio_error.context().file);
+    try testing.expect(zokio_error.context().line == 42);
+
+    // 测试编译时功能
+    const config = @import("core/runtime.zig").RuntimeConfig{};
+    const RuntimeType = experimental.comptime_runtime.generateRuntime(config);
+    try testing.expect(@hasDecl(RuntimeType, "COMPILE_TIME_INFO"));
 }
 
 // 引用所有子模块的测试

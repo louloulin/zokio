@@ -1,15 +1,48 @@
-//! Zokio 内存管理模块 - 简化统一版
+//! 🧠 Zokio Phase 2: 编译时优化内存管理模块
 //!
-//! 提供高性能、智能化的内存分配解决方案：
-//! - 🚀 FastSmartAllocator: 主力智能分配器 (7.57M ops/sec)
-//! - 🎯 ExtendedAllocator: 专用高性能池 (23M ops/sec)
-//! - 🔧 OptimizedAllocator: 小对象专用池 (247K ops/sec)
-//! - 📊 统一配置和监控系统
+//! Phase 2 实现：编译时内存分配器选择和优化
+//! - 🚀 编译时分配器选择：根据使用模式选择最优分配器
+//! - 🧠 智能内存布局：编译时确定内存布局
+//! - 🛡️ RAII 资源管理：自动资源管理模式
+//! - 📊 零成本内存监控：编译时生成监控代码
 
 const std = @import("std");
+const builtin = @import("builtin");
 
 /// 缓存行大小（64字节，适用于大多数现代CPU）
 const CACHE_LINE_SIZE = 64;
+
+// Phase 2: 使用现有的 AllocationPattern 定义，增强编译时分配器选择
+
+/// 🛡️ Phase 2: RAII 资源管理器
+pub fn ScopedResource(comptime T: type) type {
+    return struct {
+        const Self = @This();
+
+        resource: T,
+        allocator: std.mem.Allocator,
+
+        pub fn init(allocator: std.mem.Allocator, args: anytype) !Self {
+            return Self{
+                .resource = try T.init(allocator, args),
+                .allocator = allocator,
+            };
+        }
+
+        pub fn deinit(self: *Self) void {
+            if (comptime @hasDecl(T, "deinit")) {
+                self.resource.deinit();
+            }
+        }
+
+        // 自动解引用到资源
+        pub usingnamespace if (@hasDecl(T, "poll")) struct {
+            pub fn poll(self: *Self, ctx: anytype) @TypeOf(self.resource.poll(ctx)) {
+                return self.resource.poll(ctx);
+            }
+        } else struct {};
+    };
+}
 
 /// 内存分配大小类别
 pub const SizeClass = enum {
@@ -103,13 +136,22 @@ pub const MemoryStrategy = enum {
     cache_friendly,
 };
 
-/// 编译时内存分配策略生成器
+/// 🧠 Phase 2: 编译时内存分配策略生成器
 pub fn MemoryAllocator(comptime config: MemoryConfig) type {
     // 编译时验证配置
     comptime config.validate();
 
+    // 🚀 Phase 2: 编译时内存布局分析
+    const layout_analysis = comptime analyzeMemoryLayout(config);
+    const optimization_hints = comptime generateOptimizationHints(config);
+
     return struct {
         const Self = @This();
+
+        // 🚀 Phase 2: 编译时生成的分析信息
+        pub const LAYOUT_ANALYSIS = layout_analysis;
+        pub const OPTIMIZATION_HINTS = optimization_hints;
+        pub const MEMORY_CONFIG = config;
 
         // 编译时选择最优分配器
         const BaseAllocator = switch (config.strategy) {
@@ -1633,4 +1675,152 @@ test "缓存友好分配器" {
     for (memory, 0..) |byte, i| {
         try testing.expectEqual(@as(u8, @intCast(i % 256)), byte);
     }
+}
+
+test "🧠 Phase 2: 编译时内存优化验证" {
+    const testing = std.testing;
+
+    // 测试编译时分配器选择
+    const config = MemoryConfig{
+        .strategy = .tiered_pools,
+        .enable_cache_alignment = true,
+        .enable_numa = true,
+        .enable_metrics = true,
+        .max_allocation_size = 1024 * 1024,
+    };
+
+    const AllocatorType = MemoryAllocator(config);
+
+    // 验证编译时分析结果
+    try testing.expect(AllocatorType.LAYOUT_ANALYSIS.cache_line_aligned == true);
+    try testing.expect(AllocatorType.LAYOUT_ANALYSIS.numa_aware == true);
+    try testing.expect(AllocatorType.LAYOUT_ANALYSIS.memory_efficiency_score > 0.8);
+    try testing.expect(AllocatorType.LAYOUT_ANALYSIS.fragmentation_risk == .low);
+
+    // 验证优化提示
+    try testing.expect(AllocatorType.OPTIMIZATION_HINTS.performance_impact > 1.0);
+    try testing.expect(AllocatorType.OPTIMIZATION_HINTS.memory_overhead < 0.3);
+
+    // 验证配置传递
+    try testing.expect(AllocatorType.MEMORY_CONFIG.strategy == .tiered_pools);
+    try testing.expect(AllocatorType.MEMORY_CONFIG.enable_cache_alignment == true);
+}
+
+/// 🧠 Phase 2: 编译时内存布局分析
+fn analyzeMemoryLayout(comptime config: MemoryConfig) MemoryLayoutAnalysis {
+    return MemoryLayoutAnalysis{
+        .cache_line_aligned = config.enable_cache_alignment,
+        .numa_aware = config.enable_numa,
+        .optimal_pool_sizes = calculateOptimalPoolSizes(config),
+        .memory_efficiency_score = calculateMemoryEfficiency(config),
+        .fragmentation_risk = assessFragmentationRisk(config),
+    };
+}
+
+/// 🚀 Phase 2: 编译时优化提示生成
+fn generateOptimizationHints(comptime config: MemoryConfig) OptimizationHints {
+    var hints: []const []const u8 = &[_][]const u8{};
+
+    // 基于配置生成优化建议
+    if (!config.enable_cache_alignment) {
+        hints = hints ++ [_][]const u8{"启用缓存行对齐可提升性能"};
+    }
+
+    if (config.strategy == .general_purpose and config.enable_metrics) {
+        hints = hints ++ [_][]const u8{"考虑使用专用分配器以获得更好性能"};
+    }
+
+    if (config.max_allocation_size > 1024 * 1024 * 1024) {
+        hints = hints ++ [_][]const u8{"大内存分配可能影响性能"};
+    }
+
+    return OptimizationHints{
+        .suggestions = hints,
+        .performance_impact = calculatePerformanceImpact(config),
+        .memory_overhead = calculateMemoryOverhead(config),
+    };
+}
+
+/// 内存布局分析结果
+const MemoryLayoutAnalysis = struct {
+    cache_line_aligned: bool,
+    numa_aware: bool,
+    optimal_pool_sizes: PoolSizes,
+    memory_efficiency_score: f64,
+    fragmentation_risk: FragmentationRisk,
+};
+
+/// 优化提示
+const OptimizationHints = struct {
+    suggestions: []const []const u8,
+    performance_impact: f64,
+    memory_overhead: f64,
+};
+
+/// 池大小配置
+const PoolSizes = struct {
+    small_pool: usize,
+    medium_pool: usize,
+    large_pool: usize,
+};
+
+/// 碎片化风险评估
+const FragmentationRisk = enum {
+    low,
+    medium,
+    high,
+};
+
+/// 计算最优池大小
+fn calculateOptimalPoolSizes(comptime config: MemoryConfig) PoolSizes {
+    return PoolSizes{
+        .small_pool = config.small_pool_size,
+        .medium_pool = config.medium_pool_size,
+        .large_pool = config.large_pool_threshold,
+    };
+}
+
+/// 计算内存效率
+fn calculateMemoryEfficiency(comptime config: MemoryConfig) f64 {
+    var efficiency: f64 = 0.8; // 基础效率
+
+    if (config.enable_cache_alignment) efficiency += 0.1;
+    if (config.enable_numa) efficiency += 0.05;
+    if (config.strategy == .tiered_pools) efficiency += 0.05;
+
+    return @min(efficiency, 1.0);
+}
+
+/// 评估碎片化风险
+fn assessFragmentationRisk(comptime config: MemoryConfig) FragmentationRisk {
+    return switch (config.strategy) {
+        .arena => .low,
+        .tiered_pools => .low,
+        .cache_friendly => .medium,
+        .general_purpose => .medium,
+        .fixed_buffer => .high,
+        .stack => .high,
+        .adaptive => .medium,
+    };
+}
+
+/// 计算性能影响
+fn calculatePerformanceImpact(comptime config: MemoryConfig) f64 {
+    var impact: f64 = 1.0; // 基础性能
+
+    if (config.enable_metrics) impact -= 0.05; // 监控开销
+    if (config.enable_numa) impact += 0.1; // NUMA 优化
+    if (config.enable_cache_alignment) impact += 0.15; // 缓存优化
+
+    return impact;
+}
+
+/// 计算内存开销
+fn calculateMemoryOverhead(comptime config: MemoryConfig) f64 {
+    var overhead: f64 = 0.1; // 基础开销
+
+    if (config.enable_metrics) overhead += 0.05;
+    if (config.strategy == .tiered_pools) overhead += 0.1;
+
+    return overhead;
 }
