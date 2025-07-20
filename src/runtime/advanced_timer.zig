@@ -9,7 +9,7 @@
 const std = @import("std");
 const libxev = @import("libxev");
 const utils = @import("../utils/utils.zig");
-const Waker = @import("../future/future.zig").Waker;
+const Waker = @import("../core/future.zig").Waker;
 
 /// 🔧 高级定时器配置
 pub const AdvancedTimerConfig = struct {

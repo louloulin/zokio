@@ -7,7 +7,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const utils = @import("../utils/utils.zig");
 const platform = @import("../utils/platform.zig");
-const future = @import("../future/future.zig");
+const future = @import("../core/future.zig");
 const memory = @import("../memory/memory.zig");
 
 /// 调度器配置

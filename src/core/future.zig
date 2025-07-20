@@ -10,10 +10,10 @@ const utils = @import("../utils/utils.zig");
 // Zokio 2.0 真正异步系统导入
 const AsyncEventLoop = @import("../runtime/async_event_loop.zig").AsyncEventLoop;
 const NewTaskId = @import("../runtime/async_event_loop.zig").TaskId;
-const NewWaker = @import("../runtime/waker.zig").Waker;
-const NewContext = @import("../runtime/waker.zig").Context;
-const NewTask = @import("../runtime/waker.zig").Task;
-const NewTaskScheduler = @import("../runtime/waker.zig").TaskScheduler;
+const NewWaker = @import("waker.zig").Waker;
+const NewContext = @import("waker.zig").Context;
+const NewTask = @import("waker.zig").Task;
+const NewTaskScheduler = @import("waker.zig").TaskScheduler;
 
 /// Result类型 - 用于表示可能失败的操作结果
 pub fn Result(comptime T: type, comptime E: type) type {
@@ -776,7 +776,7 @@ pub fn await_fn(future: anytype) @TypeOf(future).Output {
     }
 
     // 🚀 获取当前事件循环，确保在异步运行时上下文中
-    const runtime = @import("../runtime/runtime.zig");
+    const runtime = @import("../core/runtime.zig");
     const event_loop = runtime.getCurrentEventLoop() orelse {
         // 如果没有事件循环，使用回退模式（同步执行）
         std.log.debug("await_fn: 没有事件循环，使用同步回退模式", .{});
@@ -891,7 +891,7 @@ fn createDefaultContext() Context {
     };
 
     // 🚀 Zokio 4.0 改进：从运行时获取当前事件循环
-    const runtime = @import("../runtime/runtime.zig");
+    const runtime = @import("../core/runtime.zig");
     const current_event_loop = runtime.getCurrentEventLoop();
 
     // 创建一个真正的Waker，连接到事件循环
@@ -985,7 +985,7 @@ const EventLoopWaker = struct {
     }
 
     /// 空操作调度器（临时实现）
-    var noop_scheduler = @import("../runtime/waker.zig").TaskScheduler{};
+    var noop_scheduler = @import("waker.zig").TaskScheduler{};
 };
 
 /// 🚀 Zokio 3.0 任务暂停机制

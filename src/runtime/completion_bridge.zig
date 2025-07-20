@@ -8,9 +8,9 @@
 
 const std = @import("std");
 const libxev = @import("libxev");
-const future = @import("../future/future.zig");
+const future = @import("../core/future.zig");
 const Waker = future.Waker;
-const Context = @import("waker.zig").Context;
+const Context = @import("../core/waker.zig").Context;
 const Poll = future.Poll;
 
 /// 🔧 CompletionBridge状态

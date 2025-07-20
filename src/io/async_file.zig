@@ -11,7 +11,7 @@
 
 const std = @import("std");
 const xev = @import("libxev");
-const future = @import("../future/future.zig");
+const future = @import("../core/future.zig");
 const CompletionBridge = @import("../runtime/completion_bridge.zig").CompletionBridge;
 
 /// 📁 异步文件句柄

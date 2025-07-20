@@ -3,8 +3,8 @@
 //! 提供异步测试和模拟工具。
 
 const std = @import("std");
-const future = @import("../future/future.zig");
-const runtime = @import("../runtime/runtime.zig");
+const future = @import("../core/future.zig");
+const runtime = @import("../core/runtime.zig");
 
 /// 异步测试运行器
 pub fn asyncTest(comptime test_fn: anytype) !void {

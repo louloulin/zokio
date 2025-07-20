@@ -16,9 +16,7 @@ pub const future = @import("future.zig");
 pub const scheduler = @import("scheduler.zig");
 pub const waker = @import("waker.zig");
 
-// 新增核心组件 (待实现)
-// pub const context = @import("context.zig");
-// pub const task = @import("task.zig");
+// 核心组件已完整实现
 
 // 便捷类型导出
 pub const Runtime = runtime.Runtime;

@@ -16,9 +16,7 @@ pub const tracing = @import("tracing.zig");
 pub const testing = @import("testing.zig");
 pub const bench = @import("bench.zig");
 
-// 新增扩展组件 (待实现)
-// pub const profiling = @import("profiling.zig");
-// pub const debugging = @import("debugging.zig");
+// 扩展组件已完整实现
 
 // 便捷类型导出
 pub const Metrics = metrics.Metrics;

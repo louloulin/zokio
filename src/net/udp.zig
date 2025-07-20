@@ -5,7 +5,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const future = @import("../future/future.zig");
+const future = @import("../core/future.zig");
 const socket = @import("socket.zig");
 const NetError = @import("mod.zig").NetError;
 

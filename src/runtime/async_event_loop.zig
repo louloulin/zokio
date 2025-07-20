@@ -6,7 +6,7 @@
 const std = @import("std");
 const libxev = @import("libxev");
 const utils = @import("../utils/utils.zig");
-const future = @import("../future/future.zig");
+const future = @import("../core/future.zig");
 
 // 🚀 Zokio 5.0 改进：统一 Waker 类型
 const Waker = future.Waker;

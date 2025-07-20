@@ -8,11 +8,10 @@ const std = @import("std");
 const builtin = @import("builtin");
 const utils = @import("../utils/utils.zig");
 const platform = @import("../utils/platform.zig");
-const future = @import("../future/future.zig");
-const scheduler = @import("../scheduler/scheduler.zig");
+const future = @import("future.zig");
+const scheduler = @import("../core/scheduler.zig");
 const io = @import("../io/io.zig");
 const memory = @import("../memory/memory.zig");
-const async_block_api = @import("../future/async_block.zig");
 
 // 条件导入libxev
 const libxev = if (@hasDecl(@import("root"), "libxev")) @import("libxev") else null;
@@ -1776,7 +1775,7 @@ pub fn asyncMain(comptime main_fn: anytype) !void {
     defer runtime.stop();
 
     // 执行主函数
-    const main_future = async_block_api.async_block(main_fn);
+    const main_future = future.async_block(main_fn);
     _ = try runtime.blockOn(main_future);
 }
 

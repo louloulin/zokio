@@ -3,7 +3,7 @@
 //! 提供高精度定时器、延迟执行、超时控制等时间相关功能。
 
 const std = @import("std");
-const future = @import("../future/future.zig");
+const future = @import("../core/future.zig");
 const utils = @import("../utils/utils.zig");
 
 /// 时间点表示
