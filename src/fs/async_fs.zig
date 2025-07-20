@@ -8,7 +8,7 @@
 
 const std = @import("std");
 const libxev = @import("libxev");
-const future = @import("../future/future.zig");
+const future = @import("../core/future.zig");
 const io = @import("../io/io.zig");
 const utils = @import("../utils/utils.zig");
 const CompletionBridge = @import("../runtime/completion_bridge.zig").CompletionBridge;
@@ -20,7 +20,7 @@ const Waker = future.Waker;
 /// 🚀 获取当前事件循环
 fn getCurrentEventLoop() ?*AsyncEventLoop {
     // 导入运行时模块以访问全局事件循环管理
-    const runtime = @import("../runtime/runtime.zig");
+    const runtime = @import("../core/runtime.zig");
     return runtime.getCurrentEventLoop();
 }
 

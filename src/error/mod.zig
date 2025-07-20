@@ -9,9 +9,17 @@
 
 const std = @import("std");
 
-// 导出核心错误处理组件
-pub const ZokioError = @import("zokio_error.zig").ZokioError;
-pub const ErrorResult = @import("zokio_error.zig").ErrorResult;
+// 导出统一错误处理系统
+pub const unified = @import("unified_error_system.zig");
+pub const ZokioError = unified.ZokioError;
+pub const ErrorResult = unified.ErrorResult;
+pub const UnifiedErrorLogger = unified.ErrorLogger;
+pub const try_zokio = unified.try_zokio;
+
+// 导出原有错误处理组件（向后兼容）
+pub const legacy = @import("zokio_error.zig");
+pub const LegacyZokioError = legacy.ZokioError;
+pub const LegacyErrorResult = legacy.ErrorResult;
 
 pub const ResourceManager = @import("resource_manager.zig").ResourceManager;
 pub const RAIIWrapper = @import("resource_manager.zig").RAIIWrapper;

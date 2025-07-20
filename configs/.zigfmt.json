@@ -1,0 +1,9 @@
+{
+    "indent": 4,
+    "max_width": 100,
+    "fn_single_line": false,
+    "if_single_line": false,
+    "array_single_line": false,
+    "struct_single_line": false,
+    "enum_single_line": false
+}

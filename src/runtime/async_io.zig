@@ -8,9 +8,9 @@ const libxev = @import("libxev");
 const utils = @import("../utils/utils.zig");
 const AsyncEventLoop = @import("async_event_loop.zig").AsyncEventLoop;
 const IoInterest = @import("async_event_loop.zig").IoInterest;
-const Waker = @import("waker.zig").Waker;
-const Context = @import("waker.zig").Context;
-const Poll = @import("../future/future.zig").Poll;
+const Waker = @import("../core/waker.zig").Waker;
+const Context = @import("../core/waker.zig").Context;
+const Poll = @import("../core/future.zig").Poll;
 
 /// ✅ 真正异步的TCP读取Future
 ///

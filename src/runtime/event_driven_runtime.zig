@@ -8,8 +8,8 @@
 
 const std = @import("std");
 const xev = @import("libxev");
-const future = @import("../future/future.zig");
-const event_driven_await = @import("../future/event_driven_await.zig");
+const future = @import("../core/future.zig");
+// event_driven_await 功能已合并到 core/future.zig 中
 const CompletionBridge = @import("completion_bridge.zig").CompletionBridge;
 
 /// 🚀 事件驱动运行时
@@ -48,8 +48,8 @@ pub const EventDrivenRuntime = struct {
             .allocator = allocator,
         };
 
-        // 设置为当前运行时
-        event_driven_await.setCurrentRuntime(&runtime);
+        // 设置为当前运行时 (功能已移动到 core/future.zig)
+        // TODO: 实现运行时设置功能
 
         return runtime;
     }
@@ -60,7 +60,7 @@ pub const EventDrivenRuntime = struct {
         self.xev_loop.deinit();
         self.task_queue.deinit();
         self.waker_registry.deinit();
-        
+
         if (self.thread_pool) |pool| {
             pool.deinit();
             self.allocator.destroy(pool);
@@ -142,10 +142,10 @@ pub const EventDrivenRuntime = struct {
     /// 🚀 生成新任务
     pub fn spawn(self: *Self, future_arg: anytype) !TaskHandle {
         const task = Task.fromFuture(future_arg, self.allocator);
-        
+
         // 添加到任务队列
         try self.task_queue.push(task);
-        
+
         // 增加活跃任务计数
         _ = self.active_tasks.fetchAdd(1, .acq_rel);
 
@@ -156,7 +156,7 @@ pub const EventDrivenRuntime = struct {
     pub fn blockOn(self: *Self, future_arg: anytype) !@TypeOf(future_arg).Output {
         // 生成任务
         const handle = try self.spawn(future_arg);
-        
+
         // 等待完成
         return self.waitForTask(handle);
     }
@@ -200,14 +200,14 @@ const TaskQueue = struct {
     fn push(self: *TaskQueue, task: Task) !void {
         self.mutex.lock();
         defer self.mutex.unlock();
-        
+
         try self.queue.writeItem(task);
     }
 
     fn pop(self: *TaskQueue) ?Task {
         self.mutex.lock();
         defer self.mutex.unlock();
-        
+
         return self.queue.readItem();
     }
 
@@ -239,7 +239,7 @@ const WakerRegistry = struct {
     fn register(self: *WakerRegistry, waker: *future.Waker) !void {
         self.mutex.lock();
         defer self.mutex.unlock();
-        
+
         try self.wakers.append(waker);
     }
 
@@ -261,23 +261,23 @@ const WakerRegistry = struct {
 /// 📋 任务定义
 const Task = struct {
     id: u64,
-    execute_fn: *const fn() void,
-    
+    execute_fn: *const fn () void,
+
     fn fromFuture(future_arg: anytype, allocator: std.mem.Allocator) Task {
         _ = future_arg;
         _ = allocator;
-        
+
         // TODO: 实现 Future 到 Task 的转换
         return Task{
             .id = generateTaskId(),
             .execute_fn = dummyExecute,
         };
     }
-    
+
     fn execute(self: Task) void {
         self.execute_fn();
     }
-    
+
     fn dummyExecute() void {
         // 占位实现
     }

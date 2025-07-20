@@ -6,7 +6,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const libxev = @import("libxev");
 
-const future = @import("../future/future.zig");
+const future = @import("../core/future.zig");
 const socket = @import("socket.zig");
 const NetError = @import("mod.zig").NetError;
 
@@ -26,7 +26,7 @@ const IpAddr = socket.IpAddr;
 /// 从当前上下文获取事件循环实例
 fn getCurrentEventLoop() ?*AsyncEventLoop {
     // 导入运行时模块以访问全局事件循环管理
-    const runtime = @import("../runtime/runtime.zig");
+    const runtime = @import("../core/runtime.zig");
     return runtime.getCurrentEventLoop();
 }
 

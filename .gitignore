@@ -14,7 +14,7 @@ zig-cache/
 # 调试文件
 *.dSYM/
 *.pdb
-
+plan*
 # IDE和编辑器文件
 .vscode/
 .idea/

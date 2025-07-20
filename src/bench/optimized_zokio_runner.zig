@@ -6,17 +6,17 @@
 //! - 1.51M ops/sec libxev I/O
 
 const std = @import("std");
-const DefaultRuntime = @import("../runtime/runtime.zig").DefaultRuntime;
+const DefaultRuntime = @import("../core/runtime.zig").DefaultRuntime;
 const PerformanceMetrics = @import("mod.zig").PerformanceMetrics;
 const BenchType = @import("mod.zig").BenchType;
 
 // 导入已验证的高性能组件
-const Scheduler = @import("../scheduler/scheduler.zig").Scheduler;
-const SchedulerConfig = @import("../scheduler/scheduler.zig").SchedulerConfig;
-const Task = @import("../scheduler/scheduler.zig").Task;
-const TaskId = @import("../future/future.zig").TaskId;
-const Context = @import("../future/future.zig").Context;
-const Poll = @import("../future/future.zig").Poll;
+const Scheduler = @import("../core/scheduler.zig").Scheduler;
+const SchedulerConfig = @import("../core/scheduler.zig").SchedulerConfig;
+const Task = @import("../core/scheduler.zig").Task;
+const TaskId = @import("../core/future.zig").TaskId;
+const Context = @import("../core/future.zig").Context;
+const Poll = @import("../core/future.zig").Poll;
 const MemoryManager = @import("../memory/memory.zig").MemoryManager;
 const MemoryConfig = @import("../memory/memory.zig").MemoryConfig;
 const IoDriver = @import("../io/io.zig").IoDriver;

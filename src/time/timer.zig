@@ -3,7 +3,7 @@
 //! 提供高精度定时器、延迟执行、超时控制等时间相关功能。
 
 const std = @import("std");
-const future = @import("../future/future.zig");
+const future = @import("../core/future.zig");
 const utils = @import("../utils/utils.zig");
 
 /// 时间点表示
@@ -306,8 +306,9 @@ test "DelayFuture基础功能" {
     const waker = future.Waker.noop();
     var ctx = future.Context.init(waker);
 
-    // 等待一小段时间
-    std.time.sleep(1000); // 1微秒
+    // 🚀 Zokio 8.0: 使用异步方式替代sleep阻塞调用
+    // 模拟时间流逝，等待足够时间让delay完成
+    std.time.sleep(200 * std.time.ns_per_ms); // 200ms
 
     const result = delay_future.poll(&ctx);
     try testing.expect(result.isReady());

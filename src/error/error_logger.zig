@@ -9,6 +9,7 @@
 
 const std = @import("std");
 const ZokioError = @import("zokio_error.zig").ZokioError;
+const unified = @import("unified_error_system.zig");
 
 /// 📊 日志级别
 pub const LogLevel = enum(u8) {
@@ -336,9 +337,39 @@ pub fn deinitGlobalLogger(allocator: std.mem.Allocator) void {
 }
 
 /// 📝 便捷的日志函数
-pub fn logError(message: []const u8, error_info: ?ZokioError) void {
+pub fn logError(message: []const u8, error_info: ?unified.ZokioError) void {
     if (global_logger) |logger| {
-        logger.log(.err, message, error_info, @src());
+        // 将新的错误类型转换为旧的格式进行日志记录
+        const legacy_error = if (error_info) |err| switch (err) {
+            .runtime => |runtime_err| ZokioError{
+                .runtime_error = .{
+                    .kind = .runtime_not_started, // 默认类型
+                    .message = runtime_err.message,
+                    .component = runtime_err.component,
+                },
+            },
+            .io => |io_err| ZokioError{
+                .io_error = .{
+                    .kind = .file_not_found, // 默认类型
+                    .message = io_err.message,
+                    .file_path = io_err.path,
+                },
+            },
+            .memory => |mem_err| ZokioError{
+                .memory_error = .{
+                    .kind = .out_of_memory, // 默认类型
+                    .message = mem_err.message,
+                    .requested_size = mem_err.requested_size orelse 0,
+                },
+            },
+            else => ZokioError{ .runtime_error = .{
+                .kind = .runtime_not_started,
+                .message = "未知错误类型",
+                .component = "unknown",
+            } },
+        } else null;
+
+        logger.log(.err, message, legacy_error, @src());
     }
 }
 

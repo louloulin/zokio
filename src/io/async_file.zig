@@ -11,7 +11,7 @@
 
 const std = @import("std");
 const xev = @import("libxev");
-const future = @import("../future/future.zig");
+const future = @import("../core/future.zig");
 const CompletionBridge = @import("../runtime/completion_bridge.zig").CompletionBridge;
 
 /// 📁 异步文件句柄
@@ -122,7 +122,7 @@ pub const AsyncReadFuture = struct {
 
         // 检查超时
         if (self.bridge.checkTimeout()) {
-            std.log.warn("文件读取操作超时");
+            std.log.warn("文件读取操作超时", .{});
             return .{ .ready = 0 }; // 超时返回 0 字节
         }
 
@@ -131,12 +131,11 @@ pub const AsyncReadFuture = struct {
             // 从桥接器获取结果
             switch (self.bridge.getResult(anyerror!usize)) {
                 .ready => |result| {
-                    switch (result) {
-                        .ok => |bytes| return .{ .ready = bytes },
-                        .err => |err| {
-                            std.log.err("异步文件读取失败: {}", .{err});
-                            return .{ .ready = 0 };
-                        },
+                    if (result) |bytes| {
+                        return .{ .ready = bytes };
+                    } else |err| {
+                        std.log.err("异步文件读取失败: {}", .{err});
+                        return .{ .ready = 0 };
                     }
                 },
                 .pending => return .pending,
@@ -195,7 +194,7 @@ pub const AsyncWriteFuture = struct {
 
         // 检查超时
         if (self.bridge.checkTimeout()) {
-            std.log.warn("文件写入操作超时");
+            std.log.warn("文件写入操作超时", .{});
             return .{ .ready = 0 }; // 超时返回 0 字节
         }
 
@@ -204,12 +203,11 @@ pub const AsyncWriteFuture = struct {
             // 从桥接器获取结果
             switch (self.bridge.getResult(anyerror!usize)) {
                 .ready => |result| {
-                    switch (result) {
-                        .ok => |bytes| return .{ .ready = bytes },
-                        .err => |err| {
-                            std.log.err("异步文件写入失败: {}", .{err});
-                            return .{ .ready = 0 };
-                        },
+                    if (result) |bytes| {
+                        return .{ .ready = bytes };
+                    } else |err| {
+                        std.log.err("异步文件写入失败: {}", .{err});
+                        return .{ .ready = 0 };
                     }
                 },
                 .pending => return .pending,

@@ -86,6 +86,118 @@ pub fn build(b: *std.Build) void {
     const libxev_test_step = b.step("test-libxev", "运行libxev集成测试");
     libxev_test_step.dependOn(&run_libxev_tests.step);
 
+    // await_fn修复测试
+    const await_fn_tests = b.addTest(.{
+        .root_source_file = b.path("tests/test_await_fn_fixed.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    await_fn_tests.root_module.addOptions("config", options);
+    await_fn_tests.root_module.addImport("libxev", libxev.module("xev"));
+    await_fn_tests.root_module.addImport("zokio", lib.root_module);
+
+    const run_await_fn_tests = b.addRunArtifact(await_fn_tests);
+    const await_fn_test_step = b.step("test-await-fn", "运行await_fn修复测试");
+    await_fn_test_step.dependOn(&run_await_fn_tests.step);
+
+    // CompletionBridge修复测试
+    const completion_bridge_tests = b.addTest(.{
+        .root_source_file = b.path("tests/test_completion_bridge_fixed.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    completion_bridge_tests.root_module.addOptions("config", options);
+    completion_bridge_tests.root_module.addImport("libxev", libxev.module("xev"));
+    completion_bridge_tests.root_module.addImport("zokio", lib.root_module);
+
+    const run_completion_bridge_tests = b.addRunArtifact(completion_bridge_tests);
+    const completion_bridge_test_step = b.step("test-completion-bridge", "运行CompletionBridge修复测试");
+    completion_bridge_test_step.dependOn(&run_completion_bridge_tests.step);
+
+    // 事件循环集成测试
+    const event_loop_integration_tests = b.addTest(.{
+        .root_source_file = b.path("tests/test_event_loop_integration.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    event_loop_integration_tests.root_module.addOptions("config", options);
+    event_loop_integration_tests.root_module.addImport("libxev", libxev.module("xev"));
+    event_loop_integration_tests.root_module.addImport("zokio", lib.root_module);
+
+    const run_event_loop_integration_tests = b.addRunArtifact(event_loop_integration_tests);
+    const event_loop_integration_test_step = b.step("test-event-loop", "运行事件循环集成测试");
+    event_loop_integration_test_step.dependOn(&run_event_loop_integration_tests.step);
+
+    // I/O libxev集成测试
+    const io_libxev_integration_tests = b.addTest(.{
+        .root_source_file = b.path("tests/test_io_libxev_integration.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    io_libxev_integration_tests.root_module.addOptions("config", options);
+    io_libxev_integration_tests.root_module.addImport("libxev", libxev.module("xev"));
+    io_libxev_integration_tests.root_module.addImport("zokio", lib.root_module);
+
+    const run_io_libxev_integration_tests = b.addRunArtifact(io_libxev_integration_tests);
+    const io_libxev_integration_test_step = b.step("test-io-libxev", "运行I/O libxev集成测试");
+    io_libxev_integration_test_step.dependOn(&run_io_libxev_integration_tests.step);
+
+    // Zokio端到端集成测试
+    const zokio_e2e_tests = b.addTest(.{
+        .root_source_file = b.path("tests/test_zokio_integration_e2e.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    zokio_e2e_tests.root_module.addOptions("config", options);
+    zokio_e2e_tests.root_module.addImport("libxev", libxev.module("xev"));
+    zokio_e2e_tests.root_module.addImport("zokio", lib.root_module);
+
+    const run_zokio_e2e_tests = b.addRunArtifact(zokio_e2e_tests);
+    const zokio_e2e_test_step = b.step("test-e2e", "运行Zokio端到端集成测试");
+    zokio_e2e_test_step.dependOn(&run_zokio_e2e_tests.step);
+
+    // 阻塞调用清除验证测试
+    const blocking_calls_elimination_tests = b.addTest(.{
+        .root_source_file = b.path("tests/test_blocking_calls_elimination.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    blocking_calls_elimination_tests.root_module.addOptions("config", options);
+    blocking_calls_elimination_tests.root_module.addImport("libxev", libxev.module("xev"));
+    blocking_calls_elimination_tests.root_module.addImport("zokio", lib.root_module);
+
+    const run_blocking_calls_elimination_tests = b.addRunArtifact(blocking_calls_elimination_tests);
+    const blocking_calls_elimination_test_step = b.step("test-no-blocking", "验证阻塞调用彻底清除");
+    blocking_calls_elimination_test_step.dependOn(&run_blocking_calls_elimination_tests.step);
+
+    // libxev深度集成测试
+    const libxev_deep_integration_tests = b.addTest(.{
+        .root_source_file = b.path("tests/test_libxev_deep_integration.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    libxev_deep_integration_tests.root_module.addOptions("config", options);
+    libxev_deep_integration_tests.root_module.addImport("libxev", libxev.module("xev"));
+    libxev_deep_integration_tests.root_module.addImport("zokio", lib.root_module);
+
+    const run_libxev_deep_integration_tests = b.addRunArtifact(libxev_deep_integration_tests);
+    const libxev_deep_integration_test_step = b.step("test-libxev-deep", "验证libxev深度集成优化");
+    libxev_deep_integration_test_step.dependOn(&run_libxev_deep_integration_tests.step);
+
+    // Phase 4 综合测试
+    const phase4_comprehensive_tests = b.addTest(.{
+        .root_source_file = b.path("tests/test_phase4_comprehensive.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    phase4_comprehensive_tests.root_module.addOptions("config", options);
+    phase4_comprehensive_tests.root_module.addImport("libxev", libxev.module("xev"));
+    phase4_comprehensive_tests.root_module.addImport("zokio", lib.root_module);
+
+    const run_phase4_comprehensive_tests = b.addRunArtifact(phase4_comprehensive_tests);
+    const phase4_comprehensive_test_step = b.step("test-phase4", "验证Phase 4深度优化和完善");
+    phase4_comprehensive_test_step.dependOn(&run_phase4_comprehensive_tests.step);
+
     // 真实性验证测试
     const real_impl_tests = b.addTest(.{
         .root_source_file = b.path("test_real_implementation.zig"),
@@ -99,33 +211,19 @@ pub fn build(b: *std.Build) void {
     const run_real_impl_tests = b.addRunArtifact(real_impl_tests);
     const real_impl_test_step = b.step("test-real", "运行真实性验证测试");
 
-    // await_fn非阻塞测试
-    const await_fn_tests = b.addTest(.{
+    // await_fn非阻塞测试（旧版本）
+    const await_fn_old_tests = b.addTest(.{
         .root_source_file = b.path("tests/test_await_fn_no_blocking.zig"),
         .target = target,
         .optimize = optimize,
     });
-    await_fn_tests.root_module.addOptions("config", options);
-    await_fn_tests.root_module.addImport("libxev", libxev.module("xev"));
-    await_fn_tests.root_module.addImport("zokio", lib.root_module);
+    await_fn_old_tests.root_module.addOptions("config", options);
+    await_fn_old_tests.root_module.addImport("libxev", libxev.module("xev"));
+    await_fn_old_tests.root_module.addImport("zokio", lib.root_module);
 
-    const run_await_fn_tests = b.addRunArtifact(await_fn_tests);
-    const await_fn_test_step = b.step("test-await-fn", "运行await_fn非阻塞测试");
-    await_fn_test_step.dependOn(&run_await_fn_tests.step);
-
-    // CompletionBridge修复测试
-    const completion_bridge_tests = b.addTest(.{
-        .root_source_file = b.path("tests/test_completion_bridge_fix.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    completion_bridge_tests.root_module.addOptions("config", options);
-    completion_bridge_tests.root_module.addImport("libxev", libxev.module("xev"));
-    completion_bridge_tests.root_module.addImport("zokio", lib.root_module);
-
-    const run_completion_bridge_tests = b.addRunArtifact(completion_bridge_tests);
-    const completion_bridge_test_step = b.step("test-completion-bridge", "运行CompletionBridge修复测试");
-    completion_bridge_test_step.dependOn(&run_completion_bridge_tests.step);
+    const run_await_fn_old_tests = b.addRunArtifact(await_fn_old_tests);
+    const await_fn_old_test_step = b.step("test-await-fn-old", "运行await_fn非阻塞测试（旧版本）");
+    await_fn_old_test_step.dependOn(&run_await_fn_old_tests.step);
 
     // 异步文件I/O修复测试
     const async_file_io_tests = b.addTest(.{
@@ -168,6 +266,174 @@ pub fn build(b: *std.Build) void {
     const run_real_io_performance_tests = b.addRunArtifact(real_io_performance_tests);
     const real_io_performance_test_step = b.step("test-real-io-perf", "运行真实I/O性能测试");
     real_io_performance_test_step.dependOn(&run_real_io_performance_tests.step);
+
+    // HTTP压测工具
+    const http_benchmark = b.addExecutable(.{
+        .name = "http_benchmark",
+        .root_source_file = b.path("tools/http_benchmark.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    http_benchmark.root_module.addOptions("config", options);
+    http_benchmark.root_module.addImport("libxev", libxev.module("xev"));
+    http_benchmark.root_module.addImport("zokio", lib.root_module);
+
+    const run_http_benchmark = b.addRunArtifact(http_benchmark);
+    const http_benchmark_step = b.step("http-benchmark", "🚀 运行HTTP服务器压测工具");
+    http_benchmark_step.dependOn(&run_http_benchmark.step);
+
+    // 简化HTTP测试服务器
+    const simple_test_server = b.addExecutable(.{
+        .name = "simple_test_server",
+        .root_source_file = b.path("tools/simple_test_server.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const run_simple_test_server = b.addRunArtifact(simple_test_server);
+    const simple_test_server_step = b.step("test-server", "🚀 运行简化HTTP测试服务器");
+    simple_test_server_step.dependOn(&run_simple_test_server.step);
+
+    // 简化HTTP压测工具
+    const simple_benchmark = b.addExecutable(.{
+        .name = "simple_benchmark",
+        .root_source_file = b.path("tools/simple_benchmark.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const run_simple_benchmark = b.addRunArtifact(simple_benchmark);
+    const simple_benchmark_step = b.step("http-perf-analysis", "🔍 运行HTTP性能分析和压测");
+    simple_benchmark_step.dependOn(&run_simple_benchmark.step);
+
+    // 并发HTTP服务器
+    const concurrent_http_server = b.addExecutable(.{
+        .name = "concurrent_http_server",
+        .root_source_file = b.path("examples/concurrent_http_server.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    concurrent_http_server.root_module.addOptions("config", options);
+    concurrent_http_server.root_module.addImport("libxev", libxev.module("xev"));
+    concurrent_http_server.root_module.addImport("zokio", lib.root_module);
+
+    const run_concurrent_http_server = b.addRunArtifact(concurrent_http_server);
+    const concurrent_http_server_step = b.step("concurrent-http-server", "🚀 运行并发HTTP服务器 (阶段1优化)");
+    concurrent_http_server_step.dependOn(&run_concurrent_http_server.step);
+
+    // 阶段1并发服务器
+    const stage1_server = b.addExecutable(.{
+        .name = "stage1_concurrent_server",
+        .root_source_file = b.path("examples/stage1_concurrent_server.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const run_stage1_server = b.addRunArtifact(stage1_server);
+    const stage1_server_step = b.step("stage1-server", "🚀 运行阶段1并发HTTP服务器性能测试");
+    stage1_server_step.dependOn(&run_stage1_server.step);
+
+    // 阶段2异步I/O服务器
+    const stage2_server = b.addExecutable(.{
+        .name = "stage2_async_io_server",
+        .root_source_file = b.path("examples/stage2_async_io_server.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    stage2_server.root_module.addOptions("config", options);
+    stage2_server.root_module.addImport("libxev", libxev.module("xev"));
+    stage2_server.root_module.addImport("zokio", lib.root_module);
+
+    const run_stage2_server = b.addRunArtifact(stage2_server);
+    const stage2_server_step = b.step("stage2-server", "🚀 运行阶段2异步I/O HTTP服务器");
+    stage2_server_step.dependOn(&run_stage2_server.step);
+
+    // 阶段2性能测试
+    const stage2_perf_test = b.addExecutable(.{
+        .name = "stage2_performance_test",
+        .root_source_file = b.path("tools/stage2_performance_test.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    stage2_perf_test.root_module.addOptions("config", options);
+    stage2_perf_test.root_module.addImport("libxev", libxev.module("xev"));
+    stage2_perf_test.root_module.addImport("zokio", lib.root_module);
+
+    const run_stage2_perf_test = b.addRunArtifact(stage2_perf_test);
+    const stage2_perf_test_step = b.step("stage2-test", "🚀 运行阶段2异步I/O性能测试");
+    stage2_perf_test_step.dependOn(&run_stage2_perf_test.step);
+
+    // 阶段2简化测试
+    const stage2_simple_test = b.addExecutable(.{
+        .name = "stage2_simple_test",
+        .root_source_file = b.path("examples/stage2_simple_test.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    stage2_simple_test.root_module.addOptions("config", options);
+    stage2_simple_test.root_module.addImport("libxev", libxev.module("xev"));
+    stage2_simple_test.root_module.addImport("zokio", lib.root_module);
+
+    const run_stage2_simple_test = b.addRunArtifact(stage2_simple_test);
+    const stage2_simple_test_step = b.step("stage2-simple", "🚀 运行阶段2简化异步测试");
+    stage2_simple_test_step.dependOn(&run_stage2_simple_test.step);
+
+    // 阶段2工作测试
+    const stage2_working_test = b.addExecutable(.{
+        .name = "stage2_working_test",
+        .root_source_file = b.path("examples/stage2_working_test.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    stage2_working_test.root_module.addOptions("config", options);
+    stage2_working_test.root_module.addImport("libxev", libxev.module("xev"));
+    stage2_working_test.root_module.addImport("zokio", lib.root_module);
+
+    const run_stage2_working_test = b.addRunArtifact(stage2_working_test);
+    const stage2_working_test_step = b.step("stage2-working", "🚀 运行阶段2工作异步测试");
+    stage2_working_test_step.dependOn(&run_stage2_working_test.step);
+
+    // 阶段2内存安全测试
+    const stage2_memory_safe_test = b.addExecutable(.{
+        .name = "stage2_memory_safe_test",
+        .root_source_file = b.path("examples/stage2_memory_safe_test.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const run_stage2_memory_safe_test = b.addRunArtifact(stage2_memory_safe_test);
+    const stage2_memory_safe_test_step = b.step("stage2-memory", "🚀 运行阶段2内存安全测试");
+    stage2_memory_safe_test_step.dependOn(&run_stage2_memory_safe_test.step);
+
+    // 阶段2优化异步服务器
+    const stage2_optimized_server = b.addExecutable(.{
+        .name = "stage2_optimized_async_server",
+        .root_source_file = b.path("examples/stage2_optimized_async_server.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    stage2_optimized_server.root_module.addOptions("config", options);
+    stage2_optimized_server.root_module.addImport("libxev", libxev.module("xev"));
+    stage2_optimized_server.root_module.addImport("zokio", lib.root_module);
+
+    const run_stage2_optimized_server = b.addRunArtifact(stage2_optimized_server);
+    const stage2_optimized_server_step = b.step("stage2-optimized", "🚀 运行阶段2优化异步I/O服务器");
+    stage2_optimized_server_step.dependOn(&run_stage2_optimized_server.step);
+
+    // 阶段2真正异步I/O服务器
+    const stage2_real_async_server = b.addExecutable(.{
+        .name = "stage2_real_async_io_server",
+        .root_source_file = b.path("examples/stage2_real_async_io_server.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    stage2_real_async_server.root_module.addOptions("config", options);
+    stage2_real_async_server.root_module.addImport("libxev", libxev.module("xev"));
+    stage2_real_async_server.root_module.addImport("zokio", lib.root_module);
+
+    const run_stage2_real_async_server = b.addRunArtifact(stage2_real_async_server);
+    const stage2_real_async_server_step = b.step("stage2-real", "🚀 运行阶段2真正异步I/O服务器");
+    stage2_real_async_server_step.dependOn(&run_stage2_real_async_server.step);
 
     real_impl_test_step.dependOn(&run_real_impl_tests.step);
 
@@ -457,6 +723,54 @@ pub fn build(b: *std.Build) void {
         .paths = &[_][]const u8{ "src", "tests", "examples", "benchmarks" },
         .check = true,
     });
+
+    // 代码风格检查工具
+    const style_checker = b.addExecutable(.{
+        .name = "code_style_checker",
+        .root_source_file = b.path("tools/scripts/code_style_checker.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const style_check_run = b.addRunArtifact(style_checker);
+    const style_check_step = b.step("style-check", "🎨 运行代码风格检查");
+    style_check_step.dependOn(&style_check_run.step);
+
+    // 静态分析工具
+    const static_analyzer = b.addExecutable(.{
+        .name = "static_analysis",
+        .root_source_file = b.path("tools/scripts/static_analysis.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const static_analysis_run = b.addRunArtifact(static_analyzer);
+    const static_analysis_step = b.step("static-analysis", "🔍 运行静态分析");
+    static_analysis_step.dependOn(&static_analysis_run.step);
+
+    // 质量检查工具
+    const quality_checker = b.addExecutable(.{
+        .name = "quality_check",
+        .root_source_file = b.path("tools/scripts/quality_check.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const quality_check_run = b.addRunArtifact(quality_checker);
+    const quality_check_step = b.step("quality-check", "🔍 运行完整质量检查");
+    quality_check_step.dependOn(&quality_check_run.step);
+
+    // 项目重组工具
+    const restructure_tool = b.addExecutable(.{
+        .name = "restructure_project",
+        .root_source_file = b.path("tools/scripts/restructure_project.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const restructure_run = b.addRunArtifact(restructure_tool);
+    const restructure_step = b.step("restructure", "🏗️ 重组项目结构");
+    restructure_step.dependOn(&restructure_run.step);
     fmt_step.dependOn(&fmt_check.step);
 
     // 高性能压力测试
@@ -695,6 +1009,274 @@ pub fn build(b: *std.Build) void {
     const simple_comparison_cmd = b.addRunArtifact(simple_comparison);
     const simple_comparison_step = b.step("simple-comparison", "运行简化的性能对比测试");
     simple_comparison_step.dependOn(&simple_comparison_cmd.step);
+
+    // 简化libxev诊断测试
+    const libxev_diagnostic_test = b.addExecutable(.{
+        .name = "test_simple_libxev",
+        .root_source_file = b.path("test_simple_libxev.zig"),
+        .target = target,
+        .optimize = .Debug,
+    });
+    libxev_diagnostic_test.root_module.addImport("libxev", libxev.module("xev"));
+
+    const libxev_diagnostic_test_cmd = b.addRunArtifact(libxev_diagnostic_test);
+    const libxev_diagnostic_test_step = b.step("test-libxev-diagnostic", "运行简化libxev诊断测试");
+    libxev_diagnostic_test_step.dependOn(&libxev_diagnostic_test_cmd.step);
+
+    // AsyncEventLoop诊断测试
+    const async_event_loop_test = b.addExecutable(.{
+        .name = "test_async_event_loop",
+        .root_source_file = b.path("test_async_event_loop.zig"),
+        .target = target,
+        .optimize = .Debug,
+    });
+    async_event_loop_test.root_module.addImport("libxev", libxev.module("xev"));
+    async_event_loop_test.root_module.addImport("zokio", lib.root_module);
+    async_event_loop_test.root_module.addOptions("config", options);
+
+    const async_event_loop_test_cmd = b.addRunArtifact(async_event_loop_test);
+    const async_event_loop_test_step = b.step("test-async-event-loop", "运行AsyncEventLoop诊断测试");
+    async_event_loop_test_step.dependOn(&async_event_loop_test_cmd.step);
+
+    // 简化运行时诊断测试
+    const runtime_simple_test = b.addExecutable(.{
+        .name = "test_runtime_simple",
+        .root_source_file = b.path("test_runtime_simple.zig"),
+        .target = target,
+        .optimize = .Debug,
+    });
+    runtime_simple_test.root_module.addImport("libxev", libxev.module("xev"));
+    runtime_simple_test.root_module.addImport("zokio", lib.root_module);
+    runtime_simple_test.root_module.addOptions("config", options);
+
+    const runtime_simple_test_cmd = b.addRunArtifact(runtime_simple_test);
+    const runtime_simple_test_step = b.step("test-runtime-simple", "运行简化运行时诊断测试");
+    runtime_simple_test_step.dependOn(&runtime_simple_test_cmd.step);
+
+    // 逐步诊断测试
+    const step_by_step_test = b.addExecutable(.{
+        .name = "test_step_by_step",
+        .root_source_file = b.path("test_step_by_step.zig"),
+        .target = target,
+        .optimize = .Debug,
+    });
+    step_by_step_test.root_module.addImport("libxev", libxev.module("xev"));
+    step_by_step_test.root_module.addImport("zokio", lib.root_module);
+    step_by_step_test.root_module.addOptions("config", options);
+
+    const step_by_step_test_cmd = b.addRunArtifact(step_by_step_test);
+    const step_by_step_test_step = b.step("test-step-by-step", "运行逐步诊断测试");
+    step_by_step_test_step.dependOn(&step_by_step_test_cmd.step);
+
+    // 批量操作测试
+    const batch_operations_test = b.addTest(.{
+        .root_source_file = b.path("tests/test_batch_operations.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    batch_operations_test.root_module.addImport("zokio", lib.root_module);
+    batch_operations_test.root_module.addImport("libxev", libxev.module("xev"));
+    batch_operations_test.root_module.addOptions("config", options);
+
+    const batch_operations_test_cmd = b.addRunArtifact(batch_operations_test);
+    const batch_operations_test_step = b.step("test-batch-operations", "运行批量操作测试");
+    batch_operations_test_step.dependOn(&batch_operations_test_cmd.step);
+
+    // libxev高级特性测试
+    const libxev_advanced_test = b.addTest(.{
+        .root_source_file = b.path("tests/test_libxev_advanced_features.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    libxev_advanced_test.root_module.addImport("zokio", lib.root_module);
+    libxev_advanced_test.root_module.addImport("libxev", libxev.module("xev"));
+    libxev_advanced_test.root_module.addOptions("config", options);
+
+    const libxev_advanced_test_cmd = b.addRunArtifact(libxev_advanced_test);
+    const libxev_advanced_test_step = b.step("test-libxev-advanced", "运行libxev高级特性测试");
+    libxev_advanced_test_step.dependOn(&libxev_advanced_test_cmd.step);
+
+    // 异步机制诊断测试
+    const async_diagnosis_test = b.addTest(.{
+        .root_source_file = b.path("tests/test_async_diagnosis.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    async_diagnosis_test.root_module.addImport("zokio", lib.root_module);
+    async_diagnosis_test.root_module.addImport("libxev", libxev.module("xev"));
+    async_diagnosis_test.root_module.addOptions("config", options);
+
+    const async_diagnosis_test_cmd = b.addRunArtifact(async_diagnosis_test);
+    const async_diagnosis_test_step = b.step("test-async-diagnosis", "运行异步机制诊断测试");
+    async_diagnosis_test_step.dependOn(&async_diagnosis_test_cmd.step);
+
+    // 事件循环修复验证测试
+    const event_loop_fix_test = b.addTest(.{
+        .root_source_file = b.path("tests/test_event_loop_fix.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    event_loop_fix_test.root_module.addImport("zokio", lib.root_module);
+    event_loop_fix_test.root_module.addImport("libxev", libxev.module("xev"));
+    event_loop_fix_test.root_module.addOptions("config", options);
+
+    const event_loop_fix_test_cmd = b.addRunArtifact(event_loop_fix_test);
+    const event_loop_fix_test_step = b.step("test-event-loop-fix", "运行事件循环修复验证测试");
+    event_loop_fix_test_step.dependOn(&event_loop_fix_test_cmd.step);
+
+    // 简单修复验证测试
+    const simple_fix_test = b.addTest(.{
+        .root_source_file = b.path("tests/test_simple_fix.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    simple_fix_test.root_module.addImport("zokio", lib.root_module);
+    simple_fix_test.root_module.addImport("libxev", libxev.module("xev"));
+    simple_fix_test.root_module.addOptions("config", options);
+
+    const simple_fix_test_cmd = b.addRunArtifact(simple_fix_test);
+    const simple_fix_test_step = b.step("test-simple-fix", "运行简单修复验证测试");
+    simple_fix_test_step.dependOn(&simple_fix_test_cmd.step);
+
+    // 最小化修复验证测试
+    const minimal_fix_test = b.addTest(.{
+        .root_source_file = b.path("tests/test_minimal_fix.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    minimal_fix_test.root_module.addImport("zokio", lib.root_module);
+    minimal_fix_test.root_module.addImport("libxev", libxev.module("xev"));
+    minimal_fix_test.root_module.addOptions("config", options);
+
+    const minimal_fix_test_cmd = b.addRunArtifact(minimal_fix_test);
+    const minimal_fix_test_step = b.step("test-minimal-fix", "运行最小化修复验证测试");
+    minimal_fix_test_step.dependOn(&minimal_fix_test_cmd.step);
+
+    // 精确隔离测试
+    const precise_isolation_tests = b.addTest(.{
+        .root_source_file = b.path("tests/test_precise_isolation.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    precise_isolation_tests.root_module.addImport("zokio", lib.root_module);
+    precise_isolation_tests.root_module.addImport("libxev", libxev.module("xev"));
+    precise_isolation_tests.root_module.addOptions("config", options);
+
+    const precise_isolation_test_cmd = b.addRunArtifact(precise_isolation_tests);
+    const precise_isolation_test_step = b.step("test-precise-isolation", "运行精确隔离测试");
+    precise_isolation_test_step.dependOn(&precise_isolation_test_cmd.step);
+
+    // libxev初始化测试
+    const libxev_init_test = b.addTest(.{
+        .root_source_file = b.path("tests/test_libxev_init.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    libxev_init_test.root_module.addImport("zokio", lib.root_module);
+    libxev_init_test.root_module.addImport("libxev", libxev.module("xev"));
+    libxev_init_test.root_module.addOptions("config", options);
+
+    const libxev_init_test_cmd = b.addRunArtifact(libxev_init_test);
+    const libxev_init_test_step = b.step("test-libxev-init", "运行libxev初始化测试");
+    libxev_init_test_step.dependOn(&libxev_init_test_cmd.step);
+
+    // 运行时启动调试测试
+    const runtime_start_debug_test = b.addTest(.{
+        .root_source_file = b.path("tests/test_runtime_start_debug.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    runtime_start_debug_test.root_module.addImport("zokio", lib.root_module);
+    runtime_start_debug_test.root_module.addImport("libxev", libxev.module("xev"));
+    runtime_start_debug_test.root_module.addOptions("config", options);
+
+    const runtime_start_debug_test_cmd = b.addRunArtifact(runtime_start_debug_test);
+    const runtime_start_debug_test_step = b.step("test-runtime-start-debug", "运行运行时启动调试测试");
+    runtime_start_debug_test_step.dependOn(&runtime_start_debug_test_cmd.step);
+
+    // 逐步排除问题测试
+    const step_by_step_debug_test = b.addTest(.{
+        .root_source_file = b.path("tests/test_step_by_step.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    step_by_step_debug_test.root_module.addImport("zokio", lib.root_module);
+    step_by_step_debug_test.root_module.addImport("libxev", libxev.module("xev"));
+    step_by_step_debug_test.root_module.addOptions("config", options);
+
+    const step_by_step_debug_test_cmd = b.addRunArtifact(step_by_step_debug_test);
+    const step_by_step_debug_test_step = b.step("test-step-by-step-debug", "运行逐步排除问题测试");
+    step_by_step_debug_test_step.dependOn(&step_by_step_debug_test_cmd.step);
+
+    // threadlocal变量修复验证测试
+    const threadlocal_fix_test = b.addTest(.{
+        .root_source_file = b.path("tests/test_threadlocal_fix.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    threadlocal_fix_test.root_module.addImport("zokio", lib.root_module);
+    threadlocal_fix_test.root_module.addImport("libxev", libxev.module("xev"));
+    threadlocal_fix_test.root_module.addOptions("config", options);
+
+    const threadlocal_fix_test_cmd = b.addRunArtifact(threadlocal_fix_test);
+    const threadlocal_fix_test_step = b.step("test-threadlocal-fix", "运行threadlocal变量修复验证测试");
+    threadlocal_fix_test_step.dependOn(&threadlocal_fix_test_cmd.step);
+
+    // 最终验证测试
+    const final_verification_test = b.addTest(.{
+        .root_source_file = b.path("tests/test_final_verification.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    final_verification_test.root_module.addImport("zokio", lib.root_module);
+    final_verification_test.root_module.addImport("libxev", libxev.module("xev"));
+    final_verification_test.root_module.addOptions("config", options);
+
+    const final_verification_test_cmd = b.addRunArtifact(final_verification_test);
+    const final_verification_test_step = b.step("test-final-verification", "运行最终验证测试");
+    final_verification_test_step.dependOn(&final_verification_test_cmd.step);
+
+    // start()隔离测试
+    const start_isolation_test = b.addTest(.{
+        .root_source_file = b.path("tests/test_start_isolation.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    start_isolation_test.root_module.addImport("zokio", lib.root_module);
+    start_isolation_test.root_module.addImport("libxev", libxev.module("xev"));
+    start_isolation_test.root_module.addOptions("config", options);
+
+    const start_isolation_test_cmd = b.addRunArtifact(start_isolation_test);
+    const start_isolation_test_step = b.step("test-start-isolation", "运行start()隔离测试");
+    start_isolation_test_step.dependOn(&start_isolation_test_cmd.step);
+
+    // libxev上下文测试
+    const libxev_context_test = b.addTest(.{
+        .root_source_file = b.path("tests/test_libxev_context.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    libxev_context_test.root_module.addImport("zokio", lib.root_module);
+    libxev_context_test.root_module.addImport("libxev", libxev.module("xev"));
+    libxev_context_test.root_module.addOptions("config", options);
+
+    const libxev_context_test_cmd = b.addRunArtifact(libxev_context_test);
+    const libxev_context_test_step = b.step("test-libxev-context", "运行libxev上下文测试");
+    libxev_context_test_step.dependOn(&libxev_context_test_cmd.step);
+
+    // 运行时上下文测试
+    const runtime_context_test = b.addTest(.{
+        .root_source_file = b.path("tests/test_runtime_context.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    runtime_context_test.root_module.addImport("zokio", lib.root_module);
+    runtime_context_test.root_module.addImport("libxev", libxev.module("xev"));
+    runtime_context_test.root_module.addOptions("config", options);
+
+    const runtime_context_test_cmd = b.addRunArtifact(runtime_context_test);
+    const runtime_context_test_step = b.step("test-runtime-context", "运行运行时上下文测试");
+    runtime_context_test_step.dependOn(&runtime_context_test_cmd.step);
 
     // 内存分配性能专项测试
     const memory_perf_test = b.addExecutable(.{
@@ -1161,6 +1743,30 @@ pub fn build(b: *std.Build) void {
     const run_async_simple_test = b.addRunArtifact(async_simple_test);
     const async_simple_test_step = b.step("test-async-simple", "运行Zokio 2.0简化异步测试");
     async_simple_test_step.dependOn(&run_async_simple_test.step);
+
+    // 🧪 添加简单验证测试
+    const test_simple_verification = b.addTest(.{
+        .root_source_file = b.path("tests/test_simple_verification.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    test_simple_verification.root_module.addImport("libxev", libxev.module("xev"));
+
+    const run_test_simple_verification = b.addRunArtifact(test_simple_verification);
+    const test_simple_verification_step = b.step("test-simple", "运行简单验证测试");
+    test_simple_verification_step.dependOn(&run_test_simple_verification.step);
+
+    // 🧪 添加修复版异步文件I/O测试
+    const test_async_file_io_fixed = b.addTest(.{
+        .root_source_file = b.path("tests/test_async_file_io_fixed.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    test_async_file_io_fixed.root_module.addImport("libxev", libxev.module("xev"));
+
+    const run_test_async_file_io_fixed = b.addRunArtifact(test_async_file_io_fixed);
+    const test_async_file_io_fixed_step = b.step("test-async-file-fixed", "运行修复版异步文件I/O测试");
+    test_async_file_io_fixed_step.dependOn(&run_test_async_file_io_fixed.step);
 
     // 全面测试 (旧版本)
     const test_all_step = b.step("test-legacy", "运行所有旧版测试");
