@@ -13,8 +13,15 @@ const expectEqual = testing.expectEqual;
 
 // 导入 Zokio 核心模块
 const zokio = @import("zokio");
-const future = zokio.future;
-const AsyncEventLoop = @import("../src/runtime/async_event_loop.zig").AsyncEventLoop;
+const Future = zokio.zokio.Future;
+const Poll = zokio.zokio.Poll;
+const Context = zokio.zokio.Context;
+const await_fn = zokio.zokio.await_fn;
+const async_fn = zokio.zokio.async_fn;
+const ready = zokio.zokio.ready;
+const pending = zokio.zokio.pending;
+const AsyncEventLoop = zokio.legacy.AsyncEventLoop;
+const Waker = @import("../src/core/future.zig").Waker;
 
 /// 🧪 集成测试统计
 var integration_stats = struct {
@@ -35,7 +42,7 @@ fn endIntegrationTest(start_time: i128, passed: bool) void {
     const end_time = std.time.nanoTimestamp();
     const duration = end_time - start_time;
     integration_stats.total_duration_ns += @intCast(duration);
-    
+
     if (passed) {
         integration_stats.passed_tests += 1;
         std.debug.print("✅ 集成测试通过 ({d:.3}ms)\n", .{@as(f64, @floatFromInt(duration)) / 1_000_000.0});
@@ -58,7 +65,7 @@ const SimpleAsyncTask = struct {
     const Self = @This();
     pub const Output = u32;
 
-    pub fn poll(self: *Self, ctx: *future.Context) future.Poll(u32) {
+    pub fn poll(self: *Self, ctx: *Context) Poll(u32) {
         _ = ctx;
         self.poll_count += 1;
 
@@ -88,8 +95,8 @@ test "🔗 端到端异步任务执行测试" {
     var task = SimpleAsyncTask{ .value = 42 };
 
     // 模拟异步执行
-    const waker = future.Waker.noop();
-    var ctx = future.Context.init(waker);
+    const waker = Waker.noop();
+    var ctx = Context.init(waker);
 
     var poll_attempts: u32 = 0;
     const max_polls = 10;
@@ -122,7 +129,7 @@ const ConcurrentTask = struct {
     const Self = @This();
     pub const Output = u32;
 
-    pub fn poll(self: *Self, ctx: *future.Context) future.Poll(u32) {
+    pub fn poll(self: *Self, ctx: *Context) Poll(u32) {
         _ = ctx;
         self.current_polls += 1;
 
@@ -157,8 +164,8 @@ test "🔗 多任务并发执行集成测试" {
         };
     }
 
-    const waker = future.Waker.noop();
-    var ctx = future.Context.init(waker);
+    const waker = Waker.noop();
+    var ctx = Context.init(waker);
 
     var total_completed: u32 = 0;
     var round: u32 = 0;
@@ -212,7 +219,7 @@ test "🚀 事件循环长时间运行集成测试" {
     const iterations = 1000;
     for (0..iterations) |i| {
         try event_loop.runOnce();
-        
+
         // 每100次迭代检查一次状态
         if (i % 100 == 0) {
             try expect(event_loop.isRunning());
@@ -234,9 +241,9 @@ const StressTestTask = struct {
     const Self = @This();
     pub const Output = u32;
 
-    pub fn poll(self: *Self, ctx: *future.Context) future.Poll(u32) {
+    pub fn poll(self: *Self, ctx: *Context) Poll(u32) {
         _ = ctx;
-        
+
         // 每次轮询完成一些工作
         const work_per_poll = 10;
         self.completed_work += work_per_poll;
@@ -276,8 +283,8 @@ test "🚀 高负载压力集成测试" {
         completed_tasks[i] = false;
     }
 
-    const waker = future.Waker.noop();
-    var ctx = future.Context.init(waker);
+    const waker = Waker.noop();
+    var ctx = Context.init(waker);
 
     var total_completed: u32 = 0;
     var round: u32 = 0;
@@ -310,13 +317,13 @@ test "🚀 高负载压力集成测试" {
     const duration_ms = @as(f64, @floatFromInt(test_end - test_start)) / 1_000_000.0;
 
     try expectEqual(@as(u32, task_count), total_completed);
-    
+
     std.debug.print("📊 压力测试结果:\n", .{});
     std.debug.print("  任务数量: {}\n", .{task_count});
     std.debug.print("  完成轮次: {}\n", .{round});
     std.debug.print("  总耗时: {d:.3}ms\n", .{duration_ms});
     std.debug.print("  平均每任务: {d:.3}ms\n", .{duration_ms / @as(f64, @floatFromInt(task_count))});
-    
+
     // 性能验证：应该在合理时间内完成
     try expect(duration_ms < 1000.0); // 1秒内完成
 }
@@ -332,13 +339,13 @@ test "📊 生成集成测试报告" {
     std.debug.print("📊 总集成测试: {}\n", .{integration_stats.total_tests});
     std.debug.print("✅ 通过测试: {}\n", .{integration_stats.passed_tests});
     std.debug.print("❌ 失败测试: {}\n", .{integration_stats.failed_tests});
-    
+
     const success_rate = @as(f64, @floatFromInt(integration_stats.passed_tests)) / @as(f64, @floatFromInt(integration_stats.total_tests)) * 100.0;
     std.debug.print("📈 成功率: {d:.1}%\n", .{success_rate});
-    
+
     const total_duration_ms = @as(f64, @floatFromInt(integration_stats.total_duration_ns)) / 1_000_000.0;
     std.debug.print("⏱️  总耗时: {d:.3}ms\n", .{total_duration_ms});
-    
+
     if (success_rate >= 95.0) {
         std.debug.print("🎉 集成测试目标达成！\n", .{});
     } else {

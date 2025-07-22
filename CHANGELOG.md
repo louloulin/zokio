@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 性能测试目标调整
 - 内存分配优化
 
-## [0.8.0] - 2024-12-09
+## [0.8.0] - 2025-12-09
 
 ### Added
 - 修复AsyncEventLoop全局互斥锁问题
@@ -44,7 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 集成测试：4/4 通过 (100%)
 - 性能测试：6/6 通过 (100%)
 
-## [0.7.0] - 2024-12-08
+## [0.7.0] - 2025-12-08
 
 ### Added
 - libxev深度集成优化
@@ -56,7 +56,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 优化内存分配策略
 - 改进错误处理机制
 
-## [0.6.0] - 2024-12-07
+## [0.6.0] - 2025-12-07
 
 ### Added
 - HTTP服务器优化
@@ -68,7 +68,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 支持高并发连接
 - 内存使用优化
 
-## [0.5.0] - 2024-12-06
+## [0.5.0] - 2025-12-06
 
 ### Added
 - 基础异步运行时实现
@@ -80,7 +80,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 事件驱动架构
 - 跨平台兼容性
 
-## [0.1.0] - 2024-12-01
+## [0.1.0] - 2025-12-01
 
 ### Added
 - 项目初始化

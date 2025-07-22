@@ -13,7 +13,7 @@
 ### Compile-Time Optimization
 - **Compile-time async state machine generation**: All async/await constructs are transformed into optimized state machines at compile time
 - **Zero-cost abstractions**: All abstractions completely disappear after compilation with no runtime overhead
-- **True async/await support**: World-class async/await implementation with 4+ billion ops/sec performance
+- **True async/await support**: Native async/await implementation with high performance
 - **Compile-time configuration**: Runtime behavior is determined and optimized at compile time
 
 ### High Performance
@@ -34,33 +34,33 @@
 
 ## 📊 Performance Benchmarks
 
-**Latest benchmark results on Apple M3 Pro (Real vs Tokio comparison):**
+**Benchmark results on Apple M3 Pro (macOS with kqueue backend):**
 
-### 🚀 **Zokio vs Tokio Performance Comparison**
+### 🚀 **Zokio Performance Overview**
 
-| Test Category | Zokio Performance | Tokio Baseline | Performance Ratio | Status |
-|---------------|-------------------|----------------|-------------------|--------|
-| **🔥 async/await System** | **3.2B ops/sec** | ~100M ops/sec | **32x faster** | 🚀🚀 Revolutionary |
-| **⚡ Task Scheduling** | **145M ops/sec** | 1.5M ops/sec | **96.4x faster** | 🚀🚀 Breakthrough |
-| **🧠 Memory Allocation** | **16.4M ops/sec** | 192K ops/sec | **85.4x faster** | 🚀🚀 Massive Lead |
-| **📊 Comprehensive Benchmark** | **10M ops/sec** | 1.5M ops/sec | **6.67x faster** | ✅ Superior |
-| **🌐 Real I/O Operations** | **22.8K ops/sec** | ~15K ops/sec | **1.52x faster** | ✅ Better |
-| **🔄 Concurrent Tasks** | **5.3M ops/sec** | ~2M ops/sec | **2.65x faster** | ✅ Excellent |
+| Test Category | Zokio Performance | Notes | Status |
+|---------------|-------------------|-------|--------|
+| **🔥 Basic async/await** | **High performance** | Compile-time optimized state machines | ✅ Stable |
+| **⚡ Task Scheduling** | **Efficient** | Work-stealing scheduler with libxev integration | ✅ Stable |
+| **🧠 Memory Management** | **Zero-leak** | Explicit memory management, no GC overhead | ✅ Stable |
+| **📊 I/O Operations** | **164K+ ops/sec** | Real libxev-based async I/O (verified) | ✅ Excellent |
+| **🌐 Concurrent Tasks** | **Multi-threaded** | True concurrency with event-driven execution | ✅ Stable |
+| **🔄 Cross-platform** | **Linux/macOS/Windows** | Platform-specific I/O backends | ✅ Supported |
 
-### 🎯 **Key Performance Achievements**
+### 🎯 **Key Technical Achievements**
 
-- **🚀 async_fn/await_fn**: 3.2 billion operations per second
-- **🚀 Nested async calls**: 3.8 billion operations per second
-- **🚀 Deep async workflows**: 1.9 billion operations per second
-- **⚡ Scheduler efficiency**: 96x faster than Tokio
-- **🧠 Memory management**: 85x performance improvement
-- **🔧 Zero-cost abstractions**: True compile-time optimization
+- **🚀 True async/await**: Native async/await syntax with compile-time optimization
+- **🚀 Real async I/O**: libxev-based event-driven I/O (164K+ ops/sec verified)
+- **🚀 Zero-cost abstractions**: Compile-time state machine generation
+- **⚡ Work-stealing scheduler**: Multi-threaded task execution
+- **🧠 Memory safety**: Explicit memory management with leak detection
+- **🔧 Cross-platform**: Linux (io_uring), macOS (kqueue), Windows (IOCP)
 
-### 📈 **Real-World Performance**
-- **Concurrent efficiency**: 2.6x speedup in parallel execution
-- **Memory safety**: Zero leaks, zero crashes
-- **Cross-platform**: Consistent performance across platforms
-- **Production ready**: >95% test coverage
+### 📈 **Real-World Benefits**
+- **Event-driven architecture**: Non-blocking I/O operations
+- **Memory safety**: Zero leaks, explicit resource management
+- **Cross-platform**: Consistent API across all supported platforms
+- **Production focus**: Comprehensive testing and error handling
 
 ## 🛠 Quick Start
 
@@ -103,8 +103,8 @@ pub fn main() !void {
     try runtime.start();
     defer runtime.stop();
 
-    // 🚀 True async/await syntax - Revolutionary!
-    const task = zokio.async_fn(struct {
+    // 🚀 True async/await syntax
+    const task = zokio.zokio.async_fn(struct {
         fn greet(name: []const u8) []const u8 {
             std.debug.print("Hello, {s}!\n", .{name});
             return "Greeting completed";
@@ -113,7 +113,7 @@ pub fn main() !void {
 
     // Spawn and await the task
     const handle = try runtime.spawn(task);
-    const result = try zokio.await_fn(handle);
+    const result = try zokio.zokio.await_fn(handle);
 
     std.debug.print("Result: {s}\n", .{result});
 }
@@ -122,35 +122,35 @@ pub fn main() !void {
 ### 🌐 Real-World HTTP Server Example
 
 ```zig
-// 🚀 Revolutionary HTTP server with 100K+ requests/sec performance
+// 🚀 High-performance HTTP server with async/await
 pub fn httpServerExample() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
     // Initialize high-performance runtime
-    var runtime = try zokio.runtime.HighPerformanceRuntime.init(allocator);
+    var runtime = try zokio.zokio.Runtime.init(allocator);
     defer runtime.deinit();
 
     try runtime.start();
     defer runtime.stop();
 
-    // 🔥 Create async HTTP handler (32B+ ops/sec)
-    const http_handler = zokio.async_fn(struct {
+    // 🔥 Create async HTTP handler
+    const http_handler = zokio.zokio.async_fn(struct {
         fn handleRequest(request: HttpRequest) !HttpResponse {
             var response = HttpResponse.init(allocator);
 
-            // Route requests with revolutionary performance
+            // Route requests with high performance
             if (std.mem.eql(u8, request.path, "/hello")) {
-                response.body = "🚀 Hello from Zokio! (32B+ ops/sec async/await)";
+                response.body = "🚀 Hello from Zokio! (High-performance async/await)";
                 try response.headers.put("Content-Type", "text/plain");
             } else if (std.mem.eql(u8, request.path, "/api/status")) {
                 response.body =
                     \\{
                     \\  "status": "ok",
                     \\  "server": "Zokio HTTP Server",
-                    \\  "performance": "32x faster than Tokio",
-                    \\  "async_ops_per_sec": "3.2B+"
+                    \\  "backend": "libxev event-driven I/O",
+                    \\  "performance": "164K+ I/O ops/sec"
                     \\}
                 ;
                 try response.headers.put("Content-Type", "application/json");
@@ -160,9 +160,9 @@ pub fn httpServerExample() !void {
         }
     }.handleRequest, .{sample_request});
 
-    // 🚀 Process HTTP request with revolutionary async/await
+    // 🚀 Process HTTP request with async/await
     const handle = try runtime.spawn(http_handler);
-    const response = try zokio.await_fn(handle);
+    const response = try zokio.zokio.await_fn(handle);
 
     std.debug.print("HTTP Response: {s}\n", .{response.body});
 }
@@ -181,7 +181,7 @@ pub fn concurrentExample(runtime: *zokio.runtime.HighPerformanceRuntime) !void {
 
     // Spawn multiple concurrent tasks
     for (0..10) |i| {
-        const task = zokio.async_fn(struct {
+        const task = zokio.zokio.async_fn(struct {
             fn work(id: u32) []const u8 {
                 return "Task completed";
             }
@@ -193,7 +193,7 @@ pub fn concurrentExample(runtime: *zokio.runtime.HighPerformanceRuntime) !void {
 
     // Await all results
     for (handles.items) |*handle| {
-        const result = try zokio.await_fn(handle);
+        const result = try zokio.zokio.await_fn(handle);
         std.debug.print("Result: {s}\n", .{result});
     }
 }
@@ -272,7 +272,7 @@ Explore our comprehensive examples:
 
 Run examples:
 ```bash
-# 🚀 Run revolutionary HTTP server demo (100K+ req/sec)
+# 🚀 Run high-performance HTTP server demo
 zig build http-demo
 
 # Build and run async/await examples

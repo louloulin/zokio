@@ -14,9 +14,16 @@ const expectError = testing.expectError;
 
 // 导入 Zokio 核心模块
 const zokio = @import("zokio");
-const future = zokio.future;
-const AsyncEventLoop = @import("../src/runtime/async_event_loop.zig").AsyncEventLoop;
-const CompletionBridge = @import("../src/runtime/completion_bridge.zig").CompletionBridge;
+const Future = zokio.zokio.Future;
+const Poll = zokio.zokio.Poll;
+const Context = zokio.zokio.Context;
+const await_fn = zokio.zokio.await_fn;
+const async_fn = zokio.zokio.async_fn;
+const ready = zokio.zokio.ready;
+const pending = zokio.zokio.pending;
+const AsyncEventLoop = zokio.legacy.AsyncEventLoop;
+const CompletionBridge = zokio.legacy.CompletionBridge;
+const Waker = @import("../src/core/future.zig").Waker;
 
 /// 🧪 测试统计信息
 var test_stats = struct {
@@ -37,7 +44,7 @@ fn endTest(start_time: i128, passed: bool) void {
     const end_time = std.time.nanoTimestamp();
     const duration = end_time - start_time;
     test_stats.total_duration_ns += @intCast(duration);
-    
+
     if (passed) {
         test_stats.passed_tests += 1;
         std.debug.print("✅ 测试通过 ({d:.3}ms)\n", .{@as(f64, @floatFromInt(duration)) / 1_000_000.0});
@@ -56,14 +63,14 @@ test "🔧 Future.Poll 基础功能测试" {
     defer endTest(start_time, true);
 
     // 测试 Ready 状态
-    const ready_poll: future.Poll(u32) = .{ .ready = 42 };
+    const ready_poll: Poll(u32) = .{ .ready = 42 };
     switch (ready_poll) {
         .ready => |value| try expectEqual(@as(u32, 42), value),
         .pending => return error.UnexpectedPending,
     }
 
     // 测试 Pending 状态
-    const pending_poll: future.Poll(u32) = .pending;
+    const pending_poll: Poll(u32) = .pending;
     switch (pending_poll) {
         .ready => return error.UnexpectedReady,
         .pending => {}, // 正确
@@ -75,12 +82,12 @@ test "🔧 Waker 基础功能测试" {
     defer endTest(start_time, true);
 
     // 创建 noop Waker
-    const waker = future.Waker.noop();
-    
+    const waker = Waker.noop();
+
     // 测试 wake 方法不会 panic
     waker.wake();
     waker.wakeByRef();
-    
+
     // 测试多次调用
     for (0..10) |_| {
         waker.wake();
@@ -91,9 +98,9 @@ test "🔧 Context 基础功能测试" {
     const start_time = startTest("Context 基础功能");
     defer endTest(start_time, true);
 
-    const waker = future.Waker.noop();
-    const ctx = future.Context.init(waker);
-    
+    const waker = Waker.noop();
+    const ctx = Context.init(waker);
+
     // 验证 Context 初始化
     try expect(ctx.task_id != null or ctx.task_id == null); // 任一状态都可接受
 }
@@ -121,7 +128,7 @@ test "🚀 AsyncEventLoop 生命周期测试" {
     // 测试启动/停止
     event_loop.start();
     try expect(event_loop.isRunning());
-    
+
     event_loop.stop();
     try expect(!event_loop.isRunning());
 }
@@ -165,7 +172,7 @@ test "🔗 CompletionBridge 基础功能测试" {
     // 测试状态转换
     var bridge = CompletionBridge.init();
     try expect(bridge.getState() == .pending);
-    
+
     // 测试重置
     bridge.reset();
     try expect(bridge.getState() == .pending);
@@ -177,10 +184,10 @@ test "🔗 CompletionBridge 超时测试" {
 
     var bridge = CompletionBridge.init();
     bridge.timeout_ns = 1; // 1 纳秒超时
-    
+
     // 等待足够长时间确保超时
     std.time.sleep(1000); // 1 微秒
-    
+
     const is_timeout = bridge.checkTimeout();
     try expect(is_timeout);
     try expect(bridge.getState() == .timeout);
@@ -198,7 +205,7 @@ test "⚡ Future 创建性能测试" {
     const test_start = std.time.nanoTimestamp();
 
     for (0..iterations) |i| {
-        const poll: future.Poll(u32) = .{ .ready = @intCast(i % 1000) };
+        const poll: Poll(u32) = .{ .ready = @intCast(i % 1000) };
         switch (poll) {
             .ready => |value| try expect(value == i % 1000),
             .pending => return error.UnexpectedPending,
@@ -217,7 +224,7 @@ test "⚡ Waker 调用性能测试" {
     const start_time = startTest("Waker 调用性能");
     defer endTest(start_time, true);
 
-    const waker = future.Waker.noop();
+    const waker = Waker.noop();
     const iterations = 1_000_000;
     const test_start = std.time.nanoTimestamp();
 
@@ -291,16 +298,16 @@ test "🔒 多线程 Waker 测试" {
     const start_time = startTest("多线程 Waker");
     defer endTest(start_time, true);
 
-    const waker = future.Waker.noop();
+    const waker = Waker.noop();
     const thread_count = 4;
     const iterations_per_thread = 10000;
 
     var threads: [thread_count]std.Thread = undefined;
 
     const ThreadContext = struct {
-        waker: future.Waker,
+        waker: Waker,
         iterations: u32,
-        
+
         fn run(self: @This()) void {
             for (0..self.iterations) |_| {
                 self.waker.wake();

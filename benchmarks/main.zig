@@ -54,14 +54,14 @@ fn runBenchmark(
 
 /// 任务调度基准测试
 fn benchmarkTaskScheduling(operations: u64) !void {
-    const config = zokio.scheduler.SchedulerConfig{
+    const config = zokio.advanced.scheduler.SchedulerConfig{
         .worker_threads = 4,
         .queue_capacity = 256,
         .enable_work_stealing = true,
         .enable_statistics = false, // 禁用统计以获得最佳性能
     };
 
-    var scheduler = zokio.scheduler.Scheduler(config).init();
+    var scheduler = zokio.advanced.scheduler.Scheduler(config).init();
 
     // 创建任务池
     var tasks: [1000]zokio.scheduler.Task = undefined;
@@ -87,7 +87,7 @@ fn benchmarkWorkStealingQueue(operations: u64) !void {
         value: u64,
     };
 
-    var queue = zokio.scheduler.WorkStealingQueue(*TestItem, 256).init();
+    var queue = zokio.advanced.scheduler.WorkStealingQueue(*TestItem, 256).init();
     var items: [1000]TestItem = undefined;
 
     // 初始化测试项
@@ -139,12 +139,12 @@ fn benchmarkFuturePolling(operations: u64) !void {
 
 /// 内存分配基准测试
 fn benchmarkMemoryAllocation(operations: u64) !void {
-    const config = zokio.memory.MemoryConfig{
+    const config = zokio.advanced.memory.MemoryConfig{
         .strategy = .adaptive,
         .enable_metrics = false, // 禁用指标以获得最佳性能
     };
 
-    var allocator = try zokio.memory.MemoryAllocator(config).init(std.heap.page_allocator);
+    var allocator = try zokio.advanced.memory.MemoryAllocator(config).init(std.heap.page_allocator);
     defer allocator.deinit();
 
     // 基准测试：分配和释放小对象
@@ -161,7 +161,7 @@ fn benchmarkObjectPool(operations: u64) !void {
         value: u64,
     };
 
-    var pool = zokio.memory.ObjectPool(TestObject, 1000).init();
+    var pool = zokio.advanced.memory.ObjectPool(TestObject, 1000).init();
 
     // 基准测试：获取和释放对象
     var i: u64 = 0;
@@ -175,7 +175,7 @@ fn benchmarkObjectPool(operations: u64) !void {
 
 /// 原子操作基准测试
 fn benchmarkAtomicOperations(operations: u64) !void {
-    var atomic_value = zokio.utils.Atomic.Value(u64).init(0);
+    var atomic_value = zokio.advanced.utils.Atomic.Value(u64).init(0);
 
     // 基准测试：原子递增操作
     var i: u64 = 0;
@@ -190,7 +190,7 @@ fn benchmarkIoOperations(operations: u64) !void {
     var i: u64 = 0;
     while (i < operations) : (i += 1) {
         // 模拟I/O句柄生成
-        const handle = zokio.io.IoHandle.generate();
+        const handle = zokio.advanced.io.IoHandle.generate();
         _ = handle; // 使用句柄避免未使用警告
 
         // 模拟一些基本的I/O相关计算
@@ -254,8 +254,8 @@ pub fn main() !void {
     try stdout.print("==================\n\n", .{});
 
     // 显示编译时信息
-    const config = zokio.RuntimeConfig{};
-    const RuntimeType = zokio.ZokioRuntime(config);
+    const config = zokio.zokio.RuntimeConfig{};
+    const RuntimeType = zokio.experimental.comptime_runtime.generateRuntime(config);
 
     try stdout.print("编译时信息:\n", .{});
     try stdout.print("  平台: {s}\n", .{RuntimeType.COMPILE_TIME_INFO.platform});

@@ -102,8 +102,8 @@ pub fn main() !void {
     try runtime.start();
     defer runtime.stop();
 
-    // 🚀 真正的async/await语法 - 革命性！
-    const task = zokio.async_fn(struct {
+    // 🚀 真正的async/await语法
+    const task = zokio.zokio.async_fn(struct {
         fn greet(name: []const u8) []const u8 {
             std.debug.print("你好，{s}！\n", .{name});
             return "问候完成";
@@ -112,7 +112,7 @@ pub fn main() !void {
 
     // 生成并等待任务
     const handle = try runtime.spawn(task);
-    const result = try zokio.await_fn(handle);
+    const result = try zokio.zokio.await_fn(handle);
 
     std.debug.print("结果: {s}\n", .{result});
 }
