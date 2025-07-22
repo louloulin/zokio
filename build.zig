@@ -535,6 +535,20 @@ pub fn build(b: *std.Build) void {
     const performance_benchmark_step = b.step("test-performance", "运行 Zokio 7.2 性能基准测试");
     performance_benchmark_step.dependOn(&run_performance_benchmarks.step);
 
+    // await_fn事件循环测试
+    const await_fn_event_loop_tests = b.addTest(.{
+        .root_source_file = b.path("tests/test_await_fn_with_event_loop.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    await_fn_event_loop_tests.root_module.addOptions("config", options);
+    await_fn_event_loop_tests.root_module.addImport("libxev", libxev.module("xev"));
+    await_fn_event_loop_tests.root_module.addImport("zokio", lib.root_module);
+
+    const run_await_fn_event_loop_tests = b.addRunArtifact(await_fn_event_loop_tests);
+    const await_fn_event_loop_step = b.step("test-await-fn-event-loop", "测试await_fn事件循环集成");
+    await_fn_event_loop_step.dependOn(&run_await_fn_event_loop_tests.step);
+
     // Zokio 7.3 I/O 性能基准测试
     const io_performance_tests = b.addTest(.{
         .root_source_file = b.path("tests/io_performance_tests.zig"),

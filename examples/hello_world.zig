@@ -62,7 +62,7 @@ pub fn main() !void {
     };
 
     // 创建运行时实例
-    const RuntimeType = zokio.ZokioRuntime(config);
+    const RuntimeType = zokio.experimental.comptime_runtime.generateRuntime(config);
     var runtime = try RuntimeType.init(allocator);
     defer runtime.deinit();
 

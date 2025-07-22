@@ -35,7 +35,8 @@ fn testTaskScheduling(allocator: std.mem.Allocator) !void {
 
     // Zokio测试
     std.debug.print("运行Zokio任务调度测试...\n", .{});
-    var runtime = try zokio.SimpleRuntime.init(allocator);
+    const config = zokio.zokio.RuntimeConfig{};
+    var runtime = try zokio.zokio.Runtime(config).init(allocator);
     defer runtime.deinit();
     try runtime.start();
 
